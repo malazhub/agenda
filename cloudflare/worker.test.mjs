@@ -15,6 +15,7 @@ function fakeEnvironment() {
   const accounts = new Map();
   const attempts = [];
   const sessions = new Map();
+  const streamConfig = new Map();
 
   class Statement {
     constructor(sql) {
@@ -40,10 +41,12 @@ function fakeEnvironment() {
         return [...accounts.values()].find((item) => item.username.toLowerCase() === this.values[0].toLowerCase()) || null;
       }
       if (this.sql.includes('SELECT * FROM accounts WHERE id')) return accounts.get(this.values[0]) || null;
+      if (this.sql.includes('SELECT input_uid FROM live_stream_config')) return streamConfig.get(1) || null;
       return null;
     }
 
     async all() {
+      if (this.sql.includes('FROM sessions ORDER BY')) return { results: [...sessions.values()] };
       if (this.sql.includes('FROM accounts WHERE role')) {
         const role = this.sql.match(/role = '([^']+)'/)?.[1];
         return { results: [...accounts.values()].filter((item) => item.role === role) };
@@ -66,7 +69,7 @@ function fakeEnvironment() {
         }
         accounts.set(id, {
           id, username, password_hash, role, full_name, email, phone, school_or_subject, grade_id,
-          created_at: '2026-11-03 10:00:00', expires_at: null, activated: 1, paid: 0,
+          created_at: '2026-11-03 10:00:00', expires_at: '2026-12-03 10:00:00', activated: 1, paid: 0,
         });
         return { meta: { changes: 1 } };
       }
@@ -77,13 +80,22 @@ function fakeEnvironment() {
       if (this.sql.startsWith('DELETE FROM login_attempts')) {
         return { meta: { changes: 1 } };
       }
+      if (this.sql.startsWith('DELETE FROM sessions WHERE id')) {
+        return { meta: { changes: sessions.delete(this.values[0]) ? 1 : 0 } };
+      }
+      if (this.sql.startsWith('INSERT OR REPLACE INTO live_stream_config')) {
+        streamConfig.set(this.values[0], { id: this.values[0], input_uid: this.values[1] });
+        return { meta: { changes: 1 } };
+      }
       if (this.sql.startsWith('UPDATE accounts SET')) {
         const id = this.values[this.values.length - 1];
         const account = accounts.get(id);
         if (!account || account.role === 'director') return { meta: { changes: 0 } };
         let valueIndex = 0;
         if (this.sql.includes('activated = ?')) account.activated = this.values[valueIndex++];
-        if (this.sql.includes('paid = ?')) account.paid = this.values[valueIndex];
+        if (this.sql.includes('paid = ?')) account.paid = this.values[valueIndex++];
+        if (this.sql.includes('password_hash = ?')) account.password_hash = this.values[valueIndex++];
+        if (this.sql.includes("expires_at = datetime('now', '+1 month')")) account.expires_at = '2026-12-03 10:00:00';
         return { meta: { changes: 1 } };
       }
       return { meta: { changes: 0 } };
@@ -126,7 +138,13 @@ function fakeEnvironment() {
     paid: 1,
   });
 
-  return { env: { DB, SESSION_SIGNING_KEY: signingKey, ALLOWED_ORIGINS: 'https://malazhub.github.io' }, accounts, sessions, password };
+  return {
+    env: { DB, SESSION_SIGNING_KEY: signingKey, ALLOWED_ORIGINS: 'https://malazhub.github.io', STREAM_CUSTOMER_CODE: 'test-customer' },
+    accounts,
+    sessions,
+    streamConfig,
+    password,
+  };
 }
 
 async function send(env, path, { method = 'GET', body, token, origin } = {}) {
@@ -160,7 +178,7 @@ test('registration hashes credentials and rejects duplicate usernames', async ()
   const { env, accounts } = fakeEnvironment();
   const registration = {
     username: 'learner.one',
-    password: 'A-long-password-2026',
+    password: 'x !',
     role: 'student',
     fullName: 'Learner One',
     email: 'learner@example.com',
@@ -173,6 +191,7 @@ test('registration hashes credentials and rejects duplicate usernames', async ()
   const result = await response.json();
   assert.equal(result.account.role, 'student');
   assert.equal('password_hash' in result.account, false);
+  assert.ok(result.account.expiresAt);
   assert.equal(accounts.get(result.account.id).password_hash.startsWith('pbkdf2_sha256$'), true);
 
   const login = await send(env, '/api/auth/login', {
@@ -220,6 +239,19 @@ test('Director login reads persisted role tables and saves status updates', asyn
   assert.equal(account.activated, false);
   assert.equal(account.paid, true);
 
+  const renewed = await send(env, `/api/director/accounts/${account.id}`, {
+    method: 'PATCH',
+    token,
+    body: { activated: true, renew: true, password: 'new pass !' },
+  });
+  assert.equal(renewed.status, 200);
+  assert.equal((await renewed.json()).account.expiresAt, '2026-12-03 10:00:00');
+  const relogin = await send(env, '/api/auth/login', {
+    method: 'POST',
+    body: { username: 'educator.one', password: 'new pass !' },
+  });
+  assert.equal(relogin.status, 200);
+
   const denied = await send(env, '/api/director/accounts');
   assert.equal(denied.status, 401);
 });
@@ -255,4 +287,46 @@ test('Director can save a live session and the grade catalog returns its playbac
   assert.equal(sessions.length, 1);
   assert.equal(sessions[0].isLive, true);
   assert.equal(sessions[0].playbackUrl, 'https://example.org/live/video');
+});
+
+test('Director can list and delete stored sessions', async () => {
+  const { env } = fakeEnvironment();
+  const login = await send(env, '/api/auth/login', {
+    method: 'POST',
+    body: { username: 'director', password: 'DirectorPassword#2026' },
+  });
+  const { token } = await login.json();
+  const saved = await send(env, '/api/director/sessions', {
+    method: 'POST',
+    token,
+    body: {
+      sessions: [{
+        id: 'resource-eb8-science',
+        gradeId: 'eb8',
+        subject: 'Science',
+        title: 'Ecosystems',
+        sourceName: 'Khan Academy',
+        sourceUrl: 'https://www.khanacademy.org/science',
+      }],
+    },
+  });
+  assert.equal(saved.status, 201);
+  const listed = await send(env, '/api/director/sessions', { token });
+  assert.equal((await listed.json()).sessions.length, 1);
+  const deleted = await send(env, '/api/director/sessions/resource-eb8-science', { method: 'DELETE', token });
+  assert.equal(deleted.status, 200);
+  assert.deepEqual(await deleted.json(), { deleted: true });
+});
+
+test('Live room has a shared playback URL independent of a grade session', async () => {
+  const { env, streamConfig } = fakeEnvironment();
+  const notConfigured = await send(env, '/api/live-stream');
+  assert.equal((await notConfigured.json()).status, 'unconfigured');
+
+  streamConfig.set(1, { id: 1, input_uid: 'shared-live-input' });
+  const response = await send(env, '/api/live-stream');
+  assert.deepEqual(await response.json(), {
+    status: 'waiting',
+    playbackUrl: 'https://customer-test-customer.cloudflarestream.com/shared-live-input/iframe',
+  });
 });

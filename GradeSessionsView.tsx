@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Language, GradeLevelDef } from '../types';
-import { getGradeSessions } from '../services/cloudflareApi';
-import type { StoredSessionRecord } from '../services/cloudflareApi';
+import { getGradeSessions, getLiveStreamStatus } from '../services/cloudflareApi';
+import type { LiveStreamStatus, StoredSessionRecord } from '../services/cloudflareApi';
 import { ArrowLeft, ArrowRight, Video, FileText, ExternalLink, RefreshCw } from 'lucide-react';
 
 interface GradeSessionsViewProps {
@@ -18,6 +18,7 @@ export const GradeSessionsView: React.FC<GradeSessionsViewProps> = ({
   const isRTL = currentLang === 'ar';
   const [activeTab, setActiveTab] = useState<'stored' | 'live'>('stored');
   const [sessions, setSessions] = useState<StoredSessionRecord[]>([]);
+  const [liveStream, setLiveStream] = useState<LiveStreamStatus | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
@@ -26,9 +27,14 @@ export const GradeSessionsView: React.FC<GradeSessionsViewProps> = ({
     let active = true;
     setIsLoading(true);
     setError(null);
-    getGradeSessions(selectedGrade.id, activeTab === 'live')
-      .then(({ sessions: loadedSessions }) => {
-        if (active) setSessions(loadedSessions);
+    Promise.all([
+      getGradeSessions(selectedGrade.id, activeTab === 'live'),
+      activeTab === 'live' ? getLiveStreamStatus() : Promise.resolve(null),
+    ])
+      .then(([{ sessions: loadedSessions }, stream]) => {
+        if (!active) return;
+        setSessions(loadedSessions);
+        setLiveStream(stream);
       })
       .catch((requestError) => {
         if (active) setError(requestError instanceof Error ? requestError.message : 'Unable to load sessions.');
@@ -81,7 +87,7 @@ export const GradeSessionsView: React.FC<GradeSessionsViewProps> = ({
             }`}
           >
             <FileText className="w-4 h-4" />
-            <span>{currentLang === 'ar' ? 'الحصص المسجلة (20 تقريباً)' : currentLang === 'fr' ? 'Sessions enregistrées (~20)' : 'Stored Sessions (~20)'}</span>
+            <span>{currentLang === 'ar' ? 'الموارد التعليمية' : currentLang === 'fr' ? 'Ressources pédagogiques' : 'Learning resources'}</span>
           </button>
 
           <button
@@ -112,18 +118,51 @@ export const GradeSessionsView: React.FC<GradeSessionsViewProps> = ({
             {currentLang === 'ar' ? 'إعادة المحاولة' : currentLang === 'fr' ? 'Réessayer' : 'Retry'}
           </button>
         </div>
+      ) : activeTab === 'live' ? (
+        <div className="space-y-4">
+          {liveStream?.playbackUrl ? (
+            <div className="overflow-hidden rounded-3xl border border-slate-800 bg-slate-950 shadow-lg">
+              <iframe
+                title={currentLang === 'ar' ? 'البث المباشر' : currentLang === 'fr' ? 'Diffusion en direct' : 'Live broadcast'}
+                src={liveStream.playbackUrl}
+                className="aspect-video w-full"
+                allow="accelerometer; gyroscope; autoplay; encrypted-media; picture-in-picture;"
+                allowFullScreen
+              />
+              <p className="px-4 py-3 text-xs font-semibold text-slate-200">
+                {currentLang === 'ar' ? 'غرفة البث المشتركة — انتظر بدء البث من المدير أو المدرّس.' : currentLang === 'fr' ? 'Salle de direct commune — en attente du démarrage par le directeur ou l’enseignant.' : 'Shared live room — waiting for the Director or educator to start streaming.'}
+              </p>
+            </div>
+          ) : (
+            <div className="rounded-3xl border border-rose-200 bg-white p-10 text-center space-y-2">
+              <Video className="mx-auto h-8 w-8 text-rose-600" />
+              <p className="text-sm font-bold text-slate-800">
+                {currentLang === 'ar' ? 'غرفة البث المباشر متاحة، لكن لم يتم إعداد مصدر البث بعد.' : currentLang === 'fr' ? 'La salle de direct est disponible, mais aucune source de diffusion n’est configurée.' : 'The live room is available, but a broadcast source has not been configured yet.'}
+              </p>
+            </div>
+          )}
+          {sessions.length > 0 && (
+            <div className="grid gap-4 md:grid-cols-2">
+              {sessions.map((session) => (
+                <article key={session.id} className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm space-y-3">
+                  <p className="text-[10px] font-black uppercase tracking-wide text-rose-600">{session.subject}</p>
+                  <h3 className="text-base font-black text-slate-900">{session.title}</h3>
+                  <button type="button" onClick={() => openSession(session)} className="rounded-xl bg-rose-600 px-4 py-2 text-xs font-black text-white">
+                    <Video className="me-2 inline h-4 w-4" />{currentLang === 'ar' ? 'افتح الفيديو' : currentLang === 'fr' ? 'Ouvrir la vidéo' : 'Open video'}
+                  </button>
+                </article>
+              ))}
+            </div>
+          )}
+        </div>
       ) : sessions.length === 0 ? (
         <div className="bg-white rounded-3xl border border-slate-200 p-10 text-center space-y-2">
           <p className="text-sm font-bold text-slate-800">
-            {activeTab === 'live'
-              ? currentLang === 'ar' ? 'لا توجد حصة مباشرة متاحة الآن.' : currentLang === 'fr' ? 'Aucune session en direct pour le moment.' : 'No live session is available right now.'
-              : currentLang === 'ar' ? 'لا توجد حصص محفوظة لهذا الصف حتى الآن.' : currentLang === 'fr' ? 'Aucune session enregistrée pour ce niveau.' : 'No stored sessions are available for this grade yet.'}
+            {currentLang === 'ar' ? 'لا توجد حصص محفوظة لهذا الصف حتى الآن.' : currentLang === 'fr' ? 'Aucune session enregistrée pour ce niveau.' : 'No stored sessions are available for this grade yet.'}
           </p>
-          {activeTab === 'stored' && (
-            <p className="text-xs text-slate-500">
-              {currentLang === 'ar' ? 'سيتم عرض الحصص التعليمية الموثوقة هنا عند إضافتها إلى الكتالوج.' : currentLang === 'fr' ? 'Les ressources pédagogiques vérifiées apparaîtront ici lorsqu’elles seront ajoutées au catalogue.' : 'Trusted educational sessions will appear here when added to the catalog.'}
-            </p>
-          )}
+          <p className="text-xs text-slate-500">
+            {currentLang === 'ar' ? 'سيتم عرض الحصص التعليمية الموثوقة هنا عند إضافتها إلى الكتالوج.' : currentLang === 'fr' ? 'Les ressources pédagogiques vérifiées apparaîtront ici lorsqu’elles seront ajoutées au catalogue.' : 'Trusted educational sessions will appear here when added to the catalog.'}
+          </p>
         </div>
       ) : (
         <div className="grid gap-4 md:grid-cols-2">

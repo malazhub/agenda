@@ -50,7 +50,16 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
       onRegisterSuccess(account);
       onClose();
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : 'Unable to create the account.');
+      const message = requestError instanceof Error ? requestError.message : '';
+      setError(
+        /already registered|already exists/i.test(message)
+          ? t.registrationUsernameTaken
+          : /complete the required|invalid .* fields/i.test(message)
+            ? t.registrationRequiredFields
+            : /cloudflare api url|failed to fetch|networkerror/i.test(message)
+              ? t.registrationServiceUnavailable
+              : message || t.registrationServiceUnavailable,
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -70,6 +79,7 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
           <button
             onClick={onClose}
             className="text-slate-400 hover:text-white p-1 rounded"
+            aria-label={t.closeLabel}
           >
             <X className="w-4 h-4" />
           </button>
@@ -80,7 +90,7 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
           {/* Role selector */}
           <div>
             <label className="block text-xs font-bold text-slate-700 mb-1">
-              نوع الحساب
+              {t.accountTypeLabel}
             </label>
             <div className="grid grid-cols-2 gap-2">
               <button
@@ -110,7 +120,7 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
 
           <div>
             <label className="block text-xs font-bold text-slate-700 mb-1">
-              اسم المستخدم
+              {t.usernameLabel}
             </label>
             <input
               type="text"
@@ -121,7 +131,7 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
               autoComplete="username"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
-              placeholder="username"
+              placeholder={t.usernamePlaceholder}
               className="w-full text-xs p-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:outline-emerald-600 font-medium"
             />
           </div>
@@ -129,14 +139,14 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
           {/* Full Name */}
           <div>
             <label className="block text-xs font-bold text-slate-700 mb-1">
-              الاسم الكامل
+              {t.fullNameLabel}
             </label>
             <input
               type="text"
               required
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="مثال: كريم خوري"
+              placeholder={t.fullNamePlaceholder}
               className="w-full text-xs p-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:outline-emerald-600 font-medium"
             />
           </div>
@@ -145,7 +155,7 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
           <div className="grid grid-cols-2 gap-2">
             <div>
               <label className="block text-xs font-bold text-slate-700 mb-1">
-                البريد الإلكتروني
+                {t.emailLabel}
               </label>
               <input
                 type="email"
@@ -158,13 +168,13 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
             </div>
             <div>
               <label className="block text-xs font-bold text-slate-700 mb-1">
-                رقم الهاتف (لبنان)
+                {t.phoneLabel}
               </label>
               <input
                 type="tel"
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
-                placeholder="+961 70 123 456"
+                placeholder={t.phonePlaceholder}
                 className="w-full text-xs p-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:outline-emerald-600 font-medium"
               />
             </div>
@@ -174,29 +184,28 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
           <div className="grid grid-cols-2 gap-2">
             <div>
               <label className="block text-xs font-bold text-slate-700 mb-1">
-                كلمة المرور
+                {t.passwordLabel}
               </label>
               <input
                 type="password"
                 required
-                minLength={12}
-                maxLength={256}
+                maxLength={1024}
                 autoComplete="new-password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder="12 حرفاً على الأقل"
+                placeholder={t.passwordPlaceholder}
                 className="w-full text-xs p-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:outline-emerald-600 font-medium"
               />
             </div>
             <div>
               <label className="block text-xs font-bold text-slate-700 mb-1">
-                {role === 'student' ? 'المدرسة / الصف' : 'المادة التعليمية'}
+                {role === 'student' ? t.schoolOrGradeLabel : t.educatorSubjectLabel}
               </label>
               <input
                 type="text"
                 value={schoolOrSubject}
                 onChange={(e) => setSchoolOrSubject(e.target.value)}
-                placeholder={role === 'student' ? 'مثال: Terminale SG' : 'مثال: رياضيات وفيزياء'}
+                placeholder={role === 'student' ? t.schoolPlaceholder : t.educatorSubjectPlaceholder}
                 className="w-full text-xs p-2.5 bg-slate-50 border border-slate-200 rounded-lg font-medium"
               />
             </div>
@@ -216,7 +225,7 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
               className="w-full bg-emerald-700 hover:bg-emerald-800 disabled:opacity-60 text-white font-bold py-2.5 px-4 rounded-xl text-xs transition cursor-pointer flex items-center justify-center gap-1.5"
             >
               <CheckCircle2 className="w-4 h-4" />
-              <span>{isSubmitting ? 'جارٍ إنشاء الحساب...' : 'إنشاء الحساب'}</span>
+              <span>{isSubmitting ? t.creatingAccountLabel : t.createAccountLabel}</span>
             </button>
           </div>
         </form>
