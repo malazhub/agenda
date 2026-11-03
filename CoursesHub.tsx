@@ -12,8 +12,7 @@ import {
   ChevronLeft,
   ShieldCheck,
   User,
-  Lock,
-  ArrowLeft
+  Lock
 } from 'lucide-react';
 
 interface CoursesHubProps {
@@ -24,17 +23,12 @@ interface CoursesHubProps {
   onEnterLiveClassroom?: (session?: LiveSessionInfo) => void;
 }
 
-type DirectorEntry = {
-  studentName: string;
-  studentJoinDate: string;
-  studentExpiryDate: string;
-  studentActive: boolean;
-  studentPaid: boolean;
-  educatorName: string;
-  educatorJoinDate: string;
-  educatorExpiryDate: string;
-  educatorActive: boolean;
-  educatorPaid: boolean;
+type DirectorRow = {
+  name: string;
+  joiningDate: string;
+  expiryDate: string;
+  activated: boolean;
+  paid: boolean;
 };
 
 export const CoursesHub: React.FC<CoursesHubProps> = ({
@@ -45,48 +39,20 @@ export const CoursesHub: React.FC<CoursesHubProps> = ({
   const isRTL = currentLang === 'ar';
 
   const [activeGradeForSessions, setActiveGradeForSessions] = useState<GradeLevelDef | null>(null);
-
   const [directorScreen, setDirectorScreen] = useState<'home' | 'login' | 'dashboard'>('home');
   const [directorForm, setDirectorForm] = useState({ username: '', password: '' });
   const [directorError, setDirectorError] = useState('');
 
-  const [directorRows, setDirectorRows] = useState<DirectorEntry[]>([
-    {
-      studentName: 'Karim Mansour',
-      studentJoinDate: '2026-10-01',
-      studentExpiryDate: '2027-01-31',
-      studentActive: true,
-      studentPaid: true,
-      educatorName: 'Jad Khoury',
-      educatorJoinDate: '2026-10-02',
-      educatorExpiryDate: '2027-02-15',
-      educatorActive: true,
-      educatorPaid: true
-    },
-    {
-      studentName: 'Sanaa Karam',
-      studentJoinDate: '2026-09-15',
-      studentExpiryDate: '2026-12-15',
-      studentActive: true,
-      studentPaid: false,
-      educatorName: 'Nour Haddad',
-      educatorJoinDate: '2026-09-20',
-      educatorExpiryDate: '2027-01-20',
-      educatorActive: false,
-      educatorPaid: false
-    },
-    {
-      studentName: 'Rami El Feghali',
-      studentJoinDate: '2026-07-11',
-      studentExpiryDate: '2026-11-30',
-      studentActive: false,
-      studentPaid: false,
-      educatorName: 'Charbel Daou',
-      educatorJoinDate: '2026-07-15',
-      educatorExpiryDate: '2026-12-14',
-      educatorActive: true,
-      educatorPaid: true
-    }
+  const [studentRows, setStudentRows] = useState<DirectorRow[]>([
+    { name: 'Karim Mansour', joiningDate: '2026-10-01', expiryDate: '2027-01-31', activated: true, paid: true },
+    { name: 'Sanaa Karam', joiningDate: '2026-09-15', expiryDate: '2026-12-15', activated: true, paid: false },
+    { name: 'Rami El Feghali', joiningDate: '2026-07-11', expiryDate: '2026-11-30', activated: false, paid: false }
+  ]);
+
+  const [educatorRows, setEducatorRows] = useState<DirectorRow[]>([
+    { name: 'Jad Khoury', joiningDate: '2026-10-02', expiryDate: '2027-02-15', activated: true, paid: true },
+    { name: 'Nour Haddad', joiningDate: '2026-09-20', expiryDate: '2027-01-20', activated: false, paid: false },
+    { name: 'Charbel Daou', joiningDate: '2026-07-15', expiryDate: '2026-12-14', activated: true, paid: true }
   ]);
 
   const handleDirectorLogin = () => {
@@ -101,22 +67,41 @@ export const CoursesHub: React.FC<CoursesHubProps> = ({
 
     setDirectorError(
       currentLang === 'ar'
-        ? 'اسم المستخدم أو كلمة المرور غير صحيحة'
+        ? 'اسم المستخدم أو كلمة المرور غير صحيح'
         : currentLang === 'fr'
         ? 'Nom d’utilisateur ou mot de passe incorrect'
         : 'Incorrect username or password'
     );
   };
 
-  const toggleRowValue = (
-    index: number,
-    field: 'studentActive' | 'studentPaid' | 'educatorActive' | 'educatorPaid'
-  ) => {
-    setDirectorRows(prev =>
+  const toggleStudentRow = (index: number) => {
+    setStudentRows(prev =>
       prev.map((row, i) =>
-        i === index
-          ? { ...row, [field]: !row[field] }
-          : row
+        i === index ? { ...row, activated: !row.activated } : row
+      )
+    );
+  };
+
+  const toggleEducatorRow = (index: number) => {
+    setEducatorRows(prev =>
+      prev.map((row, i) =>
+        i === index ? { ...row, activated: !row.activated } : row
+      )
+    );
+  };
+
+  const toggleStudentPaid = (index: number) => {
+    setStudentRows(prev =>
+      prev.map((row, i) =>
+        i === index ? { ...row, paid: !row.paid } : row
+      )
+    );
+  };
+
+  const toggleEducatorPaid = (index: number) => {
+    setEducatorRows(prev =>
+      prev.map((row, i) =>
+        i === index ? { ...row, paid: !row.paid } : row
       )
     );
   };
@@ -230,69 +215,90 @@ export const CoursesHub: React.FC<CoursesHubProps> = ({
           </button>
         </div>
 
-        <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white">
-          <table className="min-w-full text-xs">
-            <thead className="bg-slate-100">
-              <tr>
-                <th className="px-3 py-3 text-left font-black text-slate-700">Student name</th>
-                <th className="px-3 py-3 text-left font-black text-slate-700">Joining date</th>
-                <th className="px-3 py-3 text-left font-black text-slate-700">Expiry date</th>
-                <th className="px-3 py-3 text-left font-black text-slate-700">Activated</th>
-                <th className="px-3 py-3 text-left font-black text-slate-700">Paid</th>
-                <th className="px-3 py-3 text-left font-black text-slate-700">Educator name</th>
-                <th className="px-3 py-3 text-left font-black text-slate-700">Joining date</th>
-                <th className="px-3 py-3 text-left font-black text-slate-700">Expiry date</th>
-                <th className="px-3 py-3 text-left font-black text-slate-700">Activated</th>
-                <th className="px-3 py-3 text-left font-black text-slate-700">Paid</th>
-              </tr>
-            </thead>
-
-            <tbody>
-              {directorRows.map((row, index) => (
-                <tr key={index} className="border-t border-slate-200">
-                  <td className="px-3 py-3 font-semibold text-slate-800">{row.studentName}</td>
-                  <td className="px-3 py-3 text-slate-700">{row.studentJoinDate}</td>
-                  <td className="px-3 py-3 text-slate-700">{row.studentExpiryDate}</td>
-                  <td className="px-3 py-3">
-                    <input
-                      type="checkbox"
-                      checked={row.studentActive}
-                      onChange={() => toggleRowValue(index, 'studentActive')}
-                      className="w-4 h-4 accent-indigo-600 cursor-pointer"
-                    />
-                  </td>
-                  <td className="px-3 py-3">
-                    <input
-                      type="checkbox"
-                      checked={row.studentPaid}
-                      onChange={() => toggleRowValue(index, 'studentPaid')}
-                      className="w-4 h-4 accent-indigo-600 cursor-pointer"
-                    />
-                  </td>
-
-                  <td className="px-3 py-3 font-semibold text-slate-800">{row.educatorName}</td>
-                  <td className="px-3 py-3 text-slate-700">{row.educatorJoinDate}</td>
-                  <td className="px-3 py-3 text-slate-700">{row.educatorExpiryDate}</td>
-                  <td className="px-3 py-3">
-                    <input
-                      type="checkbox"
-                      checked={row.educatorActive}
-                      onChange={() => toggleRowValue(index, 'educatorActive')}
-                      className="w-4 h-4 accent-indigo-600 cursor-pointer"
-                    />
-                  </td>
-                  <td className="px-3 py-3">
-                    <input
-                      type="checkbox"
-                      checked={row.educatorPaid}
-                      onChange={() => toggleRowValue(index, 'educatorPaid')}
-                      className="w-4 h-4 accent-indigo-600 cursor-pointer"
-                    />
-                  </td>
+        <div className="space-y-6">
+          <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white">
+            <h3 className="px-4 py-3 text-sm font-black text-slate-900 bg-slate-100 border-b border-slate-200">
+              {currentLang === 'ar' ? 'الطلاب' : currentLang === 'fr' ? 'Étudiants' : 'Students'}
+            </h3>
+            <table className="min-w-full text-xs">
+              <thead className="bg-slate-100">
+                <tr>
+                  <th className="px-3 py-3 text-left font-black text-slate-700">Name</th>
+                  <th className="px-3 py-3 text-left font-black text-slate-700">Joining date</th>
+                  <th className="px-3 py-3 text-left font-black text-slate-700">Expiry date</th>
+                  <th className="px-3 py-3 text-left font-black text-slate-700">Activated</th>
+                  <th className="px-3 py-3 text-left font-black text-slate-700">Paid</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {studentRows.map((row, index) => (
+                  <tr key={index} className="border-t border-slate-200">
+                    <td className="px-3 py-3 font-semibold text-slate-800">{row.name}</td>
+                    <td className="px-3 py-3 text-slate-700">{row.joiningDate}</td>
+                    <td className="px-3 py-3 text-slate-700">{row.expiryDate}</td>
+                    <td className="px-3 py-3">
+                      <input
+                        type="checkbox"
+                        checked={row.activated}
+                        onChange={() => toggleStudentRow(index)}
+                        className="w-4 h-4 accent-indigo-600 cursor-pointer"
+                      />
+                    </td>
+                    <td className="px-3 py-3">
+                      <input
+                        type="checkbox"
+                        checked={row.paid}
+                        onChange={() => toggleStudentPaid(index)}
+                        className="w-4 h-4 accent-indigo-600 cursor-pointer"
+                      />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white">
+            <h3 className="px-4 py-3 text-sm font-black text-slate-900 bg-slate-100 border-b border-slate-200">
+              {currentLang === 'ar' ? 'المعلمون' : currentLang === 'fr' ? 'Éducateurs' : 'Educators'}
+            </h3>
+            <table className="min-w-full text-xs">
+              <thead className="bg-slate-100">
+                <tr>
+                  <th className="px-3 py-3 text-left font-black text-slate-700">Name</th>
+                  <th className="px-3 py-3 text-left font-black text-slate-700">Joining date</th>
+                  <th className="px-3 py-3 text-left font-black text-slate-700">Expiry date</th>
+                  <th className="px-3 py-3 text-left font-black text-slate-700">Activated</th>
+                  <th className="px-3 py-3 text-left font-black text-slate-700">Paid</th>
+                </tr>
+              </thead>
+              <tbody>
+                {educatorRows.map((row, index) => (
+                  <tr key={index} className="border-t border-slate-200">
+                    <td className="px-3 py-3 font-semibold text-slate-800">{row.name}</td>
+                    <td className="px-3 py-3 text-slate-700">{row.joiningDate}</td>
+                    <td className="px-3 py-3 text-slate-700">{row.expiryDate}</td>
+                    <td className="px-3 py-3">
+                      <input
+                        type="checkbox"
+                        checked={row.activated}
+                        onChange={() => toggleEducatorRow(index)}
+                        className="w-4 h-4 accent-indigo-600 cursor-pointer"
+                      />
+                    </td>
+                    <td className="px-3 py-3">
+                      <input
+                        type="checkbox"
+                        checked={row.paid}
+                        onChange={() => toggleEducatorPaid(index)}
+                        className="w-4 h-4 accent-indigo-600 cursor-pointer"
+                      />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
     );
@@ -379,9 +385,7 @@ export const CoursesHub: React.FC<CoursesHubProps> = ({
           >
             <span className="flex items-center justify-center gap-2">
               <ShieldCheck className="w-4 h-4" />
-              <span>
-                {currentLang === 'ar' ? 'المدير' : currentLang === 'fr' ? 'Directeur' : 'Director'}
-              </span>
+              <span>{currentLang === 'ar' ? 'المدير' : currentLang === 'fr' ? 'Directeur' : 'Director'}</span>
             </span>
           </button>
         </div>
