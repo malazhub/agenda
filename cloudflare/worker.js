@@ -1,5 +1,6 @@
 const SESSION_TTL_SECONDS = 12 * 60 * 60;
 const PASSWORD_ITERATIONS = 100000;
+const MAX_PASSWORD_LENGTH = 1024;
 const encoder = new TextEncoder();
 
 function json(data, status = 200, headers = {}) {
@@ -151,8 +152,8 @@ async function handleRegister(request, env) {
   const schoolOrSubject = typeof body?.schoolOrSubject === "string" ? body.schoolOrSubject.trim() : "";
   const gradeId = typeof body?.gradeId === "string" ? body.gradeId.trim() : "";
 
-  if (!/^[a-z0-9._-]{3,32}$/.test(username) || password.length < 12 || password.length > 256) {
-    return json({ error: "Use a 3–32 character username and a password of at least 12 characters." }, 400);
+  if (!/^[a-z0-9._-]{3,32}$/.test(username) || !password || password.length > MAX_PASSWORD_LENGTH) {
+    return json({ error: "Use a 3–32 character username and a non-empty password of at most 1,024 characters." }, 400);
   }
   if (!["student", "educator"].includes(role) || fullName.length < 2 || fullName.length > 120 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
     return json({ error: "Complete the required name, email, and account role fields." }, 400);
@@ -170,7 +171,7 @@ async function handleRegister(request, env) {
   const id = randomId();
   try {
     await env.DB.prepare(
-      "INSERT INTO accounts (id, username, password_hash, role, full_name, email, phone, school_or_subject, grade_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      "INSERT INTO accounts (id, username, password_hash, role, full_name, email, phone, school_or_subject, grade_id, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now', '+1 month'))",
     ).bind(id, username, passwordHash, role, fullName, email, phone, schoolOrSubject, gradeId).run();
   } catch (error) {
     if (error instanceof Error && error.message.toLowerCase().includes("unique")) {
@@ -191,7 +192,7 @@ async function handleLogin(request, env) {
   const body = await requestJson(request);
   const username = typeof body?.username === "string" ? body.username.trim().toLowerCase() : "";
   const password = typeof body?.password === "string" ? body.password : "";
-  if (!username || !password || password.length > 256) return json({ error: "Invalid username or password." }, 401);
+  if (!username || !password || password.length > MAX_PASSWORD_LENGTH) return json({ error: "Invalid username or password." }, 401);
 
   const recentAttempts = await env.DB.prepare(
     "SELECT COUNT(*) AS count FROM login_attempts WHERE username = ? COLLATE NOCASE AND succeeded = 0 AND created_at >= datetime('now', '-15 minutes')",
@@ -244,7 +245,17 @@ async function updateAccount(request, env, accountId) {
     updates.push("paid = ?");
     values.push(Number(body.paid));
   }
-  if (!updates.length) return json({ error: "Provide an activation or payment status to update." }, 400);
+  if (typeof body?.password === "string") {
+    if (!body.password || body.password.length > MAX_PASSWORD_LENGTH) {
+      return json({ error: "A password must contain 1–1,024 characters." }, 400);
+    }
+    updates.push("password_hash = ?");
+    values.push(await hashPassword(body.password));
+  }
+  if (body?.renew === true) {
+    updates.push("expires_at = datetime('now', '+1 month')");
+  }
+  if (!updates.length) return json({ error: "Provide at least one supported account update." }, 400);
   values.push(accountId);
   const result = await env.DB.prepare(`UPDATE accounts SET ${updates.join(", ")} WHERE id = ? AND role IN ('student', 'educator')`)
     .bind(...values)
@@ -252,6 +263,39 @@ async function updateAccount(request, env, accountId) {
   if (!result.meta.changes) return json({ error: "Account not found." }, 404);
   const account = await env.DB.prepare("SELECT * FROM accounts WHERE id = ?").bind(accountId).first();
   return json({ account: publicAccount(account) });
+}
+
+async function directorSessions(request, env) {
+  const director = await authenticate(request, env, "director");
+  if (!director) return json({ error: "Director authentication required." }, 401);
+  const result = await env.DB.prepare(
+    "SELECT * FROM sessions ORDER BY grade_id, subject, title LIMIT 1000",
+  ).all();
+  return json({ sessions: (result.results || []).map(publicSession) });
+}
+
+function publicSession(session) {
+  return {
+    id: session.id,
+    gradeId: session.grade_id,
+    subject: session.subject,
+    title: session.title,
+    teacherName: session.teacher_name,
+    sourceName: session.source_name,
+    sourceUrl: session.source_url,
+    playbackUrl: session.playback_url || session.source_url,
+    isLive: Boolean(session.is_live),
+    liveStartsAt: session.live_starts_at,
+    mediaUrl: session.media_key ? `/api/media/${encodeURIComponent(session.media_key)}` : null,
+  };
+}
+
+async function deleteSession(request, env, sessionId) {
+  const director = await authenticate(request, env, "director");
+  if (!director) return json({ error: "Director authentication required." }, 401);
+  const result = await env.DB.prepare("DELETE FROM sessions WHERE id = ?").bind(sessionId).run();
+  if (!result.meta.changes) return json({ error: "Session not found." }, 404);
+  return json({ deleted: true });
 }
 
 async function listSessions(url, env) {
@@ -264,19 +308,76 @@ async function listSessions(url, env) {
     : "SELECT * FROM sessions WHERE grade_id = ? AND is_live = 0 ORDER BY RANDOM() LIMIT 20";
   const result = await env.DB.prepare(query).bind(gradeId).all();
   return json({
-    sessions: (result.results || []).map((session) => ({
-      id: session.id,
-      gradeId: session.grade_id,
-      subject: session.subject,
-      title: session.title,
-      teacherName: session.teacher_name,
-      sourceName: session.source_name,
-      sourceUrl: session.source_url,
-      playbackUrl: session.playback_url || session.source_url,
-      isLive: Boolean(session.is_live),
-      liveStartsAt: session.live_starts_at,
-      mediaUrl: session.media_key ? `/api/media/${encodeURIComponent(session.media_key)}` : null,
-    })),
+    sessions: (result.results || []).map(publicSession),
+  });
+}
+
+async function cloudflareStreamRequest(env, path, init) {
+  const token = env.CLOUDFLARE_STREAM_API_TOKEN;
+  const accountId = env.CLOUDFLARE_ACCOUNT_ID;
+  if (!token || !accountId) {
+    return { configured: false };
+  }
+  const response = await fetch(`https://api.cloudflare.com/client/v4/accounts/${accountId}/stream/${path}`, {
+    ...init,
+    headers: {
+      authorization: `Bearer ${token}`,
+      "content-type": "application/json",
+      ...init?.headers,
+    },
+  });
+  const body = await response.json();
+  if (!response.ok || body.success !== true) {
+    console.error("Cloudflare Stream API request failed", response.status, body.errors);
+    throw new Error("Cloudflare Stream could not complete the request. Check the Stream API token and account configuration.");
+  }
+  return { configured: true, result: body.result };
+}
+
+async function getLiveStream(request, env) {
+  const stream = await env.DB.prepare("SELECT input_uid FROM live_stream_config WHERE id = 1").first();
+  const customerCode = env.STREAM_CUSTOMER_CODE;
+  if (!stream || !customerCode) {
+    return json({ status: "unconfigured", playbackUrl: null });
+  }
+  return json({
+    status: "waiting",
+    playbackUrl: `https://customer-${encodeURIComponent(customerCode)}.cloudflarestream.com/${encodeURIComponent(stream.input_uid)}/iframe`,
+  });
+}
+
+async function ensureLiveStream(request, env) {
+  const director = await authenticate(request, env, "director");
+  if (!director) return json({ error: "Director authentication required." }, 401);
+  const accountId = env.CLOUDFLARE_ACCOUNT_ID;
+  if (!accountId || !env.CLOUDFLARE_STREAM_API_TOKEN) {
+    return json({ error: "Configure CLOUDFLARE_STREAM_API_TOKEN with Stream Write permission to set up the live broadcast." }, 503);
+  }
+
+  let liveInput = await env.DB.prepare("SELECT input_uid FROM live_stream_config WHERE id = 1").first();
+  let input;
+  if (liveInput) {
+    ({ result: input } = await cloudflareStreamRequest(env, `live_inputs/${encodeURIComponent(liveInput.input_uid)}`, { method: "GET" }));
+  } else {
+    ({ result: input } = await cloudflareStreamRequest(env, "live_inputs", {
+      method: "POST",
+      body: JSON.stringify({
+        meta: { name: "Agenda shared classroom broadcast" },
+        preferLowLatency: true,
+        recording: { mode: "automatic", allowedOrigins: ["https://malazhub.github.io"] },
+      }),
+    }));
+    await env.DB.prepare(
+      "INSERT OR REPLACE INTO live_stream_config (id, input_uid) VALUES (1, ?)",
+    ).bind(input.uid).run();
+  }
+  return json({
+    inputUid: input.uid,
+    rtmpsUrl: input.rtmps?.url || "",
+    streamKey: input.rtmps?.streamKey || "",
+    playbackUrl: env.STREAM_CUSTOMER_CODE
+      ? `https://customer-${encodeURIComponent(env.STREAM_CUSTOMER_CODE)}.cloudflarestream.com/${encodeURIComponent(input.uid)}/iframe`
+      : null,
   });
 }
 
@@ -393,11 +494,17 @@ async function handle(request, env) {
   if (request.method === "POST" && path === "/api/auth/register") return handleRegister(request, env);
   if (request.method === "POST" && path === "/api/auth/login") return handleLogin(request, env);
   if (request.method === "GET" && path === "/api/director/accounts") return directorAccounts(request, env);
+  if (request.method === "GET" && path === "/api/director/sessions") return directorSessions(request, env);
   if (request.method === "POST" && path === "/api/director/sessions") return createSessions(request, env);
+  if (request.method === "POST" && path === "/api/director/live-stream") return ensureLiveStream(request, env);
+  if (request.method === "GET" && path === "/api/live-stream") return getLiveStream(request, env);
   if (request.method === "GET" && path === "/api/sessions") return listSessions(url, env);
 
   const accountMatch = path.match(/^\/api\/director\/accounts\/([0-9a-f-]{36})$/i);
   if (request.method === "PATCH" && accountMatch) return updateAccount(request, env, accountMatch[1]);
+
+  const sessionMatch = path.match(/^\/api\/director\/sessions\/([a-zA-Z0-9_-]{1,100})$/);
+  if (request.method === "DELETE" && sessionMatch) return deleteSession(request, env, sessionMatch[1]);
 
   const uploadMatch = path.match(/^\/api\/director\/media\/(.+)$/);
   if (request.method === "PUT" && uploadMatch) return uploadMedia(request, env, uploadMatch[1]);

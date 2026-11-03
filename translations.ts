@@ -75,6 +75,51 @@ export interface Translations {
   
   roleStudent: string;
   roleTeacher: string;
+  accountTypeLabel: string;
+  usernameLabel: string;
+  fullNameLabel: string;
+  emailLabel: string;
+  phoneLabel: string;
+  schoolOrGradeLabel: string;
+  educatorSubjectLabel: string;
+  passwordLabel: string;
+  usernamePlaceholder: string;
+  fullNamePlaceholder: string;
+  phonePlaceholder: string;
+  schoolPlaceholder: string;
+  educatorSubjectPlaceholder: string;
+  passwordPlaceholder: string;
+  createAccountLabel: string;
+  creatingAccountLabel: string;
+  closeLabel: string;
+  registrationUsernameTaken: string;
+  registrationRequiredFields: string;
+  registrationServiceUnavailable: string;
+  backToMain: string;
+  joiningDate: string;
+  expiryDate: string;
+  phoneNumber: string;
+  renewMonth: string;
+  resetPassword: string;
+  passwordNotStored: string;
+  sessionsTab: string;
+  addSession: string;
+  deleteSession: string;
+  saveSession: string;
+  liveBroadcast: string;
+  setupLiveBroadcast: string;
+  liveWaiting: string;
+  liveNotConfigured: string;
+  liveBroadcastSetupRequired: string;
+  streamUrl: string;
+  streamKey: string;
+  subjectLabel: string;
+  titleLabel: string;
+  sourceNameLabel: string;
+  sourceUrlLabel: string;
+  playbackUrlLabel: string;
+  gradeLabel: string;
+  deleteConfirm: string;
   
   paymentMethods: string;
   whishMoney: string;
@@ -185,6 +230,51 @@ export const translations: Record<Language, Translations> = {
     
     roleStudent: "طالب",
     roleTeacher: "مدرّس",
+    accountTypeLabel: "نوع الحساب",
+    usernameLabel: "اسم المستخدم",
+    fullNameLabel: "الاسم الكامل",
+    emailLabel: "البريد الإلكتروني",
+    phoneLabel: "رقم الهاتف",
+    schoolOrGradeLabel: "المدرسة / الصف",
+    educatorSubjectLabel: "المادة التعليمية",
+    passwordLabel: "كلمة المرور",
+    usernamePlaceholder: "اسم المستخدم",
+    fullNamePlaceholder: "مثال: كريم خوري",
+    phonePlaceholder: "+961 70 123 456",
+    schoolPlaceholder: "اسم المدرسة أو الصف",
+    educatorSubjectPlaceholder: "المواد التي تدرّسها",
+    passwordPlaceholder: "أدخل كلمة المرور",
+    createAccountLabel: "إنشاء الحساب",
+    creatingAccountLabel: "جارٍ إنشاء الحساب...",
+    closeLabel: "إغلاق",
+    registrationUsernameTaken: "اسم المستخدم مستخدم بالفعل. اختر اسماً آخر.",
+    registrationRequiredFields: "يرجى التحقق من جميع الحقول المطلوبة.",
+    registrationServiceUnavailable: "تعذر الاتصال بخدمة التسجيل. حاول مرة أخرى.",
+    backToMain: "العودة إلى الشاشة الرئيسية",
+    joiningDate: "تاريخ الانضمام",
+    expiryDate: "تاريخ الانتهاء",
+    phoneNumber: "رقم الهاتف",
+    renewMonth: "تجديد شهر",
+    resetPassword: "تغيير كلمة المرور",
+    passwordNotStored: "لا يتم حفظ كلمات المرور بصيغتها المقروءة",
+    sessionsTab: "إدارة الحصص",
+    addSession: "إضافة حصة",
+    deleteSession: "حذف",
+    saveSession: "حفظ الحصة",
+    liveBroadcast: "البث المباشر",
+    setupLiveBroadcast: "إعداد البث",
+    liveWaiting: "البث جاهز — بانتظار بدء الإرسال من المدرّس.",
+    liveNotConfigured: "لم يتم إعداد بث مباشر بعد.",
+    liveBroadcastSetupRequired: "يلزم إعداد Cloudflare Stream قبل بدء البث.",
+    streamUrl: "عنوان البث",
+    streamKey: "مفتاح البث",
+    subjectLabel: "المادة",
+    titleLabel: "العنوان",
+    sourceNameLabel: "المصدر",
+    sourceUrlLabel: "رابط المصدر",
+    playbackUrlLabel: "رابط الفيديو",
+    gradeLabel: "الصف",
+    deleteConfirm: "هل تريد حذف هذه الحصة؟",
     
     paymentMethods: "طرق الدفع",
     whishMoney: "Whish Money",
@@ -294,6 +384,51 @@ export const translations: Record<Language, Translations> = {
     
     roleStudent: "Élève",
     roleTeacher: "Professeur",
+    accountTypeLabel: "Type de compte",
+    usernameLabel: "Nom d’utilisateur",
+    fullNameLabel: "Nom complet",
+    emailLabel: "Adresse e-mail",
+    phoneLabel: "Téléphone",
+    schoolOrGradeLabel: "École / classe",
+    educatorSubjectLabel: "Matière enseignée",
+    passwordLabel: "Mot de passe",
+    usernamePlaceholder: "Nom d’utilisateur",
+    fullNamePlaceholder: "Ex. : Karim Khoury",
+    phonePlaceholder: "+961 70 123 456",
+    schoolPlaceholder: "Nom de l’école ou classe",
+    educatorSubjectPlaceholder: "Matières enseignées",
+    passwordPlaceholder: "Saisir le mot de passe",
+    createAccountLabel: "Créer le compte",
+    creatingAccountLabel: "Création du compte...",
+    closeLabel: "Fermer",
+    registrationUsernameTaken: "Ce nom d’utilisateur existe déjà. Choisissez-en un autre.",
+    registrationRequiredFields: "Vérifiez les champs obligatoires.",
+    registrationServiceUnavailable: "Le service d’inscription est indisponible. Réessayez.",
+    backToMain: "Retour à l’écran principal",
+    joiningDate: "Date d’inscription",
+    expiryDate: "Date d’expiration",
+    phoneNumber: "Téléphone",
+    renewMonth: "Renouveler un mois",
+    resetPassword: "Réinitialiser le mot de passe",
+    passwordNotStored: "Les mots de passe ne sont pas conservés en clair",
+    sessionsTab: "Gérer les cours",
+    addSession: "Ajouter un cours",
+    deleteSession: "Supprimer",
+    saveSession: "Enregistrer le cours",
+    liveBroadcast: "Diffusion en direct",
+    setupLiveBroadcast: "Configurer la diffusion",
+    liveWaiting: "Le direct est prêt — en attente du démarrage par l’enseignant.",
+    liveNotConfigured: "Aucune diffusion en direct n’est configurée.",
+    liveBroadcastSetupRequired: "Configurez Cloudflare Stream avant de lancer le direct.",
+    streamUrl: "Adresse de diffusion",
+    streamKey: "Clé de diffusion",
+    subjectLabel: "Matière",
+    titleLabel: "Titre",
+    sourceNameLabel: "Source",
+    sourceUrlLabel: "Lien de la source",
+    playbackUrlLabel: "Lien vidéo",
+    gradeLabel: "Classe",
+    deleteConfirm: "Supprimer ce cours ?",
     
     paymentMethods: "Moyens de Paiement",
     whishMoney: "Whish Money",
@@ -403,6 +538,51 @@ export const translations: Record<Language, Translations> = {
     
     roleStudent: "Student",
     roleTeacher: "Educator",
+    accountTypeLabel: "Account type",
+    usernameLabel: "Username",
+    fullNameLabel: "Full name",
+    emailLabel: "Email address",
+    phoneLabel: "Phone number",
+    schoolOrGradeLabel: "School / grade",
+    educatorSubjectLabel: "Teaching subject",
+    passwordLabel: "Password",
+    usernamePlaceholder: "Choose a username",
+    fullNamePlaceholder: "Your full name",
+    phonePlaceholder: "+961 70 123 456",
+    schoolPlaceholder: "School name or grade",
+    educatorSubjectPlaceholder: "Subjects you teach",
+    passwordPlaceholder: "Enter a password",
+    createAccountLabel: "Create account",
+    creatingAccountLabel: "Creating account...",
+    closeLabel: "Close",
+    registrationUsernameTaken: "That username is already registered. Choose another.",
+    registrationRequiredFields: "Check that all required fields are complete.",
+    registrationServiceUnavailable: "Registration service is unavailable. Try again.",
+    backToMain: "Back to main screen",
+    joiningDate: "Joining date",
+    expiryDate: "Expiry date",
+    phoneNumber: "Phone number",
+    renewMonth: "Renew one month",
+    resetPassword: "Reset password",
+    passwordNotStored: "Passwords are never stored in readable form",
+    sessionsTab: "Manage sessions",
+    addSession: "Add session",
+    deleteSession: "Delete",
+    saveSession: "Save session",
+    liveBroadcast: "Live broadcast",
+    setupLiveBroadcast: "Set up broadcast",
+    liveWaiting: "The live room is ready — waiting for the teacher to start streaming.",
+    liveNotConfigured: "No live broadcast has been configured yet.",
+    liveBroadcastSetupRequired: "Configure Cloudflare Stream before starting a broadcast.",
+    streamUrl: "Stream URL",
+    streamKey: "Stream key",
+    subjectLabel: "Subject",
+    titleLabel: "Title",
+    sourceNameLabel: "Source name",
+    sourceUrlLabel: "Source URL",
+    playbackUrlLabel: "Video URL",
+    gradeLabel: "Grade",
+    deleteConfirm: "Delete this session?",
     
     paymentMethods: "Payment Methods",
     whishMoney: "Whish Money",

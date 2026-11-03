@@ -3,8 +3,9 @@ import { Language, GradeLevelDef, LiveSessionInfo } from '../types';
 import { translations } from '../translations';
 import { LEBANESE_GRADE_LEVELS } from '../data/mockGradesAndSessions';
 import { GradeSessionsView } from './GradeSessionsView';
-import { getDirectorAccounts, loginAccount, updateDirectorAccount } from '../services/cloudflareApi';
-import type { CloudflareAccount } from '../services/cloudflareApi';
+import { DirectorSessionsPanel } from './DirectorSessionsPanel';
+import { getDirectorAccounts, loginAccount, setupLiveStream, updateDirectorAccount } from '../services/cloudflareApi';
+import type { CloudflareAccount, LiveStreamSetup } from '../services/cloudflareApi';
 import {
   Clock,
   GraduationCap,
@@ -42,6 +43,26 @@ export const CoursesHub: React.FC<CoursesHubProps> = ({
   const [educatorRows, setEducatorRows] = useState<DirectorRow[]>([]);
   const [directorLoading, setDirectorLoading] = useState(false);
   const [directorDataError, setDirectorDataError] = useState('');
+  const [directorMessage, setDirectorMessage] = useState('');
+  const [directorTab, setDirectorTab] = useState<'accounts' | 'sessions'>('accounts');
+  const [streamSetup, setStreamSetup] = useState<LiveStreamSetup | null>(null);
+  const [streamSetupError, setStreamSetupError] = useState('');
+  const [streamSetupLoading, setStreamSetupLoading] = useState(false);
+
+  const formatDate = (value: string | null) => {
+    if (!value) return '—';
+    const date = new Date(`${value.replace(' ', 'T').replace(/Z$/, '')}Z`);
+    return Number.isNaN(date.getTime()) ? '—' : new Intl.DateTimeFormat(currentLang).format(date);
+  };
+
+  const returnToMain = () => {
+    sessionStorage.removeItem('agenda-director-token');
+    setDirectorToken('');
+    setStudentRows([]);
+    setEducatorRows([]);
+    setActiveGradeForSessions(null);
+    setDirectorScreen('home');
+  };
 
   useEffect(() => {
     if (directorScreen !== 'dashboard' || !directorToken) return;
@@ -81,18 +102,42 @@ export const CoursesHub: React.FC<CoursesHubProps> = ({
     }
   };
 
-  const updateAccount = async (account: DirectorRow, update: { activated?: boolean; paid?: boolean }) => {
+  const updateAccount = async (account: DirectorRow, update: { activated?: boolean; paid?: boolean; renew?: boolean; password?: string }) => {
     if (!directorToken) return;
     setDirectorDataError('');
+    setDirectorMessage('');
     try {
       const { account: savedAccount } = await updateDirectorAccount(directorToken, account.id, update);
       const setRows = account.role === 'student' ? setStudentRows : setEducatorRows;
       setRows((rows) => rows.map((row) => row.id === savedAccount.id ? savedAccount : row));
+      setDirectorMessage(update.password ? t.resetPassword : update.renew ? t.renewMonth : '');
     } catch (error) {
       setDirectorDataError(error instanceof Error ? error.message : 'Unable to save the account status.');
     }
   };
 
+  const resetAccountPassword = (account: DirectorRow) => {
+    const password = window.prompt(`${t.resetPassword} — ${account.username}`);
+    if (password === null) return;
+    if (!password || password.length > 1024) {
+      setDirectorDataError(`${t.passwordLabel}: 1–1,024`);
+      return;
+    }
+    void updateAccount(account, { password });
+  };
+
+  const handleStreamSetup = async () => {
+    if (!directorToken) return;
+    setStreamSetupLoading(true);
+    setStreamSetupError('');
+    try {
+      setStreamSetup(await setupLiveStream(directorToken));
+    } catch (error) {
+      setStreamSetupError(error instanceof Error ? error.message : t.liveBroadcastSetupRequired);
+    } finally {
+      setStreamSetupLoading(false);
+    }
+  };
   const renderDirectorTable = (title: string, rows: DirectorRow[]) => (
     <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white">
       <h3 className="px-4 py-3 text-sm font-black text-slate-900 bg-slate-100 border-b border-slate-200">
@@ -101,12 +146,14 @@ export const CoursesHub: React.FC<CoursesHubProps> = ({
       <table className="min-w-full text-xs">
         <thead className="bg-slate-100">
           <tr>
-            <th className="px-3 py-3 text-left font-black text-slate-700">{currentLang === 'ar' ? 'الاسم' : currentLang === 'fr' ? 'Nom' : 'Name'}</th>
-            <th className="px-3 py-3 text-left font-black text-slate-700">{currentLang === 'ar' ? 'اسم المستخدم' : currentLang === 'fr' ? 'Identifiant' : 'Username'}</th>
-            <th className="px-3 py-3 text-left font-black text-slate-700">Email</th>
+            <th className="px-3 py-3 text-left font-black text-slate-700">{t.fullNameLabel}</th>
+            <th className="px-3 py-3 text-left font-black text-slate-700">{t.usernameLabel}</th>
+            <th className="px-3 py-3 text-left font-black text-slate-700">{t.passwordLabel}</th>
+            <th className="px-3 py-3 text-left font-black text-slate-700">{t.emailLabel}</th>
+            <th className="px-3 py-3 text-left font-black text-slate-700">{t.phoneNumber}</th>
             <th className="px-3 py-3 text-left font-black text-slate-700">{currentLang === 'ar' ? 'المدرسة / المادة' : currentLang === 'fr' ? 'École / matière' : 'School / subject'}</th>
-            <th className="px-3 py-3 text-left font-black text-slate-700">{currentLang === 'ar' ? 'تاريخ التسجيل' : currentLang === 'fr' ? 'Inscription' : 'Joined'}</th>
-            <th className="px-3 py-3 text-left font-black text-slate-700">{currentLang === 'ar' ? 'تاريخ الانتهاء' : currentLang === 'fr' ? 'Expiration' : 'Expiry date'}</th>
+            <th className="px-3 py-3 text-left font-black text-slate-700">{t.joiningDate}</th>
+            <th className="px-3 py-3 text-left font-black text-slate-700">{t.expiryDate}</th>
             <th className="px-3 py-3 text-left font-black text-slate-700">{currentLang === 'ar' ? 'مفعّل' : currentLang === 'fr' ? 'Activé' : 'Activated'}</th>
             <th className="px-3 py-3 text-left font-black text-slate-700">{currentLang === 'ar' ? 'مدفوع' : currentLang === 'fr' ? 'Payé' : 'Paid'}</th>
           </tr>
@@ -116,10 +163,18 @@ export const CoursesHub: React.FC<CoursesHubProps> = ({
             <tr key={row.id} className="border-t border-slate-200">
               <td className="px-3 py-3 font-semibold text-slate-800">{row.fullName}</td>
               <td className="px-3 py-3 text-slate-700">{row.username}</td>
+              <td className="px-3 py-3 text-slate-700">
+                <span aria-label={t.passwordNotStored}>••••••••</span>
+                <button type="button" onClick={() => resetAccountPassword(row)} className="ms-2 text-indigo-700 underline">{t.resetPassword}</button>
+              </td>
               <td className="px-3 py-3 text-slate-700">{row.email}</td>
+              <td className="px-3 py-3 text-slate-700">{row.phone || '—'}</td>
               <td className="px-3 py-3 text-slate-700">{row.schoolOrSubject || '—'}</td>
-              <td className="px-3 py-3 text-slate-700">{new Date(`${row.createdAt.replace(' ', 'T')}Z`).toLocaleDateString()}</td>
-              <td className="px-3 py-3 text-slate-700">{row.expiresAt ? new Date(row.expiresAt).toLocaleDateString() : '—'}</td>
+              <td className="px-3 py-3 text-slate-700">{formatDate(row.createdAt)}</td>
+              <td className="px-3 py-3 text-slate-700">
+                <div>{formatDate(row.expiresAt)}</div>
+                <button type="button" onClick={() => void updateAccount(row, { renew: true })} className="mt-1 text-indigo-700 underline">{t.renewMonth}</button>
+              </td>
               <td className="px-3 py-3">
                 <input
                   type="checkbox"
@@ -142,7 +197,7 @@ export const CoursesHub: React.FC<CoursesHubProps> = ({
           ))}
           {rows.length === 0 && (
             <tr>
-              <td colSpan={8} className="px-4 py-8 text-center text-slate-500">
+              <td colSpan={10} className="px-4 py-8 text-center text-slate-500">
                 {currentLang === 'ar' ? 'لا توجد تسجيلات بعد.' : currentLang === 'fr' ? 'Aucune inscription pour le moment.' : 'No registrations yet.'}
               </td>
             </tr>
@@ -181,10 +236,10 @@ export const CoursesHub: React.FC<CoursesHubProps> = ({
           </div>
 
           <button
-            onClick={() => setDirectorScreen('home')}
+            onClick={returnToMain}
             className="text-slate-500 hover:text-slate-800 text-xs font-bold"
           >
-            {currentLang === 'ar' ? 'رجوع' : currentLang === 'fr' ? 'Retour' : 'Back'}
+            {t.backToMain}
           </button>
         </div>
 
@@ -263,19 +318,54 @@ export const CoursesHub: React.FC<CoursesHubProps> = ({
           </div>
 
           <button
-            onClick={() => setDirectorScreen('home')}
+            onClick={returnToMain}
             className="text-slate-600 hover:text-slate-800 text-xs font-bold"
           >
-            {currentLang === 'ar' ? 'العودة' : currentLang === 'fr' ? 'Retour' : 'Back'}
+            {t.backToMain}
           </button>
         </div>
+
+        <div className="flex flex-wrap gap-2">
+          <button type="button" onClick={() => setDirectorTab('accounts')} className={`rounded-xl px-4 py-2 text-xs font-black ${directorTab === 'accounts' ? 'bg-indigo-700 text-white' : 'bg-white text-slate-700 border border-slate-200'}`}>
+            {currentLang === 'ar' ? 'الحسابات' : currentLang === 'fr' ? 'Comptes' : 'Accounts'}
+          </button>
+          <button type="button" onClick={() => setDirectorTab('sessions')} className={`rounded-xl px-4 py-2 text-xs font-black ${directorTab === 'sessions' ? 'bg-indigo-700 text-white' : 'bg-white text-slate-700 border border-slate-200'}`}>
+            {t.sessionsTab}
+          </button>
+        </div>
+
+        <section className="rounded-2xl border border-rose-200 bg-white p-4 space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <h3 className="font-black text-slate-900">{t.liveBroadcast}</h3>
+            <button type="button" onClick={() => void handleStreamSetup()} disabled={streamSetupLoading} className="rounded-xl bg-rose-600 px-4 py-2 text-xs font-black text-white disabled:opacity-60">
+              {streamSetupLoading ? '…' : t.setupLiveBroadcast}
+            </button>
+          </div>
+          {streamSetupError && <p role="alert" className="text-xs text-red-700">{streamSetupError}</p>}
+          {streamSetup && (
+            <div className="space-y-2 break-all text-xs text-slate-700">
+              <p>{t.liveWaiting}</p>
+              {streamSetup.playbackUrl && <p><span className="font-bold">{t.playbackUrlLabel}: </span>{streamSetup.playbackUrl}</p>}
+              <p><span className="font-bold">{t.streamUrl}: </span>{streamSetup.rtmpsUrl}</p>
+              <p><span className="font-bold">{t.streamKey}: </span><code>{streamSetup.streamKey}</code></p>
+              <p className="text-amber-700">{t.passwordNotStored}</p>
+            </div>
+          )}
+        </section>
 
         {directorDataError && (
           <div role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-xs font-semibold text-red-700">
             {directorDataError}
           </div>
         )}
-        {directorLoading ? (
+        {directorMessage && (
+          <div role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-xs font-semibold text-emerald-700">
+            {directorMessage}
+          </div>
+        )}
+        {directorTab === 'sessions' && directorToken ? (
+          <DirectorSessionsPanel currentLang={currentLang} token={directorToken} grades={LEBANESE_GRADE_LEVELS} />
+        ) : directorLoading ? (
           <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center text-sm text-slate-500">
             {currentLang === 'ar' ? 'جارٍ تحميل التسجيلات...' : currentLang === 'fr' ? 'Chargement des inscriptions...' : 'Loading registrations...'}
           </div>
@@ -292,32 +382,50 @@ export const CoursesHub: React.FC<CoursesHubProps> = ({
   return (
     <div className="space-y-8">
       <div className="rounded-3xl bg-linear-to-r from-amber-500 via-emerald-600 to-indigo-700 p-6 sm:p-8 text-white shadow-xl relative overflow-hidden">
-        <div className="max-w-4xl mx-auto space-y-6 text-center relative z-10">
-          <div className="space-y-2">
-            <h1 className="text-3xl sm:text-4xl lg:text-5xl font-black tracking-tight text-white leading-tight">
-              {t.heroTitle}
-            </h1>
-            <p className="text-slate-100 text-sm sm:text-base font-semibold max-w-2xl mx-auto">
-              {t.heroSubtitle}
-            </p>
-          </div>
+        <div className="max-w-6xl mx-auto grid gap-6 lg:grid-cols-[minmax(0,1fr)_16rem] items-center relative z-10">
+          <div className="space-y-6 text-center">
+            <div className="space-y-2">
+              <h1 className="text-3xl sm:text-4xl lg:text-5xl font-black tracking-tight text-white leading-tight">
+                {t.heroTitle}
+              </h1>
+              <p className="text-slate-100 text-sm sm:text-base font-semibold max-w-2xl mx-auto">
+                {t.heroSubtitle}
+              </p>
+            </div>
 
-          <div className="bg-slate-950/40 backdrop-blur-md rounded-2xl p-4 sm:p-5 border border-white/20 max-w-2xl mx-auto shadow-lg space-y-1">
+            <div className="bg-slate-950/40 backdrop-blur-md rounded-2xl p-4 sm:p-5 border border-white/20 max-w-2xl mx-auto shadow-lg space-y-1">
             <div className="flex items-center justify-center gap-2">
               <Clock className="w-4 h-4 text-amber-300 animate-pulse" />
               <span className="text-xs font-black text-amber-300 uppercase tracking-wider">
-                {currentLang === 'ar' ? 'مواعيد الحصص المباشرة الرسمية' : 'Official Live Sessions Schedule'}
+                {currentLang === 'ar' ? 'غرفة البث المباشر' : currentLang === 'fr' ? 'Salle de diffusion en direct' : 'Live broadcast room'}
               </span>
               <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
             </div>
             <p className="text-sm sm:text-base font-black text-white">
               {currentLang === 'ar'
-                ? 'تبدأ الحصص المباشرة يومياً من الساعة 4:00 عصراً حتى 8:00 مساءً (بتوقيت بيروت)'
+                ? 'افتح غرفة البث المباشر المشتركة لجميع الصفوف'
                 : currentLang === 'fr'
-                ? 'Les cours en direct se déroulent quotidiennement de 16h00 à 20h00 (Heure de Beyrouth)'
-                : 'Live Sessions run daily from 4:00 PM to 8:00 PM (Beirut Time)'}
+                  ? 'Ouvrir la salle de diffusion commune à toutes les classes'
+                  : 'Open the shared live room for all grades'}
             </p>
           </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => setDirectorScreen('login')}
+            className="w-full rounded-2xl border border-white/20 bg-slate-950/35 p-5 text-start shadow-lg backdrop-blur transition hover:bg-slate-950/50"
+          >
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-[10px] font-black uppercase tracking-wider text-amber-200">Admin</span>
+              <ShieldCheck className="h-5 w-5 text-white" />
+            </div>
+            <span className="mt-2 block text-lg font-black">
+              {currentLang === 'ar' ? 'المدير' : currentLang === 'fr' ? 'Directeur' : 'Director'}
+            </span>
+            <span className="mt-1 block text-xs font-semibold text-indigo-100">
+              {currentLang === 'ar' ? 'تسجيل الدخول وإدارة المحتوى' : currentLang === 'fr' ? 'Connexion et gestion du contenu' : 'Sign in and manage content'}
+            </span>
+          </button>
         </div>
       </div>
 
@@ -330,8 +438,10 @@ export const CoursesHub: React.FC<CoursesHubProps> = ({
             </h3>
             <p className="text-xs text-slate-500 font-medium mt-0.5">
               {currentLang === 'ar'
-                ? 'انقر على أي صف للانتقال فوراً إلى شاشة الحصص المخزنة (20 حصة) والحصص المباشرة'
-                : 'Click any grade level to access its 20 stored exercise sessions and live interactive stream'}
+                ? 'انقر على الصف لعرض موارده التعليمية وغرفة البث المباشر'
+                : currentLang === 'fr'
+                  ? 'Sélectionnez une classe pour consulter ses ressources et le direct'
+                  : 'Select a grade to browse its learning resources and live room'}
             </p>
           </div>
         </div>

@@ -43,6 +43,29 @@ export interface StoredSessionRecord {
   mediaUrl: string | null;
 }
 
+export interface SessionInput {
+  gradeId: string;
+  subject: string;
+  title: string;
+  sourceName: string;
+  sourceUrl: string;
+  playbackUrl?: string;
+  teacherName?: string;
+  isLive?: boolean;
+}
+
+export interface LiveStreamStatus {
+  status: 'unconfigured' | 'waiting';
+  playbackUrl: string | null;
+}
+
+export interface LiveStreamSetup {
+  inputUid: string;
+  rtmpsUrl: string;
+  streamKey: string;
+  playbackUrl: string | null;
+}
+
 const API_BASE_URL = (import.meta.env.VITE_CLOUDFLARE_API_URL || '').replace(/\/+$/, '');
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -91,12 +114,42 @@ export function getDirectorAccounts(token: string): Promise<{
 export function updateDirectorAccount(
   token: string,
   accountId: string,
-  update: { activated?: boolean; paid?: boolean },
+  update: { activated?: boolean; paid?: boolean; renew?: boolean; password?: string },
 ): Promise<{ account: CloudflareAccount }> {
   return request(`/api/director/accounts/${encodeURIComponent(accountId)}`, {
     method: 'PATCH',
     headers: authHeaders(token),
     body: JSON.stringify(update),
+  });
+}
+
+export function getDirectorSessions(token: string): Promise<{ sessions: StoredSessionRecord[] }> {
+  return request('/api/director/sessions', { headers: authHeaders(token) });
+}
+
+export function createDirectorSession(token: string, session: SessionInput): Promise<{ saved: number }> {
+  return request('/api/director/sessions', {
+    method: 'POST',
+    headers: authHeaders(token),
+    body: JSON.stringify({ sessions: [session] }),
+  });
+}
+
+export function deleteDirectorSession(token: string, sessionId: string): Promise<{ deleted: boolean }> {
+  return request(`/api/director/sessions/${encodeURIComponent(sessionId)}`, {
+    method: 'DELETE',
+    headers: authHeaders(token),
+  });
+}
+
+export function getLiveStreamStatus(): Promise<LiveStreamStatus> {
+  return request('/api/live-stream');
+}
+
+export function setupLiveStream(token: string): Promise<LiveStreamSetup> {
+  return request('/api/director/live-stream', {
+    method: 'POST',
+    headers: authHeaders(token),
   });
 }
 

@@ -7,6 +7,7 @@ const componentFiles = [
   'ArchiveSessionsModal.tsx',
   'BookingModal.tsx',
   'CoursesHub.tsx',
+  'DirectorSessionsPanel.tsx',
   'CurriculumOverview.tsx',
   'ExamPracticeModal.tsx',
   'GradeSessionsView.tsx',
@@ -19,7 +20,6 @@ const componentFiles = [
 ];
 
 const dataFiles = [
-  'mock20StoredSessions.ts',
   'mockAgenda.ts',
   'mockExams.ts',
   'mockGradesAndSessions.ts',

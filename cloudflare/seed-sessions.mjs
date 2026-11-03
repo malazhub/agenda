@@ -193,6 +193,92 @@ const economics = [
   'Reading economic data', 'Cumulative economics review',
 ];
 
+const scienceTopics = {
+  primary: [
+    'Living and non-living things', 'Plant parts and plant life cycles', 'Animal groups and habitats',
+    'Human senses and healthy habits', 'Weather observations and seasons',
+  ],
+  middle: [
+    'Cells, tissues, and organ systems', 'Ecosystems and food webs', 'Earth materials and the rock cycle',
+    'Weather, climate, and the water cycle', 'Scientific investigations and evidence',
+  ],
+  secondary: [
+    'Cell biology and membrane transport', 'Genetics and inheritance', 'Evolution and natural selection',
+    'Ecology, populations, and biodiversity', 'Experimental design and scientific data',
+  ],
+};
+
+const physicsTopics = {
+  primary: [
+    'Pushes, pulls, and simple motion', 'Light, shadows, and reflection',
+    'Sound and vibration', 'Magnets and magnetic materials',
+  ],
+  middle: [
+    'Speed, distance, and time', 'Balanced and unbalanced forces', 'Energy transfer and conservation',
+    'Waves, sound, and light', 'Electric circuits and conductors',
+  ],
+  secondary: [
+    'Motion graphs and kinematics', 'Newton’s laws and force diagrams',
+    'Work, power, and energy conservation', 'Waves, optics, and electric circuits',
+  ],
+};
+
+const chemistryTopics = {
+  primary: [
+    'Solids, liquids, and gases', 'Materials and their properties',
+    'Reversible and irreversible changes', 'Mixtures and separating materials',
+  ],
+  middle: [
+    'Atoms, elements, and compounds', 'The periodic table and element groups',
+    'Physical and chemical changes', 'Acids, bases, and indicators',
+  ],
+  secondary: [
+    'Atomic structure and periodic trends', 'Chemical bonding and molecular structure',
+    'Balancing equations and reaction types', 'Moles, stoichiometry, and solution concentration',
+  ],
+};
+
+const grammarByLevel = {
+  primary: [
+    'Parts of speech and simple sentences', 'Capital letters and end punctuation',
+    'Nouns, verbs, and adjectives', 'Reading for meaning and new vocabulary',
+    'Writing a clear paragraph',
+  ],
+  middle: [
+    'Sentence structure and clauses', 'Subject-verb agreement and verb tenses',
+    'Punctuation and paragraph organization', 'Vocabulary, context, and inference',
+    'Writing claims with evidence',
+  ],
+  secondary: [
+    'Complex sentences and clause types', 'Verb mood, tense, and agreement',
+    'Rhetorical analysis and textual evidence', 'Thesis statements and essay structure',
+    'Editing grammar, style, and citations',
+  ],
+};
+
+const resourceSources = {
+  math: [
+    { sourceName: 'Khan Academy', sourceUrl: 'https://www.khanacademy.org/math' },
+    { sourceName: 'CK-12 Foundation', sourceUrl: 'https://www.ck12.org/student/' },
+  ],
+  science: [
+    { sourceName: 'Khan Academy', sourceUrl: 'https://www.khanacademy.org/science' },
+    { sourceName: 'CK-12 Foundation', sourceUrl: 'https://www.ck12.org/student/' },
+  ],
+  physics: [
+    { sourceName: 'PhET Simulations — University of Colorado Boulder', sourceUrl: 'https://phet.colorado.edu/en/simulations/filter?subjects=physics&type=html' },
+    { sourceName: 'OpenStax — Rice University', sourceUrl: 'https://openstax.org/subjects/science' },
+  ],
+  chemistry: [
+    { sourceName: 'Khan Academy', sourceUrl: 'https://www.khanacademy.org/science/chemistry' },
+    { sourceName: 'OpenStax — Rice University', sourceUrl: 'https://openstax.org/details/books/chemistry-2e' },
+  ],
+  grammar: [
+    { sourceName: 'Purdue OWL — Purdue University', sourceUrl: 'https://owl.purdue.edu/' },
+    { sourceName: 'Khan Academy', sourceUrl: 'https://www.khanacademy.org/humanities/grammar' },
+  ],
+};
+
 const gradeCatalog = {
   kg: { source: 'https://www.khanacademy.org/math/cc-kindergarten-math', topics: kindergartenMath, subject: 'Mathematics' },
   eb1: { source: 'https://www.khanacademy.org/math/cc-1st-grade-math', topics: grade1Math, subject: 'Mathematics' },
@@ -215,16 +301,30 @@ const gradeCatalog = {
 
 const escapeSql = (value) => `'${String(value).replace(/'/g, "''")}'`;
 const inserts = [];
-for (const [gradeId, catalog] of Object.entries(gradeCatalog)) {
-  for (const [index, title] of catalog.topics.entries()) {
-    const id = `ka-${gradeId}-${String(index + 1).padStart(2, '0')}`;
+for (const [gradeIndex, [gradeId, catalog]] of Object.entries(gradeCatalog).entries()) {
+  const level = ['kg', 'eb1', 'eb2', 'eb3', 'eb4', 'eb5'].includes(gradeId)
+    ? 'primary'
+    : ['eb6', 'eb7', 'eb8', 'brevet'].includes(gradeId)
+      ? 'middle'
+      : 'secondary';
+  const resources = [
+    ...catalog.topics.slice(0, 6).map((title, index) => ({ subject: 'Mathematics', title, ...resourceSources.math[(gradeIndex + index) % resourceSources.math.length] })),
+    ...scienceTopics[level].map((title, index) => ({ subject: 'Science', title, ...resourceSources.science[(gradeIndex + index) % resourceSources.science.length] })),
+    ...physicsTopics[level].map((title, index) => ({ subject: 'Physics', title, ...resourceSources.physics[(gradeIndex + index) % resourceSources.physics.length] })),
+    ...chemistryTopics[level].map((title, index) => ({ subject: 'Chemistry', title, ...resourceSources.chemistry[(gradeIndex + index) % resourceSources.chemistry.length] })),
+    ...grammarByLevel[level].map((title, index) => ({ subject: 'Grammar & Writing', title, ...resourceSources.grammar[(gradeIndex + index) % resourceSources.grammar.length] })),
+  ];
+  for (const [index, resource] of resources.entries()) {
+    const id = `curriculum-${gradeId}-${String(index + 1).padStart(2, '0')}`;
     inserts.push(
       `INSERT OR REPLACE INTO sessions (id, grade_id, subject, title, source_name, source_url, playback_url, is_live) VALUES (` +
-      `${escapeSql(id)}, ${escapeSql(gradeId)}, ${escapeSql(catalog.subject)}, ${escapeSql(title)}, ` +
-      `${escapeSql('Khan Academy')}, ${escapeSql(catalog.source)}, ${escapeSql(catalog.source)}, 0);`,
+      `${escapeSql(id)}, ${escapeSql(gradeId)}, ${escapeSql(resource.subject)}, ${escapeSql(resource.title)}, ` +
+      `${escapeSql(resource.sourceName)}, ${escapeSql(resource.sourceUrl)}, ${escapeSql(resource.sourceUrl)}, 0);`,
     );
   }
 }
+
+const cleanup = "DELETE FROM sessions WHERE id LIKE 'ka-%' OR id LIKE 'curriculum-%';";
 
 if (process.argv.includes('--dry-run')) {
   console.log(`Catalog contains ${inserts.length} sessions across ${Object.keys(gradeCatalog).length} grades.`);
@@ -236,7 +336,7 @@ const sqlFile = join(tempDir, 'sessions.sql');
 const wranglerCli = join(process.cwd(), 'node_modules', 'wrangler', 'bin', 'wrangler.js');
 const location = process.argv.includes('--local') ? '--local' : '--remote';
 try {
-  await writeFile(sqlFile, inserts.join('\n'), { encoding: 'utf8', mode: 0o600 });
+  await writeFile(sqlFile, [cleanup, ...inserts].join('\n'), { encoding: 'utf8', mode: 0o600 });
   const result = spawnSync(
     process.execPath,
     [wranglerCli, 'd1', 'execute', 'agenda-db', location, '--config', 'cloudflare/wrangler.toml', '--file', sqlFile],
@@ -248,7 +348,7 @@ try {
   } else if (result.status !== 0) {
     process.exitCode = result.status || 1;
   } else {
-    console.log(`Seeded ${inserts.length} source-linked learning sessions across ${Object.keys(gradeCatalog).length} grades.`);
+    console.log(`Seeded ${inserts.length} multi-subject resources across ${Object.keys(gradeCatalog).length} grades.`);
   }
 } finally {
   await rm(tempDir, { recursive: true, force: true });
