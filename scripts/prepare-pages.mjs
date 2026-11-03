@@ -33,6 +33,7 @@ const copies = [
   ['types.ts', 'src/types.ts'],
   ['translations.ts', 'src/translations.ts'],
   ['aiSolverService.ts', 'src/services/aiSolverService.ts'],
+  ['cloudflareApi.ts', 'src/services/cloudflareApi.ts'],
   ...componentFiles.map((file) => [file, `src/components/${file}`]),
   ...dataFiles.map((file) => [file, `src/data/${file}`]),
 ];

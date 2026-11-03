@@ -1,0 +1,17 @@
+name = "agenda-api"
+main = "worker.js"
+compatibility_date = "2026-11-03"
+account_id = "15cd99734560c6868dd06d79236a0334"
+
+[vars]
+ALLOWED_ORIGINS = "https://malazhub.github.io,http://localhost:3000"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "agenda-db"
+database_id = "45f83e93-edfb-46dd-9cc0-e271c53bf30a"
+migrations_dir = "migrations"
+
+[[r2_buckets]]
+binding = "SESSION_MEDIA_BUCKET"
+bucket_name = "agenda-session-media"
