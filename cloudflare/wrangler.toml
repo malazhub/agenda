@@ -6,7 +6,7 @@ account_id = "15cd99734560c6868dd06d79236a0334"
 [vars]
 ALLOWED_ORIGINS = "https://malazhub.github.io,http://localhost:3000"
 CLOUDFLARE_ACCOUNT_ID = "15cd99734560c6868dd06d79236a0334"
-STREAM_CUSTOMER_CODE = ""
+STREAM_CUSTOMER_CODE = "44dtqsmpfu8lmln4"
 
 [[d1_databases]]
 binding = "DB"
