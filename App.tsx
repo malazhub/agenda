@@ -9,6 +9,7 @@ import {
 } from './types';
 import { translations } from './translations';
 import { MOCK_TEACHERS } from './data/mockTeachers';
+import type { CloudflareAccount } from './services/cloudflareApi';
 
 import { Header } from './components/Header';
 import { CoursesHub } from './components/CoursesHub';
@@ -110,12 +111,13 @@ export default function App() {
     setIsClassroomActive(true);
   };
 
-  const handleRegisterSuccess = (name: string, role: 'student' | 'teacher') => {
-    setUserProfile(prev => ({ ...prev, name, role }));
+  const handleRegisterSuccess = (account: CloudflareAccount) => {
+    const role = account.role === 'educator' ? 'teacher' : 'student';
+    setUserProfile(prev => ({ ...prev, name: account.fullName, email: account.email, role }));
     showToast(
       currentLang === 'ar'
-        ? `أهلاً بك يا ${name}! تم إنشاء حسابك بنجاح.`
-        : `Welcome, ${name}! Your account has been registered.`
+        ? `أهلاً بك يا ${account.fullName}! تم إنشاء حسابك بنجاح.`
+        : `Welcome, ${account.fullName}! Your account has been registered.`
     );
   };
 

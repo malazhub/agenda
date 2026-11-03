@@ -8,7 +8,14 @@
     "build": "vite build",
     "preview": "vite preview",
     "clean": "rm -rf dist server.js",
-    "lint": "tsc --noEmit"
+    "lint": "node scripts/prepare-pages.mjs && tsc --noEmit",
+    "test:worker": "node --test cloudflare/worker.test.mjs",
+    "cloudflare:dev": "wrangler dev --config cloudflare/wrangler.toml",
+    "cloudflare:deploy": "wrangler deploy --config cloudflare/wrangler.toml",
+    "cloudflare:migrate": "wrangler d1 migrations apply agenda-db --remote --config cloudflare/wrangler.toml",
+    "cloudflare:migrate:local": "wrangler d1 migrations apply agenda-db --local --config cloudflare/wrangler.toml",
+    "cloudflare:bootstrap-director": "node cloudflare/bootstrap-director.mjs",
+    "cloudflare:seed-sessions": "node cloudflare/seed-sessions.mjs"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",
@@ -31,6 +38,7 @@
     "tailwindcss": "^4.3.3",
     "tsx": "^4.21.0",
     "typescript": "^7.0.2",
-    "@types/express": "^4.17.21"
+    "@types/express": "^4.17.21",
+    "wrangler": "^4.0.0"
   }
 }

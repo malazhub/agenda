@@ -1,13 +1,13 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Language, GradeLevelDef, LiveSessionInfo } from '../types';
 import { translations } from '../translations';
 import { LEBANESE_GRADE_LEVELS } from '../data/mockGradesAndSessions';
 import { GradeSessionsView } from './GradeSessionsView';
+import { getDirectorAccounts, loginAccount, updateDirectorAccount } from '../services/cloudflareApi';
+import type { CloudflareAccount } from '../services/cloudflareApi';
 import {
   Clock,
-  Video,
   GraduationCap,
-  CheckCircle2,
   ChevronRight,
   ChevronLeft,
   ShieldCheck,
@@ -23,17 +23,10 @@ interface CoursesHubProps {
   onEnterLiveClassroom?: (session?: LiveSessionInfo) => void;
 }
 
-type DirectorRow = {
-  name: string;
-  joiningDate: string;
-  expiryDate: string;
-  activated: boolean;
-  paid: boolean;
-};
+type DirectorRow = CloudflareAccount;
 
 export const CoursesHub: React.FC<CoursesHubProps> = ({
-  currentLang,
-  onEnterLiveClassroom
+  currentLang
 }) => {
   const t = translations[currentLang];
   const isRTL = currentLang === 'ar';
@@ -42,69 +35,122 @@ export const CoursesHub: React.FC<CoursesHubProps> = ({
   const [directorScreen, setDirectorScreen] = useState<'home' | 'login' | 'dashboard'>('home');
   const [directorForm, setDirectorForm] = useState({ username: '', password: '' });
   const [directorError, setDirectorError] = useState('');
+  const [directorToken, setDirectorToken] = useState(() =>
+    typeof window === 'undefined' ? '' : window.sessionStorage.getItem('agenda-director-token') || ''
+  );
+  const [studentRows, setStudentRows] = useState<DirectorRow[]>([]);
+  const [educatorRows, setEducatorRows] = useState<DirectorRow[]>([]);
+  const [directorLoading, setDirectorLoading] = useState(false);
+  const [directorDataError, setDirectorDataError] = useState('');
 
-  const [studentRows, setStudentRows] = useState<DirectorRow[]>([
-    { name: 'Karim Mansour', joiningDate: '2026-10-01', expiryDate: '2027-01-31', activated: true, paid: true },
-    { name: 'Sanaa Karam', joiningDate: '2026-09-15', expiryDate: '2026-12-15', activated: true, paid: false },
-    { name: 'Rami El Feghali', joiningDate: '2026-07-11', expiryDate: '2026-11-30', activated: false, paid: false }
-  ]);
+  useEffect(() => {
+    if (directorScreen !== 'dashboard' || !directorToken) return;
+    let active = true;
+    setDirectorLoading(true);
+    setDirectorDataError('');
+    getDirectorAccounts(directorToken)
+      .then(({ students, educators }) => {
+        if (!active) return;
+        setStudentRows(students);
+        setEducatorRows(educators);
+      })
+      .catch((error) => {
+        if (active) setDirectorDataError(error instanceof Error ? error.message : 'Unable to load registrations.');
+      })
+      .finally(() => {
+        if (active) setDirectorLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [directorScreen, directorToken]);
 
-  const [educatorRows, setEducatorRows] = useState<DirectorRow[]>([
-    { name: 'Jad Khoury', joiningDate: '2026-10-02', expiryDate: '2027-02-15', activated: true, paid: true },
-    { name: 'Nour Haddad', joiningDate: '2026-09-20', expiryDate: '2027-01-20', activated: false, paid: false },
-    { name: 'Charbel Daou', joiningDate: '2026-07-15', expiryDate: '2026-12-14', activated: true, paid: true }
-  ]);
-
-  const handleDirectorLogin = () => {
-    if (
-      directorForm.username.trim() === 'malaz' &&
-      directorForm.password === 'mjagenda1971'
-    ) {
-      setDirectorError('');
+  const handleDirectorLogin = async () => {
+    setDirectorError('');
+    try {
+      const { account, token } = await loginAccount(directorForm.username, directorForm.password);
+      if (account.role !== 'director') {
+        throw new Error('This account does not have Director access.');
+      }
+      sessionStorage.setItem('agenda-director-token', token);
+      setDirectorToken(token);
       setDirectorScreen('dashboard');
-      return;
+      setDirectorForm({ username: '', password: '' });
+    } catch (error) {
+      setDirectorError(error instanceof Error ? error.message : 'Unable to sign in.');
     }
-
-    setDirectorError(
-      currentLang === 'ar'
-        ? 'اسم المستخدم أو كلمة المرور غير صحيح'
-        : currentLang === 'fr'
-        ? 'Nom d’utilisateur ou mot de passe incorrect'
-        : 'Incorrect username or password'
-    );
   };
 
-  const toggleStudentRow = (index: number) => {
-    setStudentRows(prev =>
-      prev.map((row, i) =>
-        i === index ? { ...row, activated: !row.activated } : row
-      )
-    );
+  const updateAccount = async (account: DirectorRow, update: { activated?: boolean; paid?: boolean }) => {
+    if (!directorToken) return;
+    setDirectorDataError('');
+    try {
+      const { account: savedAccount } = await updateDirectorAccount(directorToken, account.id, update);
+      const setRows = account.role === 'student' ? setStudentRows : setEducatorRows;
+      setRows((rows) => rows.map((row) => row.id === savedAccount.id ? savedAccount : row));
+    } catch (error) {
+      setDirectorDataError(error instanceof Error ? error.message : 'Unable to save the account status.');
+    }
   };
 
-  const toggleEducatorRow = (index: number) => {
-    setEducatorRows(prev =>
-      prev.map((row, i) =>
-        i === index ? { ...row, activated: !row.activated } : row
-      )
-    );
-  };
-
-  const toggleStudentPaid = (index: number) => {
-    setStudentRows(prev =>
-      prev.map((row, i) =>
-        i === index ? { ...row, paid: !row.paid } : row
-      )
-    );
-  };
-
-  const toggleEducatorPaid = (index: number) => {
-    setEducatorRows(prev =>
-      prev.map((row, i) =>
-        i === index ? { ...row, paid: !row.paid } : row
-      )
-    );
-  };
+  const renderDirectorTable = (title: string, rows: DirectorRow[]) => (
+    <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white">
+      <h3 className="px-4 py-3 text-sm font-black text-slate-900 bg-slate-100 border-b border-slate-200">
+        {title} ({rows.length})
+      </h3>
+      <table className="min-w-full text-xs">
+        <thead className="bg-slate-100">
+          <tr>
+            <th className="px-3 py-3 text-left font-black text-slate-700">{currentLang === 'ar' ? 'الاسم' : currentLang === 'fr' ? 'Nom' : 'Name'}</th>
+            <th className="px-3 py-3 text-left font-black text-slate-700">{currentLang === 'ar' ? 'اسم المستخدم' : currentLang === 'fr' ? 'Identifiant' : 'Username'}</th>
+            <th className="px-3 py-3 text-left font-black text-slate-700">Email</th>
+            <th className="px-3 py-3 text-left font-black text-slate-700">{currentLang === 'ar' ? 'المدرسة / المادة' : currentLang === 'fr' ? 'École / matière' : 'School / subject'}</th>
+            <th className="px-3 py-3 text-left font-black text-slate-700">{currentLang === 'ar' ? 'تاريخ التسجيل' : currentLang === 'fr' ? 'Inscription' : 'Joined'}</th>
+            <th className="px-3 py-3 text-left font-black text-slate-700">{currentLang === 'ar' ? 'تاريخ الانتهاء' : currentLang === 'fr' ? 'Expiration' : 'Expiry date'}</th>
+            <th className="px-3 py-3 text-left font-black text-slate-700">{currentLang === 'ar' ? 'مفعّل' : currentLang === 'fr' ? 'Activé' : 'Activated'}</th>
+            <th className="px-3 py-3 text-left font-black text-slate-700">{currentLang === 'ar' ? 'مدفوع' : currentLang === 'fr' ? 'Payé' : 'Paid'}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row) => (
+            <tr key={row.id} className="border-t border-slate-200">
+              <td className="px-3 py-3 font-semibold text-slate-800">{row.fullName}</td>
+              <td className="px-3 py-3 text-slate-700">{row.username}</td>
+              <td className="px-3 py-3 text-slate-700">{row.email}</td>
+              <td className="px-3 py-3 text-slate-700">{row.schoolOrSubject || '—'}</td>
+              <td className="px-3 py-3 text-slate-700">{new Date(`${row.createdAt.replace(' ', 'T')}Z`).toLocaleDateString()}</td>
+              <td className="px-3 py-3 text-slate-700">{row.expiresAt ? new Date(row.expiresAt).toLocaleDateString() : '—'}</td>
+              <td className="px-3 py-3">
+                <input
+                  type="checkbox"
+                  checked={row.activated}
+                  onChange={() => void updateAccount(row, { activated: !row.activated })}
+                  aria-label={`${row.fullName} activated`}
+                  className="w-4 h-4 accent-indigo-600 cursor-pointer"
+                />
+              </td>
+              <td className="px-3 py-3">
+                <input
+                  type="checkbox"
+                  checked={row.paid}
+                  onChange={() => void updateAccount(row, { paid: !row.paid })}
+                  aria-label={`${row.fullName} paid`}
+                  className="w-4 h-4 accent-indigo-600 cursor-pointer"
+                />
+              </td>
+            </tr>
+          ))}
+          {rows.length === 0 && (
+            <tr>
+              <td colSpan={8} className="px-4 py-8 text-center text-slate-500">
+                {currentLang === 'ar' ? 'لا توجد تسجيلات بعد.' : currentLang === 'fr' ? 'Aucune inscription pour le moment.' : 'No registrations yet.'}
+              </td>
+            </tr>
+          )}
+        </tbody>
+      </table>
+    </div>
+  );
 
   if (activeGradeForSessions) {
     return (
@@ -112,7 +158,6 @@ export const CoursesHub: React.FC<CoursesHubProps> = ({
         currentLang={currentLang}
         selectedGrade={activeGradeForSessions}
         onBack={() => setActiveGradeForSessions(null)}
-        onEnterLiveClassroom={() => onEnterLiveClassroom ? onEnterLiveClassroom() : undefined}
       />
     );
   }
@@ -143,7 +188,13 @@ export const CoursesHub: React.FC<CoursesHubProps> = ({
           </button>
         </div>
 
-        <div className="space-y-4">
+        <form
+          className="space-y-4"
+          onSubmit={(event) => {
+            event.preventDefault();
+            void handleDirectorLogin();
+          }}
+        >
           <div>
             <label className="block text-[11px] font-bold text-slate-700 mb-1">
               {currentLang === 'ar' ? 'اسم المستخدم' : currentLang === 'fr' ? 'Nom d’utilisateur' : 'Username'}
@@ -151,10 +202,12 @@ export const CoursesHub: React.FC<CoursesHubProps> = ({
             <div className="relative">
               <User className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
               <input
+                autoComplete="username"
+                required
                 value={directorForm.username}
                 onChange={e => setDirectorForm(prev => ({ ...prev, username: e.target.value }))}
                 className="w-full pl-9 pr-3 py-2.5 border border-slate-200 rounded-xl text-sm text-slate-800 bg-slate-50 focus:outline-indigo-600"
-                placeholder="malaz"
+                placeholder="username"
               />
             </div>
           </div>
@@ -167,6 +220,8 @@ export const CoursesHub: React.FC<CoursesHubProps> = ({
               <Lock className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
               <input
                 type="password"
+                autoComplete="current-password"
+                required
                 value={directorForm.password}
                 onChange={e => setDirectorForm(prev => ({ ...prev, password: e.target.value }))}
                 className="w-full pl-9 pr-3 py-2.5 border border-slate-200 rounded-xl text-sm text-slate-800 bg-slate-50 focus:outline-indigo-600"
@@ -182,12 +237,12 @@ export const CoursesHub: React.FC<CoursesHubProps> = ({
           )}
 
           <button
-            onClick={handleDirectorLogin}
+            type="submit"
             className="w-full bg-indigo-700 hover:bg-indigo-800 text-white font-black px-4 py-3 rounded-2xl transition cursor-pointer"
           >
             {currentLang === 'ar' ? 'دخول المدير' : currentLang === 'fr' ? 'Se connecter' : 'Login as Director'}
           </button>
-        </div>
+        </form>
       </div>
     );
   }
@@ -215,91 +270,21 @@ export const CoursesHub: React.FC<CoursesHubProps> = ({
           </button>
         </div>
 
-        <div className="space-y-6">
-          <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white">
-            <h3 className="px-4 py-3 text-sm font-black text-slate-900 bg-slate-100 border-b border-slate-200">
-              {currentLang === 'ar' ? 'الطلاب' : currentLang === 'fr' ? 'Étudiants' : 'Students'}
-            </h3>
-            <table className="min-w-full text-xs">
-              <thead className="bg-slate-100">
-                <tr>
-                  <th className="px-3 py-3 text-left font-black text-slate-700">Name</th>
-                  <th className="px-3 py-3 text-left font-black text-slate-700">Joining date</th>
-                  <th className="px-3 py-3 text-left font-black text-slate-700">Expiry date</th>
-                  <th className="px-3 py-3 text-left font-black text-slate-700">Activated</th>
-                  <th className="px-3 py-3 text-left font-black text-slate-700">Paid</th>
-                </tr>
-              </thead>
-              <tbody>
-                {studentRows.map((row, index) => (
-                  <tr key={index} className="border-t border-slate-200">
-                    <td className="px-3 py-3 font-semibold text-slate-800">{row.name}</td>
-                    <td className="px-3 py-3 text-slate-700">{row.joiningDate}</td>
-                    <td className="px-3 py-3 text-slate-700">{row.expiryDate}</td>
-                    <td className="px-3 py-3">
-                      <input
-                        type="checkbox"
-                        checked={row.activated}
-                        onChange={() => toggleStudentRow(index)}
-                        className="w-4 h-4 accent-indigo-600 cursor-pointer"
-                      />
-                    </td>
-                    <td className="px-3 py-3">
-                      <input
-                        type="checkbox"
-                        checked={row.paid}
-                        onChange={() => toggleStudentPaid(index)}
-                        className="w-4 h-4 accent-indigo-600 cursor-pointer"
-                      />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+        {directorDataError && (
+          <div role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-xs font-semibold text-red-700">
+            {directorDataError}
           </div>
-
-          <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white">
-            <h3 className="px-4 py-3 text-sm font-black text-slate-900 bg-slate-100 border-b border-slate-200">
-              {currentLang === 'ar' ? 'المعلمون' : currentLang === 'fr' ? 'Éducateurs' : 'Educators'}
-            </h3>
-            <table className="min-w-full text-xs">
-              <thead className="bg-slate-100">
-                <tr>
-                  <th className="px-3 py-3 text-left font-black text-slate-700">Name</th>
-                  <th className="px-3 py-3 text-left font-black text-slate-700">Joining date</th>
-                  <th className="px-3 py-3 text-left font-black text-slate-700">Expiry date</th>
-                  <th className="px-3 py-3 text-left font-black text-slate-700">Activated</th>
-                  <th className="px-3 py-3 text-left font-black text-slate-700">Paid</th>
-                </tr>
-              </thead>
-              <tbody>
-                {educatorRows.map((row, index) => (
-                  <tr key={index} className="border-t border-slate-200">
-                    <td className="px-3 py-3 font-semibold text-slate-800">{row.name}</td>
-                    <td className="px-3 py-3 text-slate-700">{row.joiningDate}</td>
-                    <td className="px-3 py-3 text-slate-700">{row.expiryDate}</td>
-                    <td className="px-3 py-3">
-                      <input
-                        type="checkbox"
-                        checked={row.activated}
-                        onChange={() => toggleEducatorRow(index)}
-                        className="w-4 h-4 accent-indigo-600 cursor-pointer"
-                      />
-                    </td>
-                    <td className="px-3 py-3">
-                      <input
-                        type="checkbox"
-                        checked={row.paid}
-                        onChange={() => toggleEducatorPaid(index)}
-                        className="w-4 h-4 accent-indigo-600 cursor-pointer"
-                      />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+        )}
+        {directorLoading ? (
+          <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center text-sm text-slate-500">
+            {currentLang === 'ar' ? 'جارٍ تحميل التسجيلات...' : currentLang === 'fr' ? 'Chargement des inscriptions...' : 'Loading registrations...'}
           </div>
-        </div>
+        ) : (
+          <div className="space-y-6">
+            {renderDirectorTable(currentLang === 'ar' ? 'الطلاب' : currentLang === 'fr' ? 'Étudiants' : 'Students', studentRows)}
+            {renderDirectorTable(currentLang === 'ar' ? 'المعلمون' : currentLang === 'fr' ? 'Éducateurs' : 'Educators', educatorRows)}
+          </div>
+        )}
       </div>
     );
   }
@@ -376,16 +361,22 @@ export const CoursesHub: React.FC<CoursesHubProps> = ({
               </span>
             </button>
           ))}
-        </div>
-
-        <div className="mt-4">
           <button
+            type="button"
             onClick={() => setDirectorScreen('login')}
-            className="w-full bg-gradient-to-r from-indigo-700 to-blue-700 hover:from-indigo-800 hover:to-blue-800 text-white font-black px-4 py-3 rounded-2xl shadow-sm transition cursor-pointer"
+            className="min-h-24 p-3 rounded-2xl text-start transition-all cursor-pointer border border-indigo-200 bg-gradient-to-br from-indigo-700 to-blue-700 text-white shadow-sm hover:from-indigo-800 hover:to-blue-800 hover:shadow-md"
           >
-            <span className="flex items-center justify-center gap-2">
-              <ShieldCheck className="w-4 h-4" />
-              <span>{currentLang === 'ar' ? 'المدير' : currentLang === 'fr' ? 'Directeur' : 'Director'}</span>
+            <div className="flex items-center justify-between gap-1 mb-1.5">
+              <span className="text-[10px] font-black px-2 py-0.5 rounded-md bg-white/15 text-white">
+                {currentLang === 'ar' ? 'إدارة' : currentLang === 'fr' ? 'ADMIN' : 'ADMIN'}
+              </span>
+              <ShieldCheck className="w-4 h-4 text-white/80" />
+            </div>
+            <h4 className="font-black text-xs leading-tight">
+              {currentLang === 'ar' ? 'المدير' : currentLang === 'fr' ? 'Directeur' : 'Director'}
+            </h4>
+            <span className="text-[9px] block mt-1 font-semibold text-indigo-100">
+              {currentLang === 'ar' ? 'لوحة الإدارة' : currentLang === 'fr' ? 'Espace de gestion' : 'Management dashboard'}
             </span>
           </button>
         </div>
