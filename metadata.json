@@ -1,0 +1,6 @@
+{
+  "name": "Agenda - Lebanese K-12 Tutoring & 26-Year Exam Archive",
+  "description": "Lebanon's trilingual K-12 educational platform featuring a 26-year archive (2000–2026) of official Brevet & Bac exams, daily school homework tracker, and on-demand certified tutoring at a flat $7/session with 3 free trials.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
