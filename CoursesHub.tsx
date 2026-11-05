@@ -23,6 +23,7 @@ interface CoursesHubProps {
   onSelectQuestionForBooking: (question: any, exam: any) => void;
   onStartPractice: (exam: any) => void;
   onEnterLiveClassroom?: (session?: LiveSessionInfo) => void;
+  onShowMessage: (message: string) => void;
   directorLoginRequest: number;
   registeredAccount: CloudflareAccount | null;
   sessionToken: string;
@@ -35,11 +36,13 @@ export const CoursesHub: React.FC<CoursesHubProps> = ({
   directorLoginRequest,
   registeredAccount,
   sessionToken,
+  onShowMessage,
 }) => {
   const t = translations[currentLang];
   const isRTL = currentLang === 'ar';
 
   const [activeGradeForSessions, setActiveGradeForSessions] = useState<GradeLevelDef | null>(null);
+  const [activeGradeTab, setActiveGradeTab] = useState<'stored' | 'live'>('stored');
   const [directorScreen, setDirectorScreen] = useState<'home' | 'login' | 'dashboard'>('home');
   const [directorForm, setDirectorForm] = useState({ username: '', password: '' });
   const [directorError, setDirectorError] = useState('');
@@ -151,6 +154,24 @@ export const CoursesHub: React.FC<CoursesHubProps> = ({
       setStreamSetupLoading(false);
     }
   };
+  const openSharedLiveRoom = () => {
+    if (!registeredAccount || !sessionToken) {
+      onShowMessage(t.liveRoomRegistrationRequired);
+      return;
+    }
+    if (registeredAccount.role === 'director') {
+      onShowMessage(t.liveRoomGradeRequired);
+      return;
+    }
+    const registeredGrade = LEBANESE_GRADE_LEVELS.find((grade) => grade.id === registeredAccount.gradeId);
+    if (!registeredGrade) {
+      onShowMessage(t.liveRoomGradeRequired);
+      return;
+    }
+    setActiveGradeTab('live');
+    setActiveGradeForSessions(registeredGrade);
+  };
+
   const renderDirectorTable = (title: string, rows: DirectorRow[]) => (
     <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white">
       <h3 className="px-4 py-3 text-sm font-black text-slate-900 bg-slate-100 border-b border-slate-200">
@@ -241,9 +262,13 @@ export const CoursesHub: React.FC<CoursesHubProps> = ({
       <GradeSessionsView
         currentLang={currentLang}
         selectedGrade={activeGradeForSessions}
+        initialTab={activeGradeTab}
         registeredAccount={registeredAccount}
         sessionToken={sessionToken}
-        onBack={() => setActiveGradeForSessions(null)}
+        onBack={() => {
+          setActiveGradeForSessions(null);
+          setActiveGradeTab('stored');
+        }}
       />
     );
   }
@@ -421,7 +446,11 @@ export const CoursesHub: React.FC<CoursesHubProps> = ({
               </p>
             </div>
 
-            <div className="bg-slate-950/40 backdrop-blur-md rounded-2xl p-4 sm:p-5 border border-white/20 max-w-2xl mx-auto shadow-lg space-y-1">
+            <button
+              type="button"
+              onClick={openSharedLiveRoom}
+              className="block w-full text-start bg-slate-950/40 backdrop-blur-md rounded-2xl p-4 sm:p-5 border border-white/20 max-w-2xl mx-auto shadow-lg space-y-1 cursor-pointer transition hover:bg-slate-950/55 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-white"
+            >
             <div className="flex items-center justify-center gap-2">
               <Clock className="w-4 h-4 text-amber-300 animate-pulse" />
               <span className="text-xs font-black text-amber-300 uppercase tracking-wider">
@@ -436,7 +465,7 @@ export const CoursesHub: React.FC<CoursesHubProps> = ({
                   ? 'Ouvrir la salle de diffusion commune à toutes les classes'
                   : 'Open the shared live room for all grades'}
             </p>
-          </div>
+            </button>
           </div>
         </div>
       </div>
@@ -462,7 +491,10 @@ export const CoursesHub: React.FC<CoursesHubProps> = ({
           {LEBANESE_GRADE_LEVELS.map(grade => (
             <button
               key={grade.id}
-              onClick={() => setActiveGradeForSessions(grade)}
+              onClick={() => {
+                setActiveGradeTab('stored');
+                setActiveGradeForSessions(grade);
+              }}
               className="p-3 rounded-2xl text-start transition-all cursor-pointer border bg-white hover:bg-indigo-50/70 hover:border-indigo-400 text-slate-800 shadow-2xs hover:shadow-md hover:shadow-indigo-200"
             >
               <div className="flex items-center justify-between gap-1 mb-1.5">
