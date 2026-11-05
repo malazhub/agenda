@@ -1,7 +1,7 @@
 import React from 'react';
 import { Language, UserProfile } from '../types';
 import { translations } from '../translations';
-import { UserPlus } from 'lucide-react';
+import { CreditCard, UserPlus } from 'lucide-react';
 
 interface HeaderProps {
   currentLang: Language;
@@ -11,6 +11,7 @@ interface HeaderProps {
   userProfile: UserProfile;
   onRoleChange: (role: 'student' | 'teacher') => void;
   onOpenRegister: () => void;
+  onOpenPayment: () => void;
   onOpenArchiveSessions?: () => void;
 }
 
@@ -18,7 +19,8 @@ export const Header: React.FC<HeaderProps> = ({
   currentLang,
   onLanguageChange,
   onTabChange,
-  onOpenRegister
+  onOpenRegister,
+  onOpenPayment
 }) => {
   const t = translations[currentLang];
 
@@ -26,14 +28,21 @@ export const Header: React.FC<HeaderProps> = ({
     <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200 shadow-xs">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 py-2.5">
         <div className="grid grid-cols-1 md:grid-cols-3 items-center gap-3">
-          {/* Left Side: Register Button (Role toggle removed as seen in screenshot) */}
-          <div className="flex items-center gap-2 justify-start order-2 md:order-1">
+          {/* Left Side: Register and payment actions */}
+          <div className="flex flex-wrap items-center gap-2 justify-start order-2 md:order-1">
             <button
               onClick={onOpenRegister}
               className="flex items-center gap-1.5 bg-linear-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs font-black px-4 py-2 rounded-xl transition shadow-sm cursor-pointer"
             >
               <UserPlus className="w-3.5 h-3.5" />
               <span>{t.registerBtn}</span>
+            </button>
+            <button
+              onClick={onOpenPayment}
+              className="flex items-center gap-1.5 bg-indigo-700 hover:bg-indigo-800 text-white text-xs font-black px-4 py-2 rounded-xl transition shadow-sm cursor-pointer"
+            >
+              <CreditCard className="w-3.5 h-3.5" />
+              <span>{t.paymentBtn}</span>
             </button>
           </div>
 

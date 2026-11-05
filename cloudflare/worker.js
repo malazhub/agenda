@@ -321,15 +321,27 @@ async function cloudflareStreamRequest(env, path, init) {
   const response = await fetch(`https://api.cloudflare.com/client/v4/accounts/${accountId}/stream/${path}`, {
     ...init,
     headers: {
-      authorization: `Bearer ${token}`,
-      "content-type": "application/json",
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+      Accept: "application/json",
       ...init?.headers,
     },
   });
-  const body = await response.json();
+  const responseText = await response.text();
+  let body;
+  try {
+    body = JSON.parse(responseText);
+  } catch {
+    const responseType = response.headers.get("content-type") || "unknown";
+    console.error("Cloudflare Stream API returned an invalid response", response.status, responseType);
+    throw new Error(`Cloudflare Stream returned an invalid response (HTTP ${response.status}, ${responseType}). Check the Stream API token and account configuration.`);
+  }
   if (!response.ok || body.success !== true) {
     console.error("Cloudflare Stream API request failed", response.status, body.errors);
-    throw new Error("Cloudflare Stream could not complete the request. Check the Stream API token and account configuration.");
+    const message = Array.isArray(body.errors)
+      ? body.errors.map((error) => error.message).filter(Boolean).join(" ")
+      : "";
+    throw new Error(message || `Cloudflare Stream could not complete the request (HTTP ${response.status}). Check the Stream API token and account configuration.`);
   }
   return { configured: true, result: body.result };
 }
@@ -343,6 +355,26 @@ async function getLiveStream(request, env) {
   return json({
     status: "waiting",
     playbackUrl: `https://customer-${encodeURIComponent(customerCode)}.cloudflarestream.com/${encodeURIComponent(stream.input_uid)}/iframe`,
+  });
+}
+
+async function configureLiveStreamInput(request, env) {
+  const director = await authenticate(request, env, "director");
+  if (!director) return json({ error: "Director authentication required." }, 401);
+  const body = await requestJson(request);
+  const inputUid = typeof body?.inputUid === "string" ? body.inputUid.trim() : "";
+  if (!/^[a-zA-Z0-9_-]{1,100}$/.test(inputUid)) {
+    return json({ error: "Enter a valid Cloudflare Stream input ID." }, 400);
+  }
+  if (!env.STREAM_CUSTOMER_CODE) {
+    return json({ error: "The Cloudflare Stream customer code is not configured." }, 503);
+  }
+  await env.DB.prepare(
+    "INSERT OR REPLACE INTO live_stream_config (id, input_uid) VALUES (1, ?)",
+  ).bind(inputUid).run();
+  return json({
+    status: "waiting",
+    playbackUrl: `https://customer-${encodeURIComponent(env.STREAM_CUSTOMER_CODE)}.cloudflarestream.com/${encodeURIComponent(inputUid)}/iframe`,
   });
 }
 
@@ -363,8 +395,7 @@ async function ensureLiveStream(request, env) {
       method: "POST",
       body: JSON.stringify({
         meta: { name: "Agenda shared classroom broadcast" },
-        preferLowLatency: true,
-        recording: { mode: "automatic", allowedOrigins: ["https://malazhub.github.io"] },
+        recording: { mode: "automatic" },
       }),
     }));
     await env.DB.prepare(
@@ -497,6 +528,7 @@ async function handle(request, env) {
   if (request.method === "GET" && path === "/api/director/sessions") return directorSessions(request, env);
   if (request.method === "POST" && path === "/api/director/sessions") return createSessions(request, env);
   if (request.method === "POST" && path === "/api/director/live-stream") return ensureLiveStream(request, env);
+  if (request.method === "PUT" && path === "/api/director/live-stream/config") return configureLiveStreamInput(request, env);
   if (request.method === "GET" && path === "/api/live-stream") return getLiveStream(request, env);
   if (request.method === "GET" && path === "/api/sessions") return listSessions(url, env);
 
@@ -529,6 +561,9 @@ export default {
       return new Response(response.body, { status: response.status, headers: responseHeaders });
     } catch (error) {
       console.error("Agenda API request failed", error);
+      if (error instanceof Error && error.message.startsWith("Cloudflare Stream")) {
+        return json({ error: error.message }, 502, headers);
+      }
       return json({ error: "The service could not complete the request." }, 500, headers);
     }
   },
