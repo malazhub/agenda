@@ -9,6 +9,10 @@ export interface Translations {
   searchBtn: string;
   
   registerBtn: string;
+  paymentBtn: string;
+  paymentTitle: string;
+  paymentDescription: string;
+  paymentProvider: string;
   bookTutor: string;
   sessionRate: string;
   sessionDurationNote: string;
@@ -164,6 +168,10 @@ export const translations: Record<Language, Translations> = {
     searchBtn: "بحث",
     
     registerBtn: "تسجيل جديد",
+    paymentBtn: "الدفع",
+    paymentTitle: "الدفع",
+    paymentDescription: "الرسوم الشهرية لكل حصة هي ١٢٥ دولاراً أمريكياً.",
+    paymentProvider: "المتابعة عبر Suyool",
     bookTutor: "حجز حصة (٧$)",
     sessionRate: "٧$ / ٤٥ دقيقة",
     sessionDurationNote: "حصة مباشرة فردية ٤٥ دقيقة مع مدرّس معتمد",
@@ -318,6 +326,10 @@ export const translations: Record<Language, Translations> = {
     searchBtn: "Rechercher",
     
     registerBtn: "S'inscrire",
+    paymentBtn: "Paiement",
+    paymentTitle: "Paiement",
+    paymentDescription: "Le paiement mensuel par séance est de 125 USD.",
+    paymentProvider: "Continuer avec Suyool",
     bookTutor: "Réserver (7 $)",
     sessionRate: "7 $ / 45 min",
     sessionDurationNote: "Séance individuelle de 45 minutes avec un enseignant certifié",
@@ -472,6 +484,10 @@ export const translations: Record<Language, Translations> = {
     searchBtn: "Search",
     
     registerBtn: "Register",
+    paymentBtn: "Payment",
+    paymentTitle: "Payment",
+    paymentDescription: "Monthly payment per session is 125 USD.",
+    paymentProvider: "Continue with Suyool",
     bookTutor: "Book Session ($7)",
     sessionRate: "$7 / 45 min",
     sessionDurationNote: "45-minute 1-on-1 session with a certified educator",

@@ -16,13 +16,15 @@ import { CoursesHub } from './components/CoursesHub';
 import { VirtualClassroom } from './components/VirtualClassroom';
 import { BookingModal } from './components/BookingModal';
 import { RegisterModal } from './components/RegisterModal';
+import { PaymentPage } from './components/PaymentPage';
 import { ArchiveSessionsModal } from './components/ArchiveSessionsModal';
 import { ExamPracticeModal } from './components/ExamPracticeModal';
 import { AIChatBot } from './components/AIChatBot';
 
 import { 
   CheckCircle2, 
-  Heart
+  Heart,
+  ShieldCheck
 } from 'lucide-react';
 
 export default function App() {
@@ -53,6 +55,8 @@ export default function App() {
 
   // Register Modal State
   const [isRegisterOpen, setIsRegisterOpen] = useState(false);
+  const [isPaymentScreenOpen, setIsPaymentScreenOpen] = useState(false);
+  const [directorLoginRequest, setDirectorLoginRequest] = useState(0);
   
   // Archive Sessions Modal State
   const [isArchiveSessionsOpen, setIsArchiveSessionsOpen] = useState(false);
@@ -140,12 +144,18 @@ export default function App() {
         userProfile={userProfile}
         onRoleChange={(role) => setUserProfile(prev => ({ ...prev, role }))}
         onOpenRegister={() => setIsRegisterOpen(true)}
+        onOpenPayment={() => {
+          setIsClassroomActive(false);
+          setIsPaymentScreenOpen(true);
+        }}
         onOpenArchiveSessions={() => setIsArchiveSessionsOpen(true)}
       />
 
       {/* Main Content: Courses Hub or Live Classroom */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8 flex-1 w-full">
-        {isClassroomActive ? (
+        {isPaymentScreenOpen ? (
+          <PaymentPage currentLang={currentLang} onBack={() => setIsPaymentScreenOpen(false)} />
+        ) : isClassroomActive ? (
           <VirtualClassroom
             currentLang={currentLang}
             teacher={selectedTeacherForBooking || MOCK_TEACHERS[0]}
@@ -154,6 +164,7 @@ export default function App() {
         ) : (
           <CoursesHub
             currentLang={currentLang}
+            directorLoginRequest={directorLoginRequest}
             onBookTeacher={handleBookTeacherDirect}
             onSelectQuestionForBooking={handleSelectQuestionForBooking}
             onStartPractice={(exam) => setPracticeExam(exam)}
@@ -231,6 +242,26 @@ export default function App() {
                 </p>
               </div>
             </div>
+            {!isPaymentScreenOpen && (
+              <button
+                type="button"
+                onClick={() => {
+                  setIsClassroomActive(false);
+                  setDirectorLoginRequest((request) => request + 1);
+                }}
+                className="flex items-center gap-3 rounded-2xl border border-white/15 bg-white/5 px-4 py-3 text-start transition hover:bg-white/10"
+              >
+                <ShieldCheck className="h-5 w-5 shrink-0 text-amber-300" />
+                <span>
+                  <span className="block text-sm font-black text-white">
+                    {currentLang === 'ar' ? 'المدير' : currentLang === 'fr' ? 'Directeur' : 'Director'}
+                  </span>
+                  <span className="block text-[10px] font-semibold text-slate-300">
+                    {currentLang === 'ar' ? 'تسجيل الدخول وإدارة المحتوى' : currentLang === 'fr' ? 'Connexion et gestion du contenu' : 'Sign in and manage content'}
+                  </span>
+                </span>
+              </button>
+            )}
           </div>
 
           <div className="flex flex-wrap items-center justify-between gap-4 text-xs text-slate-400">

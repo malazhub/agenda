@@ -22,12 +22,14 @@ interface CoursesHubProps {
   onSelectQuestionForBooking: (question: any, exam: any) => void;
   onStartPractice: (exam: any) => void;
   onEnterLiveClassroom?: (session?: LiveSessionInfo) => void;
+  directorLoginRequest: number;
 }
 
 type DirectorRow = CloudflareAccount;
 
 export const CoursesHub: React.FC<CoursesHubProps> = ({
-  currentLang
+  currentLang,
+  directorLoginRequest,
 }) => {
   const t = translations[currentLang];
   const isRTL = currentLang === 'ar';
@@ -48,6 +50,10 @@ export const CoursesHub: React.FC<CoursesHubProps> = ({
   const [streamSetup, setStreamSetup] = useState<LiveStreamSetup | null>(null);
   const [streamSetupError, setStreamSetupError] = useState('');
   const [streamSetupLoading, setStreamSetupLoading] = useState(false);
+
+  useEffect(() => {
+    if (directorLoginRequest > 0) setDirectorScreen('login');
+  }, [directorLoginRequest]);
 
   const formatDate = (value: string | null) => {
     if (!value) return '—';
@@ -382,7 +388,7 @@ export const CoursesHub: React.FC<CoursesHubProps> = ({
   return (
     <div className="space-y-8">
       <div className="rounded-3xl bg-linear-to-r from-amber-500 via-emerald-600 to-indigo-700 p-6 sm:p-8 text-white shadow-xl relative overflow-hidden">
-        <div className="max-w-6xl mx-auto grid gap-6 lg:grid-cols-[minmax(0,1fr)_16rem] items-center relative z-10">
+        <div className="max-w-6xl mx-auto items-center relative z-10">
           <div className="space-y-6 text-center">
             <div className="space-y-2">
               <h1 className="text-3xl sm:text-4xl lg:text-5xl font-black tracking-tight text-white leading-tight">
@@ -410,22 +416,6 @@ export const CoursesHub: React.FC<CoursesHubProps> = ({
             </p>
           </div>
           </div>
-          <button
-            type="button"
-            onClick={() => setDirectorScreen('login')}
-            className="w-full rounded-2xl border border-white/20 bg-slate-950/35 p-5 text-start shadow-lg backdrop-blur transition hover:bg-slate-950/50"
-          >
-            <div className="flex items-center justify-between gap-3">
-              <span className="text-[10px] font-black uppercase tracking-wider text-amber-200">Admin</span>
-              <ShieldCheck className="h-5 w-5 text-white" />
-            </div>
-            <span className="mt-2 block text-lg font-black">
-              {currentLang === 'ar' ? 'المدير' : currentLang === 'fr' ? 'Directeur' : 'Director'}
-            </span>
-            <span className="mt-1 block text-xs font-semibold text-indigo-100">
-              {currentLang === 'ar' ? 'تسجيل الدخول وإدارة المحتوى' : currentLang === 'fr' ? 'Connexion et gestion du contenu' : 'Sign in and manage content'}
-            </span>
-          </button>
         </div>
       </div>
 
@@ -471,24 +461,6 @@ export const CoursesHub: React.FC<CoursesHubProps> = ({
               </span>
             </button>
           ))}
-          <button
-            type="button"
-            onClick={() => setDirectorScreen('login')}
-            className="min-h-24 p-3 rounded-2xl text-start transition-all cursor-pointer border border-indigo-200 bg-gradient-to-br from-indigo-700 to-blue-700 text-white shadow-sm hover:from-indigo-800 hover:to-blue-800 hover:shadow-md"
-          >
-            <div className="flex items-center justify-between gap-1 mb-1.5">
-              <span className="text-[10px] font-black px-2 py-0.5 rounded-md bg-white/15 text-white">
-                {currentLang === 'ar' ? 'إدارة' : currentLang === 'fr' ? 'ADMIN' : 'ADMIN'}
-              </span>
-              <ShieldCheck className="w-4 h-4 text-white/80" />
-            </div>
-            <h4 className="font-black text-xs leading-tight">
-              {currentLang === 'ar' ? 'المدير' : currentLang === 'fr' ? 'Directeur' : 'Director'}
-            </h4>
-            <span className="text-[9px] block mt-1 font-semibold text-indigo-100">
-              {currentLang === 'ar' ? 'لوحة الإدارة' : currentLang === 'fr' ? 'Espace de gestion' : 'Management dashboard'}
-            </span>
-          </button>
         </div>
       </div>
     </div>
