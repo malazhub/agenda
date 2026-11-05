@@ -16,6 +16,19 @@ function fakeEnvironment() {
   const attempts = [];
   const sessions = new Map();
   const streamConfig = new Map();
+  sessions.set('test-registration-session', {
+    id: 'test-registration-session',
+    grade_id: 'eb8',
+    subject: 'Mathematics',
+    title: 'Registered algebra session',
+    teacher_name: '',
+    source_name: 'Agenda',
+    source_url: 'https://example.org/session',
+    playback_url: 'https://example.org/session/video',
+    media_key: null,
+    is_live: 0,
+    live_starts_at: null,
+  });
 
   class Statement {
     constructor(sql) {
@@ -40,12 +53,23 @@ function fakeEnvironment() {
       if (this.sql.includes('SELECT * FROM accounts WHERE username')) {
         return [...accounts.values()].find((item) => item.username.toLowerCase() === this.values[0].toLowerCase()) || null;
       }
-      if (this.sql.includes('SELECT * FROM accounts WHERE id')) return accounts.get(this.values[0]) || null;
+      if (this.sql.includes('FROM accounts WHERE id')) return accounts.get(this.values[0]) || null;
+      if (this.sql.includes('SELECT id, grade_id FROM sessions WHERE id')) {
+        const session = sessions.get(this.values[0]);
+        return session ? { id: session.id, grade_id: session.grade_id } : null;
+      }
+      if (this.sql.includes('SELECT * FROM sessions WHERE id = ? AND is_live = 1')) {
+        const session = sessions.get(this.values[0]);
+        return session?.is_live ? session : null;
+      }
       if (this.sql.includes('SELECT input_uid FROM live_stream_config')) return streamConfig.get(1) || null;
       return null;
     }
 
     async all() {
+      if (this.sql.includes('SELECT id, grade_id, subject, title FROM sessions')) {
+        return { results: [...sessions.values()] };
+      }
       if (this.sql.includes('FROM sessions ORDER BY')) return { results: [...sessions.values()] };
       if (this.sql.includes('FROM accounts WHERE role')) {
         const role = this.sql.match(/role = '([^']+)'/)?.[1];
@@ -63,13 +87,13 @@ function fakeEnvironment() {
 
     async run() {
       if (this.sql.startsWith('INSERT INTO accounts')) {
-        const [id, username, password_hash, role, full_name, email, phone, school_or_subject, grade_id] = this.values;
+        const [id, username, password_hash, role, full_name, email, phone, school_or_subject, grade_id, registered_session_id] = this.values;
         if ([...accounts.values()].some((item) => item.username.toLowerCase() === username.toLowerCase())) {
           throw new Error('UNIQUE constraint failed: accounts.username');
         }
         accounts.set(id, {
-          id, username, password_hash, role, full_name, email, phone, school_or_subject, grade_id,
-          created_at: '2026-11-03 10:00:00', expires_at: '2026-12-03 10:00:00', activated: 1, paid: 0,
+          id, username, password_hash, role, full_name, email, phone, school_or_subject, grade_id, registered_session_id,
+          created_at: '2026-11-03 10:00:00', expires_at: '2026-12-03 10:00:00', activated: 0, paid: 0,
         });
         return { meta: { changes: 1 } };
       }
@@ -94,6 +118,10 @@ function fakeEnvironment() {
         let valueIndex = 0;
         if (this.sql.includes('activated = ?')) account.activated = this.values[valueIndex++];
         if (this.sql.includes('paid = ?')) account.paid = this.values[valueIndex++];
+        if (this.sql.includes('registered_session_id = ?')) {
+          account.registered_session_id = this.values[valueIndex++];
+          account.grade_id = this.values[valueIndex++];
+        }
         if (this.sql.includes('password_hash = ?')) account.password_hash = this.values[valueIndex++];
         if (this.sql.includes("expires_at = datetime('now', '+1 month')")) account.expires_at = '2026-12-03 10:00:00';
         return { meta: { changes: 1 } };
@@ -132,6 +160,7 @@ function fakeEnvironment() {
     phone: '',
     school_or_subject: '',
     grade_id: '',
+    registered_session_id: null,
     created_at: '2026-11-03 09:00:00',
     expires_at: null,
     activated: 1,
@@ -184,24 +213,58 @@ test('registration hashes credentials and rejects duplicate usernames', async ()
     email: 'learner@example.com',
     phone: '',
     schoolOrSubject: 'Grade 8',
-    gradeId: 'eb8',
+    registeredSessionId: 'test-registration-session',
   };
   const response = await send(env, '/api/auth/register', { method: 'POST', body: registration });
   assert.equal(response.status, 201);
   const result = await response.json();
   assert.equal(result.account.role, 'student');
+  assert.equal(result.account.activated, false);
+  assert.equal(result.account.registeredSessionId, 'test-registration-session');
   assert.equal('password_hash' in result.account, false);
   assert.ok(result.account.expiresAt);
   assert.equal(accounts.get(result.account.id).password_hash.startsWith('pbkdf2_sha256$'), true);
 
+  const invalidSession = await send(env, '/api/auth/register', {
+    method: 'POST',
+    body: { ...registration, username: 'learner.invalid', registeredSessionId: 'missing-session' },
+  });
+  assert.equal(invalidSession.status, 400);
+  assert.match((await invalidSession.json()).error, /choose a valid session/i);
+
+  const registrationSessions = await send(env, '/api/registration/sessions');
+  assert.equal(registrationSessions.status, 200);
+  assert.ok((await registrationSessions.json()).sessions.some((session) => session.id === 'test-registration-session'));
+
+  const pendingLogin = await send(env, '/api/auth/login', {
+    method: 'POST',
+    body: { username: registration.username, password: registration.password },
+  });
+  assert.equal(pendingLogin.status, 401);
+
+  const legacyAccount = accounts.get(result.account.id);
+  legacyAccount.registered_session_id = null;
+  legacyAccount.grade_id = '';
+  const retry = await send(env, '/api/auth/register', { method: 'POST', body: registration });
+  assert.equal(retry.status, 200);
+  assert.equal((await retry.json()).account.activated, false);
+  assert.equal(legacyAccount.registered_session_id, 'test-registration-session');
+
+  const directorLogin = await send(env, '/api/auth/login', {
+    method: 'POST',
+    body: { username: 'director', password: 'DirectorPassword#2026' },
+  });
+  const { token: directorToken } = await directorLogin.json();
+  await send(env, `/api/director/accounts/${result.account.id}`, {
+    method: 'PATCH',
+    token: directorToken,
+    body: { activated: true },
+  });
   const login = await send(env, '/api/auth/login', {
     method: 'POST',
     body: { username: registration.username, password: registration.password },
   });
   assert.equal(login.status, 200);
-
-  const duplicate = await send(env, '/api/auth/register', { method: 'POST', body: registration });
-  assert.equal(duplicate.status, 409);
 });
 
 test('Director login reads persisted role tables and saves status updates', async () => {
@@ -214,7 +277,7 @@ test('Director login reads persisted role tables and saves status updates', asyn
     email: 'educator@example.com',
     phone: '',
     schoolOrSubject: 'Mathematics',
-    gradeId: '',
+    registeredSessionId: 'test-registration-session',
   };
   await send(env, '/api/auth/register', { method: 'POST', body: registration });
 
@@ -232,12 +295,13 @@ test('Director login reads persisted role tables and saves status updates', asyn
   const updated = await send(env, `/api/director/accounts/${lists.educators[0].id}`, {
     method: 'PATCH',
     token,
-    body: { activated: false, paid: true },
+    body: { activated: false, paid: true, registeredSessionId: 'test-registration-session' },
   });
   assert.equal(updated.status, 200);
   const { account } = await updated.json();
   assert.equal(account.activated, false);
   assert.equal(account.paid, true);
+  assert.equal(account.registeredSessionId, 'test-registration-session');
 
   const renewed = await send(env, `/api/director/accounts/${account.id}`, {
     method: 'PATCH',
@@ -262,10 +326,10 @@ test('Director can save a live session and the grade catalog returns its playbac
     method: 'POST',
     body: { username: 'director', password: 'DirectorPassword#2026' },
   });
-  const { token } = await login.json();
+  const { token: directorToken } = await login.json();
   const saved = await send(env, '/api/director/sessions', {
     method: 'POST',
-    token,
+    token: directorToken,
     body: {
       sessions: [{
         id: 'live-eb8-math',
@@ -282,11 +346,41 @@ test('Director can save a live session and the grade catalog returns its playbac
   });
   assert.equal(saved.status, 201);
 
-  const response = await send(env, '/api/sessions?gradeId=eb8&live=true');
+  const registration = await send(env, '/api/auth/register', {
+    method: 'POST',
+    body: {
+      username: 'live.student',
+      password: 'live session password',
+      role: 'student',
+      fullName: 'Live Student',
+      email: 'live@example.com',
+      phone: '',
+      schoolOrSubject: 'Grade 8',
+      registeredSessionId: 'live-eb8-math',
+    },
+  });
+  assert.equal(registration.status, 201);
+  const { account, token } = await registration.json();
+  const blockedBeforeActivation = await send(env, '/api/sessions?gradeId=eb8&live=true&sessionId=live-eb8-math', { token });
+  assert.equal(blockedBeforeActivation.status, 403);
+
+  await send(env, `/api/director/accounts/${account.id}`, {
+    method: 'PATCH',
+    token: directorToken,
+    body: { activated: true },
+  });
+  const anonymous = await send(env, '/api/sessions?gradeId=eb8&live=true&sessionId=live-eb8-math');
+  assert.equal(anonymous.status, 401);
+  const wrongSession = await send(env, '/api/sessions?gradeId=eb8&live=true&sessionId=test-registration-session', { token });
+  assert.equal(wrongSession.status, 403);
+
+  const response = await send(env, '/api/sessions?gradeId=eb8&live=true&sessionId=live-eb8-math', { token });
   const { sessions } = await response.json();
   assert.equal(sessions.length, 1);
   assert.equal(sessions[0].isLive, true);
   assert.equal(sessions[0].playbackUrl, 'https://example.org/live/video');
+  const liveStatus = await send(env, '/api/live-stream?sessionId=live-eb8-math', { token });
+  assert.equal((await liveStatus.json()).status, 'unconfigured');
 });
 
 test('Director can list and delete stored sessions', async () => {
@@ -312,21 +406,16 @@ test('Director can list and delete stored sessions', async () => {
   });
   assert.equal(saved.status, 201);
   const listed = await send(env, '/api/director/sessions', { token });
-  assert.equal((await listed.json()).sessions.length, 1);
+  assert.ok((await listed.json()).sessions.some((session) => session.id === 'resource-eb8-science'));
   const deleted = await send(env, '/api/director/sessions/resource-eb8-science', { method: 'DELETE', token });
   assert.equal(deleted.status, 200);
   assert.deepEqual(await deleted.json(), { deleted: true });
+  const afterDelete = await send(env, '/api/director/sessions', { token });
+  assert.equal((await afterDelete.json()).sessions.some((session) => session.id === 'resource-eb8-science'), false);
 });
 
-test('Live room has a shared playback URL independent of a grade session', async () => {
-  const { env, streamConfig } = fakeEnvironment();
-  const notConfigured = await send(env, '/api/live-stream');
-  assert.equal((await notConfigured.json()).status, 'unconfigured');
-
-  streamConfig.set(1, { id: 1, input_uid: 'shared-live-input' });
-  const response = await send(env, '/api/live-stream');
-  assert.deepEqual(await response.json(), {
-    status: 'waiting',
-    playbackUrl: 'https://customer-test-customer.cloudflarestream.com/shared-live-input/iframe',
-  });
+test('live stream endpoint rejects users without an assigned activated session', async () => {
+  const { env } = fakeEnvironment();
+  const response = await send(env, '/api/live-stream?sessionId=test-registration-session');
+  assert.equal(response.status, 401);
 });

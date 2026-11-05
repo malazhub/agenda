@@ -7,6 +7,7 @@ export interface CloudflareAccount {
   phone: string;
   schoolOrSubject: string;
   gradeId: string;
+  registeredSessionId: string | null;
   createdAt: string;
   expiresAt: string | null;
   activated: boolean;
@@ -26,7 +27,14 @@ export interface RegistrationInput {
   email: string;
   phone: string;
   schoolOrSubject: string;
+  registeredSessionId: string;
+}
+
+export interface RegistrationSession {
+  id: string;
   gradeId: string;
+  subject: string;
+  title: string;
 }
 
 export interface StoredSessionRecord {
@@ -81,7 +89,8 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   });
   const body = await response.json().catch(() => null);
   if (!response.ok) {
-    throw new Error(typeof body?.error === 'string' ? body.error : `Cloudflare API request failed (${response.status}).`);
+    const message = typeof body?.error === 'string' ? body.error : 'Cloudflare API request failed';
+    throw new Error(`${message} (${response.status})`);
   }
   return body as T;
 }
@@ -97,11 +106,19 @@ export function registerAccount(input: RegistrationInput): Promise<AuthResponse>
   });
 }
 
+export function getRegistrationSessions(): Promise<{ sessions: RegistrationSession[] }> {
+  return request('/api/registration/sessions');
+}
+
 export function loginAccount(username: string, password: string): Promise<AuthResponse> {
   return request<AuthResponse>('/api/auth/login', {
     method: 'POST',
     body: JSON.stringify({ username, password }),
   });
+}
+
+export function getCurrentAccount(token: string): Promise<{ account: CloudflareAccount }> {
+  return request('/api/auth/me', { headers: authHeaders(token) });
 }
 
 export function getDirectorAccounts(token: string): Promise<{
@@ -114,7 +131,7 @@ export function getDirectorAccounts(token: string): Promise<{
 export function updateDirectorAccount(
   token: string,
   accountId: string,
-  update: { activated?: boolean; paid?: boolean; renew?: boolean; password?: string },
+  update: { activated?: boolean; paid?: boolean; renew?: boolean; password?: string; registeredSessionId?: string },
 ): Promise<{ account: CloudflareAccount }> {
   return request(`/api/director/accounts/${encodeURIComponent(accountId)}`, {
     method: 'PATCH',
@@ -142,8 +159,10 @@ export function deleteDirectorSession(token: string, sessionId: string): Promise
   });
 }
 
-export function getLiveStreamStatus(): Promise<LiveStreamStatus> {
-  return request('/api/live-stream');
+export function getLiveStreamStatus(token: string, sessionId: string): Promise<LiveStreamStatus> {
+  return request(`/api/live-stream?sessionId=${encodeURIComponent(sessionId)}`, {
+    headers: authHeaders(token),
+  });
 }
 
 export function setupLiveStream(token: string): Promise<LiveStreamSetup> {
@@ -153,9 +172,19 @@ export function setupLiveStream(token: string): Promise<LiveStreamSetup> {
   });
 }
 
-export function getGradeSessions(gradeId: string, live = false): Promise<{ sessions: StoredSessionRecord[] }> {
-  const query = new URLSearchParams({ gradeId, ...(live ? { live: 'true' } : {}) });
-  return request<{ sessions: StoredSessionRecord[] }>(`/api/sessions?${query.toString()}`).then(({ sessions }) => ({
+export function getGradeSessions(
+  gradeId: string,
+  live = false,
+  token?: string,
+  sessionId?: string,
+): Promise<{ sessions: StoredSessionRecord[] }> {
+  const query = new URLSearchParams({
+    gradeId,
+    ...(live ? { live: 'true', ...(sessionId ? { sessionId } : {}) } : {}),
+  });
+  return request<{ sessions: StoredSessionRecord[] }>(`/api/sessions?${query.toString()}`, {
+    ...(live && token ? { headers: authHeaders(token) } : {}),
+  }).then(({ sessions }) => ({
     sessions: sessions.map((session) => ({
       ...session,
       mediaUrl: session.mediaUrl && API_BASE_URL

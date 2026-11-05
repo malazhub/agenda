@@ -9,6 +9,13 @@ export interface Translations {
   searchBtn: string;
   
   registerBtn: string;
+  signInLabel: string;
+  signInPrompt: string;
+  switchToRegister: string;
+  signingInLabel: string;
+  directorSignInSeparate: string;
+  invalidLogin: string;
+  accountSignedIn: string;
   paymentBtn: string;
   paymentTitle: string;
   paymentDescription: string;
@@ -99,6 +106,16 @@ export interface Translations {
   registrationUsernameTaken: string;
   registrationRequiredFields: string;
   registrationServiceUnavailable: string;
+  registrationPendingActivation: string;
+  accountNotActivated: string;
+  accountExpired: string;
+  registrationSessionConflict: string;
+  registrationChooseSession: string;
+  registrationLoadingSessions: string;
+  registrationNoSessions: string;
+  registeredSessionLabel: string;
+  liveActivationRequired: string;
+  liveRegisteredSessionOnly: string;
   backToMain: string;
   joiningDate: string;
   expiryDate: string;
@@ -168,6 +185,13 @@ export const translations: Record<Language, Translations> = {
     searchBtn: "بحث",
     
     registerBtn: "تسجيل جديد",
+    signInLabel: "تسجيل الدخول",
+    signInPrompt: "لديك حساب؟ سجّل الدخول",
+    switchToRegister: "إنشاء حساب جديد",
+    signingInLabel: "جارٍ تسجيل الدخول...",
+    directorSignInSeparate: "استخدم بطاقة المدير لتسجيل الدخول كمدير.",
+    invalidLogin: "اسم المستخدم أو كلمة المرور غير صحيحة.",
+    accountSignedIn: "تم تسجيل الدخول بنجاح.",
     paymentBtn: "الدفع",
     paymentTitle: "الدفع",
     paymentDescription: "الرسوم الشهرية لكل حصة هي ١٢٥ دولاراً أمريكياً.",
@@ -258,6 +282,16 @@ export const translations: Record<Language, Translations> = {
     registrationUsernameTaken: "اسم المستخدم مستخدم بالفعل. اختر اسماً آخر.",
     registrationRequiredFields: "يرجى التحقق من جميع الحقول المطلوبة.",
     registrationServiceUnavailable: "تعذر الاتصال بخدمة التسجيل. حاول مرة أخرى.",
+    registrationPendingActivation: "تم حفظ التسجيل. انتظر تفعيل المدير قبل الدخول إلى الحصص المباشرة.",
+    accountNotActivated: "لم يفعّل المدير حسابك بعد. يرجى الانتظار قبل تسجيل الدخول.",
+    accountExpired: "انتهت صلاحية حسابك. يرجى التواصل مع المدير لتجديده.",
+    registrationSessionConflict: "هذا الحساب مسجل في حصة أخرى.",
+    registrationChooseSession: "اختر الحصة التي تسجل فيها.",
+    registrationLoadingSessions: "جارٍ تحميل الحصص...",
+    registrationNoSessions: "لا توجد حصص متاحة للتسجيل حالياً.",
+    registeredSessionLabel: "الحصة المسجل فيها",
+    liveActivationRequired: "يجب تفعيل حسابك من المدير قبل الدخول إلى البث المباشر.",
+    liveRegisteredSessionOnly: "يمكنك الدخول إلى الحصة المباشرة المسجل فيها فقط.",
     backToMain: "العودة إلى الشاشة الرئيسية",
     joiningDate: "تاريخ الانضمام",
     expiryDate: "تاريخ الانتهاء",
@@ -326,6 +360,13 @@ export const translations: Record<Language, Translations> = {
     searchBtn: "Rechercher",
     
     registerBtn: "S'inscrire",
+    signInLabel: "Connexion",
+    signInPrompt: "Déjà inscrit ? Connectez-vous",
+    switchToRegister: "Créer un compte",
+    signingInLabel: "Connexion...",
+    directorSignInSeparate: "Utilisez la carte Directeur pour vous connecter en tant que directeur.",
+    invalidLogin: "Nom d’utilisateur ou mot de passe incorrect.",
+    accountSignedIn: "Connexion réussie.",
     paymentBtn: "Paiement",
     paymentTitle: "Paiement",
     paymentDescription: "Le paiement mensuel par séance est de 125 USD.",
@@ -416,6 +457,16 @@ export const translations: Record<Language, Translations> = {
     registrationUsernameTaken: "Ce nom d’utilisateur existe déjà. Choisissez-en un autre.",
     registrationRequiredFields: "Vérifiez les champs obligatoires.",
     registrationServiceUnavailable: "Le service d’inscription est indisponible. Réessayez.",
+    registrationPendingActivation: "Inscription enregistrée. Attendez l’activation du directeur pour accéder aux cours en direct.",
+    accountNotActivated: "Le directeur n’a pas encore activé votre compte. Veuillez patienter.",
+    accountExpired: "Votre compte a expiré. Contactez le directeur pour le renouveler.",
+    registrationSessionConflict: "Ce compte est déjà inscrit à une autre séance.",
+    registrationChooseSession: "Choisissez la séance à laquelle vous vous inscrivez.",
+    registrationLoadingSessions: "Chargement des séances...",
+    registrationNoSessions: "Aucune séance n’est disponible pour l’inscription.",
+    registeredSessionLabel: "Séance inscrite",
+    liveActivationRequired: "Le directeur doit activer votre compte avant l’accès au direct.",
+    liveRegisteredSessionOnly: "Vous pouvez accéder uniquement à votre séance inscrite.",
     backToMain: "Retour à l’écran principal",
     joiningDate: "Date d’inscription",
     expiryDate: "Date d’expiration",
@@ -484,6 +535,13 @@ export const translations: Record<Language, Translations> = {
     searchBtn: "Search",
     
     registerBtn: "Register",
+    signInLabel: "Sign in",
+    signInPrompt: "Already registered? Sign in",
+    switchToRegister: "Create an account",
+    signingInLabel: "Signing in...",
+    directorSignInSeparate: "Use the Director card to sign in as Director.",
+    invalidLogin: "The username or password is incorrect.",
+    accountSignedIn: "You are signed in.",
     paymentBtn: "Payment",
     paymentTitle: "Payment",
     paymentDescription: "Monthly payment per session is 125 USD.",
@@ -574,6 +632,16 @@ export const translations: Record<Language, Translations> = {
     registrationUsernameTaken: "That username is already registered. Choose another.",
     registrationRequiredFields: "Check that all required fields are complete.",
     registrationServiceUnavailable: "Registration service is unavailable. Try again.",
+    registrationPendingActivation: "Registration saved. Wait for Director activation before joining live sessions.",
+    accountNotActivated: "The Director has not activated your account yet. Please wait before signing in.",
+    accountExpired: "Your account has expired. Contact the Director to renew it.",
+    registrationSessionConflict: "This account is already registered for another session.",
+    registrationChooseSession: "Choose the session you are registering for.",
+    registrationLoadingSessions: "Loading sessions...",
+    registrationNoSessions: "No sessions are currently available for registration.",
+    registeredSessionLabel: "Registered session",
+    liveActivationRequired: "The Director must activate your account before you can join live sessions.",
+    liveRegisteredSessionOnly: "You can join only the live session you registered for.",
     backToMain: "Back to main screen",
     joiningDate: "Joining date",
     expiryDate: "Expiry date",

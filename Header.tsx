@@ -1,7 +1,7 @@
 import React from 'react';
 import { Language, UserProfile } from '../types';
 import { translations } from '../translations';
-import { CreditCard, UserPlus } from 'lucide-react';
+import { UserPlus } from 'lucide-react';
 
 interface HeaderProps {
   currentLang: Language;
@@ -11,7 +11,6 @@ interface HeaderProps {
   userProfile: UserProfile;
   onRoleChange: (role: 'student' | 'teacher') => void;
   onOpenRegister: () => void;
-  onOpenPayment: () => void;
   onOpenArchiveSessions?: () => void;
 }
 
@@ -19,8 +18,7 @@ export const Header: React.FC<HeaderProps> = ({
   currentLang,
   onLanguageChange,
   onTabChange,
-  onOpenRegister,
-  onOpenPayment
+  onOpenRegister
 }) => {
   const t = translations[currentLang];
 
@@ -28,7 +26,7 @@ export const Header: React.FC<HeaderProps> = ({
     <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200 shadow-xs">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 py-2.5">
         <div className="grid grid-cols-1 md:grid-cols-3 items-center gap-3">
-          {/* Left Side: Register and payment actions */}
+          {/* Left Side: Register action */}
           <div className="flex flex-wrap items-center gap-2 justify-start order-2 md:order-1">
             <button
               onClick={onOpenRegister}
@@ -36,13 +34,6 @@ export const Header: React.FC<HeaderProps> = ({
             >
               <UserPlus className="w-3.5 h-3.5" />
               <span>{t.registerBtn}</span>
-            </button>
-            <button
-              onClick={onOpenPayment}
-              className="flex items-center gap-1.5 bg-indigo-700 hover:bg-indigo-800 text-white text-xs font-black px-4 py-2 rounded-xl transition shadow-sm cursor-pointer"
-            >
-              <CreditCard className="w-3.5 h-3.5" />
-              <span>{t.paymentBtn}</span>
             </button>
           </div>
 
