@@ -114,6 +114,10 @@ export interface Translations {
   registrationLoadingSessions: string;
   registrationNoSessions: string;
   registeredSessionLabel: string;
+  registeredGradeLabel: string;
+  registrationChooseGrade: string;
+  registrationLoadingGrades: string;
+  registrationNoGrades: string;
   liveActivationRequired: string;
   liveRegisteredSessionOnly: string;
   backToMain: string;
@@ -284,7 +288,7 @@ export const translations: Record<Language, Translations> = {
     createAccountLabel: "إنشاء الحساب",
     creatingAccountLabel: "جارٍ إنشاء الحساب...",
     closeLabel: "إغلاق",
-    registrationUsernameTaken: "اسم المستخدم مستخدم بالفعل. اختر اسماً آخر.",
+    registrationUsernameTaken: "يوجد حساب بهذا الاسم. إذا كنت قد بدأت التسجيل فاستخدم كلمة المرور نفسها للمتابعة، وإلا فاختر اسماً آخر.",
     registrationRequiredFields: "يرجى التحقق من جميع الحقول المطلوبة.",
     registrationServiceUnavailable: "تعذر الاتصال بخدمة التسجيل. حاول مرة أخرى.",
     registrationPendingActivation: "تم حفظ التسجيل. انتظر تفعيل المدير قبل الدخول إلى الحصص المباشرة.",
@@ -295,8 +299,12 @@ export const translations: Record<Language, Translations> = {
     registrationLoadingSessions: "جارٍ تحميل الحصص...",
     registrationNoSessions: "لا توجد حصص متاحة للتسجيل حالياً.",
     registeredSessionLabel: "الحصة المسجل فيها",
+    registeredGradeLabel: "الصف الدراسي",
+    registrationChooseGrade: "اختر الصف الدراسي",
+    registrationLoadingGrades: "جارٍ تحميل الصفوف...",
+    registrationNoGrades: "لا توجد صفوف متاحة للتسجيل حالياً.",
     liveActivationRequired: "يجب تفعيل حسابك من المدير قبل الدخول إلى البث المباشر.",
-    liveRegisteredSessionOnly: "يمكنك الدخول إلى الحصة المباشرة المسجل فيها فقط.",
+    liveRegisteredSessionOnly: "يمكنك الدخول إلى البث المباشر لصفك المسجل فيه فقط.",
     backToMain: "العودة إلى الشاشة الرئيسية",
     joiningDate: "تاريخ الانضمام",
     expiryDate: "تاريخ الانتهاء",
@@ -464,7 +472,7 @@ export const translations: Record<Language, Translations> = {
     createAccountLabel: "Créer le compte",
     creatingAccountLabel: "Création du compte...",
     closeLabel: "Fermer",
-    registrationUsernameTaken: "Ce nom d’utilisateur existe déjà. Choisissez-en un autre.",
+    registrationUsernameTaken: "Un compte utilise déjà ce nom. Si vous avez commencé l’inscription, utilisez le même mot de passe pour continuer ; sinon, choisissez un autre nom.",
     registrationRequiredFields: "Vérifiez les champs obligatoires.",
     registrationServiceUnavailable: "Le service d’inscription est indisponible. Réessayez.",
     registrationPendingActivation: "Inscription enregistrée. Attendez l’activation du directeur pour accéder aux cours en direct.",
@@ -475,8 +483,12 @@ export const translations: Record<Language, Translations> = {
     registrationLoadingSessions: "Chargement des séances...",
     registrationNoSessions: "Aucune séance n’est disponible pour l’inscription.",
     registeredSessionLabel: "Séance inscrite",
+    registeredGradeLabel: "Classe",
+    registrationChooseGrade: "Choisissez une classe",
+    registrationLoadingGrades: "Chargement des classes...",
+    registrationNoGrades: "Aucune classe n’est disponible pour l’inscription.",
     liveActivationRequired: "Le directeur doit activer votre compte avant l’accès au direct.",
-    liveRegisteredSessionOnly: "Vous pouvez accéder uniquement à votre séance inscrite.",
+    liveRegisteredSessionOnly: "Vous pouvez accéder uniquement aux diffusions en direct de votre classe inscrite.",
     backToMain: "Retour à l’écran principal",
     joiningDate: "Date d’inscription",
     expiryDate: "Date d’expiration",
@@ -644,7 +656,7 @@ export const translations: Record<Language, Translations> = {
     createAccountLabel: "Create account",
     creatingAccountLabel: "Creating account...",
     closeLabel: "Close",
-    registrationUsernameTaken: "That username is already registered. Choose another.",
+    registrationUsernameTaken: "An account already uses this username. If you started registration earlier, use the same password to continue; otherwise choose another username.",
     registrationRequiredFields: "Check that all required fields are complete.",
     registrationServiceUnavailable: "Registration service is unavailable. Try again.",
     registrationPendingActivation: "Registration saved. Wait for Director activation before joining live sessions.",
@@ -655,8 +667,12 @@ export const translations: Record<Language, Translations> = {
     registrationLoadingSessions: "Loading sessions...",
     registrationNoSessions: "No sessions are currently available for registration.",
     registeredSessionLabel: "Registered session",
+    registeredGradeLabel: "Grade",
+    registrationChooseGrade: "Choose a grade",
+    registrationLoadingGrades: "Loading grades...",
+    registrationNoGrades: "No grades are currently available for registration.",
     liveActivationRequired: "The Director must activate your account before you can join live sessions.",
-    liveRegisteredSessionOnly: "You can join only the live session you registered for.",
+    liveRegisteredSessionOnly: "You can access live broadcasts only for your registered grade.",
     backToMain: "Back to main screen",
     joiningDate: "Joining date",
     expiryDate: "Expiry date",

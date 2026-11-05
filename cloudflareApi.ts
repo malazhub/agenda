@@ -27,7 +27,7 @@ export interface RegistrationInput {
   email: string;
   phone: string;
   schoolOrSubject: string;
-  registeredSessionId: string;
+  gradeId: string;
 }
 
 export interface RegistrationSession {
@@ -115,6 +115,10 @@ export function getRegistrationSessions(): Promise<{ sessions: RegistrationSessi
   return request('/api/registration/sessions');
 }
 
+export function getRegistrationGrades(): Promise<{ grades: string[] }> {
+  return request('/api/registration/grades');
+}
+
 export function loginAccount(username: string, password: string): Promise<AuthResponse> {
   return request<AuthResponse>('/api/auth/login', {
     method: 'POST',
@@ -164,8 +168,8 @@ export function deleteDirectorSession(token: string, sessionId: string): Promise
   });
 }
 
-export function getLiveStreamStatus(token: string, sessionId: string): Promise<LiveStreamStatus> {
-  return request(`/api/live-stream?sessionId=${encodeURIComponent(sessionId)}`, {
+export function getLiveStreamStatus(token: string, gradeId: string): Promise<LiveStreamStatus> {
+  return request(`/api/live-stream?gradeId=${encodeURIComponent(gradeId)}`, {
     headers: authHeaders(token),
   });
 }

@@ -28,7 +28,6 @@ export const GradeSessionsView: React.FC<GradeSessionsViewProps> = ({
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
-  const registeredSessionId = registeredAccount?.registeredSessionId || '';
   const expiryTime = registeredAccount?.expiresAt
     ? Date.parse(`${registeredAccount.expiresAt.replace(' ', 'T').replace(/Z$/, '')}Z`)
     : null;
@@ -38,7 +37,6 @@ export const GradeSessionsView: React.FC<GradeSessionsViewProps> = ({
     !accountExpired &&
     registeredAccount.role !== 'director' &&
     sessionToken &&
-    registeredSessionId &&
     registeredAccount.gradeId === selectedGrade.id
   );
   const liveAccessError = !registeredAccount?.activated
@@ -51,7 +49,7 @@ export const GradeSessionsView: React.FC<GradeSessionsViewProps> = ({
 
   useEffect(() => {
     let active = true;
-    if (activeTab === 'live' && (!registeredSessionId || !canJoinLiveSession)) {
+    if (activeTab === 'live' && !canJoinLiveSession) {
       setIsLoading(false);
       setSessions([]);
       setLiveStream(null);
@@ -63,7 +61,7 @@ export const GradeSessionsView: React.FC<GradeSessionsViewProps> = ({
     setIsLoading(true);
     setError(null);
     const load = activeTab === 'live'
-      ? getLiveStreamStatus(sessionToken, registeredSessionId).then((stream) => {
+      ? getLiveStreamStatus(sessionToken, selectedGrade.id).then((stream) => {
           if (!active) return;
           setSessions([]);
           setLiveStream(stream);
@@ -83,7 +81,7 @@ export const GradeSessionsView: React.FC<GradeSessionsViewProps> = ({
     return () => {
       active = false;
     };
-  }, [selectedGrade.id, activeTab, reloadKey, registeredAccount, sessionToken, registeredSessionId, canJoinLiveSession, liveAccessError]);
+  }, [selectedGrade.id, activeTab, reloadKey, registeredAccount, sessionToken, canJoinLiveSession, liveAccessError]);
 
   const openSession = (session: StoredSessionRecord) => {
     const url = session.mediaUrl || session.playbackUrl || session.sourceUrl;
@@ -167,7 +165,7 @@ export const GradeSessionsView: React.FC<GradeSessionsViewProps> = ({
               currentLang={currentLang}
               stream={liveStream}
               sessionToken={sessionToken}
-              sessionId={registeredSessionId}
+              gradeId={selectedGrade.id}
             />
           ) : (
             <div className="rounded-3xl border border-rose-200 bg-white p-10 text-center space-y-2">
