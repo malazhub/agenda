@@ -1,6 +1,7 @@
 const SESSION_TTL_SECONDS = 12 * 60 * 60;
 const PASSWORD_ITERATIONS = 100000;
 const MAX_PASSWORD_LENGTH = 1024;
+const STREAM_VIDEO_CALL_ID = "agenda-shared-classroom";
 const encoder = new TextEncoder();
 
 function json(data, status = 200, headers = {}) {
@@ -85,6 +86,30 @@ async function signToken(payload, secret) {
   const key = await crypto.subtle.importKey("raw", encoder.encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
   const signature = await crypto.subtle.sign("HMAC", key, encoder.encode(data));
   return `${data}.${base64UrlEncode(new Uint8Array(signature))}`;
+}
+
+async function signStreamCallToken(env, userId, role) {
+  const apiKey = env.STREAM_VIDEO_API_KEY;
+  const secret = env.STREAM_VIDEO_API_SECRET;
+  if (!apiKey || !secret) return null;
+  const now = Math.floor(Date.now() / 1000);
+  const header = base64UrlEncode(encoder.encode(JSON.stringify({ alg: "HS256", typ: "JWT" })));
+  const payload = base64UrlEncode(encoder.encode(JSON.stringify({
+    user_id: userId,
+    call_cids: [`livestream:${STREAM_VIDEO_CALL_ID}`],
+    ...(role ? { role } : {}),
+    iat: now,
+    exp: now + 60 * 60,
+  })));
+  const data = `${header}.${payload}`;
+  const key = await crypto.subtle.importKey("raw", encoder.encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  const signature = await crypto.subtle.sign("HMAC", key, encoder.encode(data));
+  return {
+    apiKey,
+    callId: STREAM_VIDEO_CALL_ID,
+    token: `${data}.${base64UrlEncode(new Uint8Array(signature))}`,
+    userId,
+  };
 }
 
 async function verifyToken(token, secret) {
@@ -387,40 +412,6 @@ async function listSessions(url, env, request) {
   });
 }
 
-async function cloudflareStreamRequest(env, path, init) {
-  const token = env.CLOUDFLARE_STREAM_API_TOKEN;
-  const accountId = env.CLOUDFLARE_ACCOUNT_ID;
-  if (!token || !accountId) {
-    return { configured: false };
-  }
-  const response = await fetch(`https://api.cloudflare.com/client/v4/accounts/${accountId}/stream/${path}`, {
-    ...init,
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
-      Accept: "application/json",
-      ...init?.headers,
-    },
-  });
-  const responseText = await response.text();
-  let body;
-  try {
-    body = JSON.parse(responseText);
-  } catch {
-    const responseType = response.headers.get("content-type") || "unknown";
-    console.error("Cloudflare Stream API returned an invalid response", response.status, responseType);
-    throw new Error(`Cloudflare Stream returned an invalid response (HTTP ${response.status}, ${responseType}). Check the Stream API token and account configuration.`);
-  }
-  if (!response.ok || body.success !== true) {
-    console.error("Cloudflare Stream API request failed", response.status, body.errors);
-    const message = Array.isArray(body.errors)
-      ? body.errors.map((error) => error.message).filter(Boolean).join(" ")
-      : "";
-    throw new Error(message || `Cloudflare Stream could not complete the request (HTTP ${response.status}). Check the Stream API token and account configuration.`);
-  }
-  return { configured: true, result: body.result };
-}
-
 async function registeredLiveSession(request, env, sessionId) {
   const claims = await authenticate(request, env, null);
   if (!claims || !["student", "educator"].includes(claims.role)) {
@@ -445,71 +436,29 @@ async function registeredLiveSession(request, env, sessionId) {
 
 async function getLiveStream(request, env) {
   const sessionId = new URL(request.url).searchParams.get("sessionId") || "";
-  const access = await registeredLiveSession(request, env, sessionId);
-  if (access.error) return access.error;
-  const stream = await env.DB.prepare("SELECT input_uid FROM live_stream_config WHERE id = 1").first();
-  const customerCode = env.STREAM_CUSTOMER_CODE;
-  if (!stream || !customerCode) {
-    return json({ status: "unconfigured", playbackUrl: null });
+  const claims = await authenticate(request, env, null);
+  if (!claims || !["student", "educator"].includes(claims.role)) {
+    return json({ error: "Sign in with an activated student or educator account." }, 401);
   }
-  return json({
-    status: "waiting",
-    playbackUrl: `https://customer-${encodeURIComponent(customerCode)}.cloudflarestream.com/${encodeURIComponent(stream.input_uid)}/iframe`,
-  });
-}
-
-async function configureLiveStreamInput(request, env) {
-  const director = await authenticate(request, env, "director");
-  if (!director) return json({ error: "Director authentication required." }, 401);
-  const body = await requestJson(request);
-  const inputUid = typeof body?.inputUid === "string" ? body.inputUid.trim() : "";
-  if (!/^[a-zA-Z0-9_-]{1,100}$/.test(inputUid)) {
-    return json({ error: "Enter a valid Cloudflare Stream input ID." }, 400);
+  const account = await env.DB.prepare("SELECT * FROM accounts WHERE id = ?").bind(claims.sub).first();
+  const expiryTime = account?.expires_at ? Date.parse(`${account.expires_at.replace(" ", "T")}Z`) : null;
+  if (!account || !account.activated || (expiryTime !== null && (!Number.isFinite(expiryTime) || expiryTime <= Date.now()))) {
+    return json({ error: "Your account must be activated by the Director and not expired to join live sessions." }, 403);
   }
-  if (!env.STREAM_CUSTOMER_CODE) {
-    return json({ error: "The Cloudflare Stream customer code is not configured." }, 503);
+  if (!sessionId || account.registered_session_id !== sessionId) {
+    return json({ error: "Live access is limited to your registered session." }, 403);
   }
-  await env.DB.prepare(
-    "INSERT OR REPLACE INTO live_stream_config (id, input_uid) VALUES (1, ?)",
-  ).bind(inputUid).run();
-  return json({
-    status: "waiting",
-    playbackUrl: `https://customer-${encodeURIComponent(env.STREAM_CUSTOMER_CODE)}.cloudflarestream.com/${encodeURIComponent(inputUid)}/iframe`,
-  });
+  const stream = await signStreamCallToken(env, account.id);
+  if (!stream) return json({ error: "Live video is not configured. Ask the Director to configure Stream Video credentials." }, 503);
+  return json({ status: "waiting", ...stream, userName: account.username });
 }
 
 async function ensureLiveStream(request, env) {
   const director = await authenticate(request, env, "director");
   if (!director) return json({ error: "Director authentication required." }, 401);
-  const accountId = env.CLOUDFLARE_ACCOUNT_ID;
-  if (!accountId || !env.CLOUDFLARE_STREAM_API_TOKEN) {
-    return json({ error: "Configure CLOUDFLARE_STREAM_API_TOKEN with Stream Write permission to set up the live broadcast." }, 503);
-  }
-
-  let liveInput = await env.DB.prepare("SELECT input_uid FROM live_stream_config WHERE id = 1").first();
-  let input;
-  if (liveInput) {
-    ({ result: input } = await cloudflareStreamRequest(env, `live_inputs/${encodeURIComponent(liveInput.input_uid)}`, { method: "GET" }));
-  } else {
-    ({ result: input } = await cloudflareStreamRequest(env, "live_inputs", {
-      method: "POST",
-      body: JSON.stringify({
-        meta: { name: "Agenda shared classroom broadcast" },
-        recording: { mode: "automatic" },
-      }),
-    }));
-    await env.DB.prepare(
-      "INSERT OR REPLACE INTO live_stream_config (id, input_uid) VALUES (1, ?)",
-    ).bind(input.uid).run();
-  }
-  return json({
-    inputUid: input.uid,
-    rtmpsUrl: input.rtmps?.url || "",
-    streamKey: input.rtmps?.streamKey || "",
-    playbackUrl: env.STREAM_CUSTOMER_CODE
-      ? `https://customer-${encodeURIComponent(env.STREAM_CUSTOMER_CODE)}.cloudflarestream.com/${encodeURIComponent(input.uid)}/iframe`
-      : null,
-  });
+  const stream = await signStreamCallToken(env, director.sub, "admin");
+  if (!stream) return json({ error: "Live video is not configured. Ask the administrator to configure Stream Video credentials." }, 503);
+  return json({ ...stream, userName: "Agenda Director" });
 }
 
 async function createSessions(request, env) {
@@ -630,7 +579,6 @@ async function handle(request, env) {
   if (request.method === "GET" && path === "/api/director/sessions") return directorSessions(request, env);
   if (request.method === "POST" && path === "/api/director/sessions") return createSessions(request, env);
   if (request.method === "POST" && path === "/api/director/live-stream") return ensureLiveStream(request, env);
-  if (request.method === "PUT" && path === "/api/director/live-stream/config") return configureLiveStreamInput(request, env);
   if (request.method === "GET" && path === "/api/live-stream") return getLiveStream(request, env);
   if (request.method === "GET" && path === "/api/sessions") return listSessions(url, env, request);
 
@@ -663,9 +611,6 @@ export default {
       return new Response(response.body, { status: response.status, headers: responseHeaders });
     } catch (error) {
       console.error("Agenda API request failed", error);
-      if (error instanceof Error && error.message.startsWith("Cloudflare Stream")) {
-        return json({ error: error.message }, 502, headers);
-      }
       return json({ error: "The service could not complete the request." }, 500, headers);
     }
   },

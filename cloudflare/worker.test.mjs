@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { pbkdf2Sync, randomBytes } from 'node:crypto';
+import { createHmac, pbkdf2Sync, randomBytes } from 'node:crypto';
 import { test } from 'node:test';
 import worker from './worker.js';
 
@@ -15,7 +15,6 @@ function fakeEnvironment() {
   const accounts = new Map();
   const attempts = [];
   const sessions = new Map();
-  const streamConfig = new Map();
   sessions.set('test-registration-session', {
     id: 'test-registration-session',
     grade_id: 'eb8',
@@ -62,7 +61,6 @@ function fakeEnvironment() {
         const session = sessions.get(this.values[0]);
         return session?.is_live ? session : null;
       }
-      if (this.sql.includes('SELECT input_uid FROM live_stream_config')) return streamConfig.get(1) || null;
       return null;
     }
 
@@ -106,10 +104,6 @@ function fakeEnvironment() {
       }
       if (this.sql.startsWith('DELETE FROM sessions WHERE id')) {
         return { meta: { changes: sessions.delete(this.values[0]) ? 1 : 0 } };
-      }
-      if (this.sql.startsWith('INSERT OR REPLACE INTO live_stream_config')) {
-        streamConfig.set(this.values[0], { id: this.values[0], input_uid: this.values[1] });
-        return { meta: { changes: 1 } };
       }
       if (this.sql.startsWith('UPDATE accounts SET')) {
         const id = this.values[this.values.length - 1];
@@ -168,10 +162,15 @@ function fakeEnvironment() {
   });
 
   return {
-    env: { DB, SESSION_SIGNING_KEY: signingKey, ALLOWED_ORIGINS: 'https://malazhub.github.io', STREAM_CUSTOMER_CODE: 'test-customer' },
+    env: {
+      DB,
+      SESSION_SIGNING_KEY: signingKey,
+      ALLOWED_ORIGINS: 'https://malazhub.github.io',
+      STREAM_VIDEO_API_KEY: 'test-stream-video-key',
+      STREAM_VIDEO_API_SECRET: 'test-stream-video-secret-with-sufficient-length',
+    },
     accounts,
     sessions,
-    streamConfig,
     password,
   };
 }
@@ -265,6 +264,11 @@ test('registration hashes credentials and rejects duplicate usernames', async ()
     body: { username: registration.username, password: registration.password },
   });
   assert.equal(login.status, 200);
+  const sharedStream = await send(env, `/api/live-stream?sessionId=${registration.registeredSessionId}`, {
+    token: (await login.json()).token,
+  });
+  assert.equal(sharedStream.status, 200);
+  assert.equal((await sharedStream.json()).status, 'waiting');
 });
 
 test('Director login reads persisted role tables and saves status updates', async () => {
@@ -380,7 +384,21 @@ test('Director can save a live session and the grade catalog returns its playbac
   assert.equal(sessions[0].isLive, true);
   assert.equal(sessions[0].playbackUrl, 'https://example.org/live/video');
   const liveStatus = await send(env, '/api/live-stream?sessionId=live-eb8-math', { token });
-  assert.equal((await liveStatus.json()).status, 'unconfigured');
+  const liveCredentials = await liveStatus.json();
+  assert.equal(liveStatus.status, 200);
+  assert.equal(liveCredentials.status, 'waiting');
+  assert.equal(liveCredentials.callId, 'agenda-shared-classroom');
+  assert.equal(liveCredentials.apiKey, 'test-stream-video-key');
+  const videoTokenPayload = JSON.parse(Buffer.from(liveCredentials.token.split('.')[1], 'base64url').toString());
+  assert.deepEqual(videoTokenPayload.call_cids, ['livestream:agenda-shared-classroom']);
+  assert.equal('STREAM_VIDEO_API_SECRET' in liveCredentials, false);
+  const [header, payload, signature] = liveCredentials.token.split('.');
+  assert.equal(
+    signature,
+    createHmac('sha256', 'test-stream-video-secret-with-sufficient-length')
+      .update(`${header}.${payload}`)
+      .digest('base64url'),
+  );
 });
 
 test('Director can list and delete stored sessions', async () => {
@@ -412,6 +430,38 @@ test('Director can list and delete stored sessions', async () => {
   assert.deepEqual(await deleted.json(), { deleted: true });
   const afterDelete = await send(env, '/api/director/sessions', { token });
   assert.equal((await afterDelete.json()).sessions.some((session) => session.id === 'resource-eb8-science'), false);
+});
+
+test('Director can obtain a call-scoped host token for the shared livestream', async () => {
+  const { env } = fakeEnvironment();
+  const login = await send(env, '/api/auth/login', {
+    method: 'POST',
+    body: { username: 'director', password: 'DirectorPassword#2026' },
+  });
+  const { token } = await login.json();
+  const setup = await send(env, '/api/director/live-stream', { method: 'POST', token });
+  assert.equal(setup.status, 200);
+  const credentials = await setup.json();
+  assert.equal(credentials.callId, 'agenda-shared-classroom');
+  assert.equal(credentials.userId, 'director-account-0000000000000000');
+  const videoTokenPayload = JSON.parse(Buffer.from(credentials.token.split('.')[1], 'base64url').toString());
+  assert.equal(videoTokenPayload.role, 'admin');
+  assert.deepEqual(videoTokenPayload.call_cids, ['livestream:agenda-shared-classroom']);
+  assert.equal('STREAM_VIDEO_API_SECRET' in credentials, false);
+});
+
+test('live-video setup reports missing provider credentials explicitly', async () => {
+  const { env } = fakeEnvironment();
+  delete env.STREAM_VIDEO_API_KEY;
+  delete env.STREAM_VIDEO_API_SECRET;
+  const login = await send(env, '/api/auth/login', {
+    method: 'POST',
+    body: { username: 'director', password: 'DirectorPassword#2026' },
+  });
+  const { token } = await login.json();
+  const response = await send(env, '/api/director/live-stream', { method: 'POST', token });
+  assert.equal(response.status, 503);
+  assert.match((await response.json()).error, /Stream Video credentials/i);
 });
 
 test('live stream endpoint rejects users without an assigned activated session', async () => {

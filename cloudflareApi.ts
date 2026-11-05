@@ -63,15 +63,20 @@ export interface SessionInput {
 }
 
 export interface LiveStreamStatus {
-  status: 'unconfigured' | 'waiting';
-  playbackUrl: string | null;
+  status: 'waiting';
+  apiKey: string;
+  callId: string;
+  token: string;
+  userId: string;
+  userName: string;
 }
 
 export interface LiveStreamSetup {
-  inputUid: string;
-  rtmpsUrl: string;
-  streamKey: string;
-  playbackUrl: string | null;
+  apiKey: string;
+  callId: string;
+  token: string;
+  userId: string;
+  userName: string;
 }
 
 const API_BASE_URL = (import.meta.env.VITE_CLOUDFLARE_API_URL || '').replace(/\/+$/, '');

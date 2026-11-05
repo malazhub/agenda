@@ -3,6 +3,7 @@ import { Language, GradeLevelDef } from '../types';
 import { translations } from '../translations';
 import { getGradeSessions, getLiveStreamStatus } from '../services/cloudflareApi';
 import type { CloudflareAccount, LiveStreamStatus, StoredSessionRecord } from '../services/cloudflareApi';
+import { LiveVideoPlayer } from './LiveVideoPlayer';
 import { ArrowLeft, ArrowRight, Video, FileText, ExternalLink, RefreshCw } from 'lucide-react';
 
 interface GradeSessionsViewProps {
@@ -61,22 +62,18 @@ export const GradeSessionsView: React.FC<GradeSessionsViewProps> = ({
     }
     setIsLoading(true);
     setError(null);
-    Promise.all([
-      getGradeSessions(
-        selectedGrade.id,
-        activeTab === 'live',
-        activeTab === 'live' ? sessionToken : undefined,
-        activeTab === 'live' ? registeredSessionId : undefined,
-      ),
-      activeTab === 'live'
-        ? getLiveStreamStatus(sessionToken, registeredSessionId)
-        : Promise.resolve(null),
-    ])
-      .then(([{ sessions: loadedSessions }, stream]) => {
-        if (!active) return;
-        setSessions(loadedSessions);
-        setLiveStream(stream);
-      })
+    const load = activeTab === 'live'
+      ? getLiveStreamStatus(sessionToken, registeredSessionId).then((stream) => {
+          if (!active) return;
+          setSessions([]);
+          setLiveStream(stream);
+        })
+      : getGradeSessions(selectedGrade.id).then(({ sessions: loadedSessions }) => {
+          if (!active) return;
+          setSessions(loadedSessions);
+          setLiveStream(null);
+        });
+    load
       .catch((requestError) => {
         if (active) setError(requestError instanceof Error ? requestError.message : 'Unable to load sessions.');
       })
@@ -165,19 +162,13 @@ export const GradeSessionsView: React.FC<GradeSessionsViewProps> = ({
         </div>
       ) : activeTab === 'live' ? (
         <div className="space-y-4">
-          {liveStream?.playbackUrl ? (
-            <div className="overflow-hidden rounded-3xl border border-slate-800 bg-slate-950 shadow-lg">
-              <iframe
-                title={currentLang === 'ar' ? 'البث المباشر' : currentLang === 'fr' ? 'Diffusion en direct' : 'Live broadcast'}
-                src={liveStream.playbackUrl}
-                className="aspect-video w-full"
-                allow="accelerometer; gyroscope; autoplay; encrypted-media; picture-in-picture;"
-                allowFullScreen
-              />
-              <p className="px-4 py-3 text-xs font-semibold text-slate-200">
-                {currentLang === 'ar' ? 'غرفة البث المشتركة — انتظر بدء البث من المدير أو المدرّس.' : currentLang === 'fr' ? 'Salle de direct commune — en attente du démarrage par le directeur ou l’enseignant.' : 'Shared live room — waiting for the Director or educator to start streaming.'}
-              </p>
-            </div>
+          {liveStream ? (
+            <LiveVideoPlayer
+              currentLang={currentLang}
+              stream={liveStream}
+              sessionToken={sessionToken}
+              sessionId={registeredSessionId}
+            />
           ) : (
             <div className="rounded-3xl border border-rose-200 bg-white p-10 text-center space-y-2">
               <Video className="mx-auto h-8 w-8 text-rose-600" />

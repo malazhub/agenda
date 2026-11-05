@@ -14,6 +14,8 @@ const componentFiles = [
   'Header.tsx',
   'HeroSearch.tsx',
   'HomeworkAgenda.tsx',
+  'LiveBroadcastHost.tsx',
+  'LiveVideoPlayer.tsx',
   'RegisterModal.tsx',
   'TutorMarketplace.tsx',
   'VirtualClassroom.tsx',

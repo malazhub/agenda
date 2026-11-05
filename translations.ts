@@ -130,15 +130,20 @@ export interface Translations {
   liveBroadcast: string;
   setupLiveBroadcast: string;
   liveWaiting: string;
-  liveNotConfigured: string;
   liveBroadcastSetupRequired: string;
-  streamUrl: string;
-  streamKey: string;
+  liveVideoConnecting: string;
+  liveVideoReady: string;
+  liveVideoWaiting: string;
+  liveVideoError: string;
+  liveVideoUnsupported: string;
+  liveBroadcastActive: string;
+  startBroadcast: string;
+  stopBroadcast: string;
+  liveVideoRetry: string;
   subjectLabel: string;
   titleLabel: string;
   sourceNameLabel: string;
   sourceUrlLabel: string;
-  playbackUrlLabel: string;
   gradeLabel: string;
   deleteConfirm: string;
   
@@ -306,15 +311,20 @@ export const translations: Record<Language, Translations> = {
     liveBroadcast: "البث المباشر",
     setupLiveBroadcast: "إعداد البث",
     liveWaiting: "البث جاهز — بانتظار بدء الإرسال من المدرّس.",
-    liveNotConfigured: "لم يتم إعداد بث مباشر بعد.",
-    liveBroadcastSetupRequired: "يلزم إعداد Cloudflare Stream قبل بدء البث.",
-    streamUrl: "عنوان البث",
-    streamKey: "مفتاح البث",
+    liveBroadcastSetupRequired: "يلزم إعداد Stream Video قبل بدء البث.",
+    liveVideoConnecting: "جارٍ الاتصال بغرفة البث...",
+    liveVideoReady: "الكاميرا والميكروفون متوقفان. ابدأ البث عند الاستعداد.",
+    liveVideoWaiting: "غرفة البث جاهزة — بانتظار بدء البث المباشر.",
+    liveVideoError: "تعذر الاتصال بالبث المباشر. تحقق من بيانات Stream Video وحاول مجدداً.",
+    liveVideoUnsupported: "لا يدعم هذا المتصفح تشغيل بث الفيديو.",
+    liveBroadcastActive: "أنت تبث الآن مباشرة.",
+    startBroadcast: "بدء البث المباشر",
+    stopBroadcast: "إيقاف البث",
+    liveVideoRetry: "إعادة المحاولة",
     subjectLabel: "المادة",
     titleLabel: "العنوان",
     sourceNameLabel: "المصدر",
     sourceUrlLabel: "رابط المصدر",
-    playbackUrlLabel: "رابط الفيديو",
     gradeLabel: "الصف",
     deleteConfirm: "هل تريد حذف هذه الحصة؟",
     
@@ -481,15 +491,20 @@ export const translations: Record<Language, Translations> = {
     liveBroadcast: "Diffusion en direct",
     setupLiveBroadcast: "Configurer la diffusion",
     liveWaiting: "Le direct est prêt — en attente du démarrage par l’enseignant.",
-    liveNotConfigured: "Aucune diffusion en direct n’est configurée.",
-    liveBroadcastSetupRequired: "Configurez Cloudflare Stream avant de lancer le direct.",
-    streamUrl: "Adresse de diffusion",
-    streamKey: "Clé de diffusion",
+    liveBroadcastSetupRequired: "Configurez Stream Video avant de lancer le direct.",
+    liveVideoConnecting: "Connexion à la salle de diffusion...",
+    liveVideoReady: "La caméra et le microphone sont arrêtés. Démarrez la diffusion lorsque vous êtes prêt.",
+    liveVideoWaiting: "La salle est prête — en attente du début de la diffusion.",
+    liveVideoError: "Impossible de se connecter au direct. Vérifiez la configuration Stream Video et réessayez.",
+    liveVideoUnsupported: "Ce navigateur ne prend pas en charge la lecture vidéo en direct.",
+    liveBroadcastActive: "Vous êtes en direct.",
+    startBroadcast: "Démarrer le direct",
+    stopBroadcast: "Arrêter le direct",
+    liveVideoRetry: "Réessayer",
     subjectLabel: "Matière",
     titleLabel: "Titre",
     sourceNameLabel: "Source",
     sourceUrlLabel: "Lien de la source",
-    playbackUrlLabel: "Lien vidéo",
     gradeLabel: "Classe",
     deleteConfirm: "Supprimer ce cours ?",
     
@@ -656,15 +671,20 @@ export const translations: Record<Language, Translations> = {
     liveBroadcast: "Live broadcast",
     setupLiveBroadcast: "Set up broadcast",
     liveWaiting: "The live room is ready — waiting for the teacher to start streaming.",
-    liveNotConfigured: "No live broadcast has been configured yet.",
-    liveBroadcastSetupRequired: "Configure Cloudflare Stream before starting a broadcast.",
-    streamUrl: "Stream URL",
-    streamKey: "Stream key",
+    liveBroadcastSetupRequired: "Configure Stream Video before starting a broadcast.",
+    liveVideoConnecting: "Connecting to the broadcast room...",
+    liveVideoReady: "Camera and microphone are off. Start the broadcast when ready.",
+    liveVideoWaiting: "The room is ready — waiting for the live broadcast to start.",
+    liveVideoError: "Could not connect to live video. Check Stream Video configuration and try again.",
+    liveVideoUnsupported: "This browser does not support live video playback.",
+    liveBroadcastActive: "You are live now.",
+    startBroadcast: "Start live broadcast",
+    stopBroadcast: "Stop broadcast",
+    liveVideoRetry: "Retry",
     subjectLabel: "Subject",
     titleLabel: "Title",
     sourceNameLabel: "Source name",
     sourceUrlLabel: "Source URL",
-    playbackUrlLabel: "Video URL",
     gradeLabel: "Grade",
     deleteConfirm: "Delete this session?",
     

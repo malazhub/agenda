@@ -4,6 +4,7 @@ import { translations } from '../translations';
 import { LEBANESE_GRADE_LEVELS } from '../data/mockGradesAndSessions';
 import { GradeSessionsView } from './GradeSessionsView';
 import { DirectorSessionsPanel } from './DirectorSessionsPanel';
+import { LiveBroadcastHost } from './LiveBroadcastHost';
 import { getDirectorAccounts, getRegistrationSessions, loginAccount, setupLiveStream, updateDirectorAccount } from '../services/cloudflareApi';
 import type { CloudflareAccount, LiveStreamSetup, RegistrationSession } from '../services/cloudflareApi';
 import {
@@ -373,12 +374,9 @@ export const CoursesHub: React.FC<CoursesHubProps> = ({
           </div>
           {streamSetupError && <p role="alert" className="text-xs text-red-700">{streamSetupError}</p>}
           {streamSetup && (
-            <div className="space-y-2 break-all text-xs text-slate-700">
+            <div className="space-y-3 text-xs text-slate-700">
               <p>{t.liveWaiting}</p>
-              {streamSetup.playbackUrl && <p><span className="font-bold">{t.playbackUrlLabel}: </span>{streamSetup.playbackUrl}</p>}
-              <p><span className="font-bold">{t.streamUrl}: </span>{streamSetup.rtmpsUrl}</p>
-              <p><span className="font-bold">{t.streamKey}: </span><code>{streamSetup.streamKey}</code></p>
-              <p className="text-amber-700">{t.passwordNotStored}</p>
+              <LiveBroadcastHost currentLang={currentLang} stream={streamSetup} directorToken={directorToken} />
             </div>
           )}
         </section>
