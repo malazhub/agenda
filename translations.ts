@@ -120,6 +120,8 @@ export interface Translations {
   registrationNoGrades: string;
   liveActivationRequired: string;
   liveRegisteredSessionOnly: string;
+  liveRoomRegistrationRequired: string;
+  liveRoomGradeRequired: string;
   backToMain: string;
   joiningDate: string;
   expiryDate: string;
@@ -305,6 +307,8 @@ export const translations: Record<Language, Translations> = {
     registrationNoGrades: "لا توجد صفوف متاحة للتسجيل حالياً.",
     liveActivationRequired: "يجب تفعيل حسابك من المدير قبل الدخول إلى البث المباشر.",
     liveRegisteredSessionOnly: "يمكنك الدخول إلى البث المباشر لصفك المسجل فيه فقط.",
+    liveRoomRegistrationRequired: "يرجى التسجيل لاستخدام غرفة البث المباشر.",
+    liveRoomGradeRequired: "يجب أن يكون لحسابك صف دراسي مسجل لاستخدام غرفة البث المباشر.",
     backToMain: "العودة إلى الشاشة الرئيسية",
     joiningDate: "تاريخ الانضمام",
     expiryDate: "تاريخ الانتهاء",
@@ -489,6 +493,8 @@ export const translations: Record<Language, Translations> = {
     registrationNoGrades: "Aucune classe n’est disponible pour l’inscription.",
     liveActivationRequired: "Le directeur doit activer votre compte avant l’accès au direct.",
     liveRegisteredSessionOnly: "Vous pouvez accéder uniquement aux diffusions en direct de votre classe inscrite.",
+    liveRoomRegistrationRequired: "Veuillez vous inscrire pour utiliser la salle en direct.",
+    liveRoomGradeRequired: "Votre compte doit être associé à une classe pour utiliser la salle en direct.",
     backToMain: "Retour à l’écran principal",
     joiningDate: "Date d’inscription",
     expiryDate: "Date d’expiration",
@@ -673,6 +679,8 @@ export const translations: Record<Language, Translations> = {
     registrationNoGrades: "No grades are currently available for registration.",
     liveActivationRequired: "The Director must activate your account before you can join live sessions.",
     liveRegisteredSessionOnly: "You can access live broadcasts only for your registered grade.",
+    liveRoomRegistrationRequired: "Please register to use the live room.",
+    liveRoomGradeRequired: "Your account must have a registered grade to use the live room.",
     backToMain: "Back to main screen",
     joiningDate: "Joining date",
     expiryDate: "Expiry date",

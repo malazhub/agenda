@@ -199,6 +199,7 @@ export default function App() {
             directorLoginRequest={directorLoginRequest}
             registeredAccount={registeredAccount}
             sessionToken={sessionToken}
+            onShowMessage={showToast}
             onBookTeacher={handleBookTeacherDirect}
             onSelectQuestionForBooking={handleSelectQuestionForBooking}
             onStartPractice={(exam) => setPracticeExam(exam)}

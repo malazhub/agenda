@@ -9,6 +9,7 @@ import { ArrowLeft, ArrowRight, Video, FileText, ExternalLink, RefreshCw } from 
 interface GradeSessionsViewProps {
   currentLang: Language;
   selectedGrade: GradeLevelDef;
+  initialTab?: 'stored' | 'live';
   registeredAccount: CloudflareAccount | null;
   sessionToken: string;
   onBack: () => void;
@@ -17,12 +18,13 @@ interface GradeSessionsViewProps {
 export const GradeSessionsView: React.FC<GradeSessionsViewProps> = ({
   currentLang,
   selectedGrade,
+  initialTab = 'stored',
   registeredAccount,
   sessionToken,
   onBack,
 }) => {
   const isRTL = currentLang === 'ar';
-  const [activeTab, setActiveTab] = useState<'stored' | 'live'>('stored');
+  const [activeTab, setActiveTab] = useState<'stored' | 'live'>(initialTab);
   const [sessions, setSessions] = useState<StoredSessionRecord[]>([]);
   const [liveStream, setLiveStream] = useState<LiveStreamStatus | null>(null);
   const [isLoading, setIsLoading] = useState(false);
