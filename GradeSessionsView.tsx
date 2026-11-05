@@ -1,18 +1,23 @@
 import React, { useEffect, useState } from 'react';
 import { Language, GradeLevelDef } from '../types';
+import { translations } from '../translations';
 import { getGradeSessions, getLiveStreamStatus } from '../services/cloudflareApi';
-import type { LiveStreamStatus, StoredSessionRecord } from '../services/cloudflareApi';
+import type { CloudflareAccount, LiveStreamStatus, StoredSessionRecord } from '../services/cloudflareApi';
 import { ArrowLeft, ArrowRight, Video, FileText, ExternalLink, RefreshCw } from 'lucide-react';
 
 interface GradeSessionsViewProps {
   currentLang: Language;
   selectedGrade: GradeLevelDef;
+  registeredAccount: CloudflareAccount | null;
+  sessionToken: string;
   onBack: () => void;
 }
 
 export const GradeSessionsView: React.FC<GradeSessionsViewProps> = ({
   currentLang,
   selectedGrade,
+  registeredAccount,
+  sessionToken,
   onBack,
 }) => {
   const isRTL = currentLang === 'ar';
@@ -22,14 +27,50 @@ export const GradeSessionsView: React.FC<GradeSessionsViewProps> = ({
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
+  const registeredSessionId = registeredAccount?.registeredSessionId || '';
+  const expiryTime = registeredAccount?.expiresAt
+    ? Date.parse(`${registeredAccount.expiresAt.replace(' ', 'T').replace(/Z$/, '')}Z`)
+    : null;
+  const accountExpired = expiryTime !== null && (!Number.isFinite(expiryTime) || expiryTime <= Date.now());
+  const canJoinLiveSession = Boolean(
+    registeredAccount?.activated &&
+    !accountExpired &&
+    registeredAccount.role !== 'director' &&
+    sessionToken &&
+    registeredSessionId &&
+    registeredAccount.gradeId === selectedGrade.id
+  );
+  const liveAccessError = !registeredAccount?.activated
+    ? translations[currentLang].liveActivationRequired
+    : accountExpired
+      ? translations[currentLang].accountExpired
+    : !canJoinLiveSession
+      ? translations[currentLang].liveRegisteredSessionOnly
+      : null;
 
   useEffect(() => {
     let active = true;
+    if (activeTab === 'live' && (!registeredSessionId || !canJoinLiveSession)) {
+      setIsLoading(false);
+      setSessions([]);
+      setLiveStream(null);
+      setError(liveAccessError);
+      return () => {
+        active = false;
+      };
+    }
     setIsLoading(true);
     setError(null);
     Promise.all([
-      getGradeSessions(selectedGrade.id, activeTab === 'live'),
-      activeTab === 'live' ? getLiveStreamStatus() : Promise.resolve(null),
+      getGradeSessions(
+        selectedGrade.id,
+        activeTab === 'live',
+        activeTab === 'live' ? sessionToken : undefined,
+        activeTab === 'live' ? registeredSessionId : undefined,
+      ),
+      activeTab === 'live'
+        ? getLiveStreamStatus(sessionToken, registeredSessionId)
+        : Promise.resolve(null),
     ])
       .then(([{ sessions: loadedSessions }, stream]) => {
         if (!active) return;
@@ -45,7 +86,7 @@ export const GradeSessionsView: React.FC<GradeSessionsViewProps> = ({
     return () => {
       active = false;
     };
-  }, [selectedGrade.id, activeTab, reloadKey]);
+  }, [selectedGrade.id, activeTab, reloadKey, registeredAccount, sessionToken, registeredSessionId, canJoinLiveSession, liveAccessError]);
 
   const openSession = (session: StoredSessionRecord) => {
     const url = session.mediaUrl || session.playbackUrl || session.sourceUrl;
@@ -92,7 +133,11 @@ export const GradeSessionsView: React.FC<GradeSessionsViewProps> = ({
 
           <button
             onClick={() => setActiveTab('live')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-black transition cursor-pointer ${
+            disabled={!canJoinLiveSession}
+            title={!canJoinLiveSession ? liveAccessError || undefined : undefined}
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-black transition ${
+              canJoinLiveSession ? 'cursor-pointer' : 'cursor-not-allowed opacity-50'
+            } ${
               activeTab === 'live' ? 'bg-rose-600 text-white shadow-sm' : 'text-slate-600 hover:text-slate-900'
             }`}
           >

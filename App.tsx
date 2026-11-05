@@ -9,6 +9,7 @@ import {
 } from './types';
 import { translations } from './translations';
 import { MOCK_TEACHERS } from './data/mockTeachers';
+import { getCurrentAccount } from './services/cloudflareApi';
 import type { CloudflareAccount } from './services/cloudflareApi';
 
 import { Header } from './components/Header';
@@ -16,7 +17,6 @@ import { CoursesHub } from './components/CoursesHub';
 import { VirtualClassroom } from './components/VirtualClassroom';
 import { BookingModal } from './components/BookingModal';
 import { RegisterModal } from './components/RegisterModal';
-import { PaymentPage } from './components/PaymentPage';
 import { ArchiveSessionsModal } from './components/ArchiveSessionsModal';
 import { ExamPracticeModal } from './components/ExamPracticeModal';
 import { AIChatBot } from './components/AIChatBot';
@@ -55,8 +55,9 @@ export default function App() {
 
   // Register Modal State
   const [isRegisterOpen, setIsRegisterOpen] = useState(false);
-  const [isPaymentScreenOpen, setIsPaymentScreenOpen] = useState(false);
   const [directorLoginRequest, setDirectorLoginRequest] = useState(0);
+  const [registeredAccount, setRegisteredAccount] = useState<CloudflareAccount | null>(null);
+  const [sessionToken, setSessionToken] = useState('');
   
   // Archive Sessions Modal State
   const [isArchiveSessionsOpen, setIsArchiveSessionsOpen] = useState(false);
@@ -74,6 +75,44 @@ export default function App() {
     document.documentElement.dir = isRTL ? 'rtl' : 'ltr';
     document.documentElement.lang = currentLang;
   }, [currentLang, isRTL]);
+
+  useEffect(() => {
+    const storedToken = sessionStorage.getItem('agenda-session-token');
+    if (storedToken) setSessionToken(storedToken);
+  }, []);
+
+  useEffect(() => {
+    if (!sessionToken) return;
+    let active = true;
+    const refreshAccount = async () => {
+      try {
+        const { account } = await getCurrentAccount(sessionToken);
+        if (!active) return;
+        setRegisteredAccount(account);
+        setUserProfile((previous) => ({
+          ...previous,
+          name: account.fullName,
+          email: account.email,
+          role: account.role === 'educator' ? 'teacher' : 'student',
+        }));
+      } catch (error) {
+        if (!active) return;
+        if (error instanceof Error && error.message.includes('(401)')) {
+          sessionStorage.removeItem('agenda-session-token');
+          setSessionToken('');
+          setRegisteredAccount(null);
+        } else {
+          console.error('Unable to refresh the signed-in account status.', error);
+        }
+      }
+    };
+    void refreshAccount();
+    const intervalId = window.setInterval(() => void refreshAccount(), 30_000);
+    return () => {
+      active = false;
+      window.clearInterval(intervalId);
+    };
+  }, [sessionToken]);
 
   const showToast = (message: string) => {
     setNotification(message);
@@ -115,14 +154,13 @@ export default function App() {
     setIsClassroomActive(true);
   };
 
-  const handleRegisterSuccess = (account: CloudflareAccount) => {
+  const handleRegisterSuccess = (account: CloudflareAccount, token: string) => {
     const role = account.role === 'educator' ? 'teacher' : 'student';
+    sessionStorage.setItem('agenda-session-token', token);
+    setSessionToken(token);
+    setRegisteredAccount(account);
     setUserProfile(prev => ({ ...prev, name: account.fullName, email: account.email, role }));
-    showToast(
-      currentLang === 'ar'
-        ? `أهلاً بك يا ${account.fullName}! تم إنشاء حسابك بنجاح.`
-        : `Welcome, ${account.fullName}! Your account has been registered.`
-    );
+    showToast(`${account.fullName}: ${account.activated ? t.accountSignedIn : t.registrationPendingActivation}`);
   };
 
   return (
@@ -144,18 +182,12 @@ export default function App() {
         userProfile={userProfile}
         onRoleChange={(role) => setUserProfile(prev => ({ ...prev, role }))}
         onOpenRegister={() => setIsRegisterOpen(true)}
-        onOpenPayment={() => {
-          setIsClassroomActive(false);
-          setIsPaymentScreenOpen(true);
-        }}
         onOpenArchiveSessions={() => setIsArchiveSessionsOpen(true)}
       />
 
       {/* Main Content: Courses Hub or Live Classroom */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8 flex-1 w-full">
-        {isPaymentScreenOpen ? (
-          <PaymentPage currentLang={currentLang} onBack={() => setIsPaymentScreenOpen(false)} />
-        ) : isClassroomActive ? (
+        {isClassroomActive ? (
           <VirtualClassroom
             currentLang={currentLang}
             teacher={selectedTeacherForBooking || MOCK_TEACHERS[0]}
@@ -165,6 +197,8 @@ export default function App() {
           <CoursesHub
             currentLang={currentLang}
             directorLoginRequest={directorLoginRequest}
+            registeredAccount={registeredAccount}
+            sessionToken={sessionToken}
             onBookTeacher={handleBookTeacherDirect}
             onSelectQuestionForBooking={handleSelectQuestionForBooking}
             onStartPractice={(exam) => setPracticeExam(exam)}
@@ -242,8 +276,7 @@ export default function App() {
                 </p>
               </div>
             </div>
-            {!isPaymentScreenOpen && (
-              <button
+            <button
                 type="button"
                 onClick={() => {
                   setIsClassroomActive(false);
@@ -261,7 +294,6 @@ export default function App() {
                   </span>
                 </span>
               </button>
-            )}
           </div>
 
           <div className="flex flex-wrap items-center justify-between gap-4 text-xs text-slate-400">

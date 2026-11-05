@@ -125,6 +125,7 @@ function publicAccount(account) {
     phone: account.phone,
     schoolOrSubject: account.school_or_subject,
     gradeId: account.grade_id,
+    registeredSessionId: account.registered_session_id || null,
     createdAt: account.created_at,
     expiresAt: account.expires_at,
     activated: Boolean(account.activated),
@@ -150,7 +151,7 @@ async function handleRegister(request, env) {
   const email = typeof body?.email === "string" ? body.email.trim().toLowerCase() : "";
   const phone = typeof body?.phone === "string" ? body.phone.trim() : "";
   const schoolOrSubject = typeof body?.schoolOrSubject === "string" ? body.schoolOrSubject.trim() : "";
-  const gradeId = typeof body?.gradeId === "string" ? body.gradeId.trim() : "";
+  const registeredSessionId = typeof body?.registeredSessionId === "string" ? body.registeredSessionId.trim() : "";
 
   if (!/^[a-z0-9._-]{3,32}$/.test(username) || !password || password.length > MAX_PASSWORD_LENGTH) {
     return json({ error: "Use a 3–32 character username and a non-empty password of at most 1,024 characters." }, 400);
@@ -158,24 +159,34 @@ async function handleRegister(request, env) {
   if (!["student", "educator"].includes(role) || fullName.length < 2 || fullName.length > 120 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
     return json({ error: "Complete the required name, email, and account role fields." }, 400);
   }
-  if (phone.length > 40 || schoolOrSubject.length > 160 || gradeId.length > 40) {
+  if (phone.length > 40 || schoolOrSubject.length > 160 || registeredSessionId.length > 100) {
     return json({ error: "One or more profile fields are too long." }, 400);
   }
 
-  const existing = await env.DB.prepare("SELECT id FROM accounts WHERE username = ? COLLATE NOCASE")
+  const selectedSession = registeredSessionId
+    ? await env.DB.prepare("SELECT id, grade_id FROM sessions WHERE id = ?").bind(registeredSessionId).first()
+    : null;
+  if (registeredSessionId && !selectedSession) return json({ error: "Choose a valid session before registering." }, 400);
+
+  const existing = await env.DB.prepare("SELECT * FROM accounts WHERE username = ? COLLATE NOCASE")
     .bind(username)
     .first();
-  if (existing) return json({ error: "That username is already registered." }, 409);
+  if (existing) return existingRegistrationResponse(existing, { password, role, registeredSessionId }, env, selectedSession);
 
   const passwordHash = await hashPassword(password);
   const id = randomId();
   try {
     await env.DB.prepare(
-      "INSERT INTO accounts (id, username, password_hash, role, full_name, email, phone, school_or_subject, grade_id, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now', '+1 month'))",
-    ).bind(id, username, passwordHash, role, fullName, email, phone, schoolOrSubject, gradeId).run();
+      "INSERT INTO accounts (id, username, password_hash, role, full_name, email, phone, school_or_subject, grade_id, registered_session_id, expires_at, activated) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now', '+1 month'), 0)",
+    ).bind(id, username, passwordHash, role, fullName, email, phone, schoolOrSubject, selectedSession?.grade_id || "", registeredSessionId || null).run();
   } catch (error) {
     if (error instanceof Error && error.message.toLowerCase().includes("unique")) {
-      return json({ error: "That username is already registered." }, 409);
+      const conflictingAccount = await env.DB.prepare("SELECT * FROM accounts WHERE username = ? COLLATE NOCASE")
+        .bind(username)
+        .first();
+      if (conflictingAccount) {
+        return existingRegistrationResponse(conflictingAccount, { password, role, registeredSessionId }, env, selectedSession);
+      }
     }
     throw error;
   }
@@ -186,6 +197,42 @@ async function handleRegister(request, env) {
     env.SESSION_SIGNING_KEY,
   );
   return json({ account: publicAccount(account), token }, 201);
+}
+
+async function existingRegistrationResponse(account, registration, env, selectedSession) {
+  const matches = account.role === registration.role &&
+    await verifyPassword(registration.password, account.password_hash);
+  if (!matches) return json({ error: "That username is already registered. Sign in or choose another username." }, 409);
+  if (registration.registeredSessionId && account.registered_session_id !== registration.registeredSessionId) {
+    if (account.registered_session_id && account.activated) {
+      return json({ error: "This account is already registered for another session." }, 409);
+    }
+    if (!selectedSession) return json({ error: "Choose a valid session before registering." }, 400);
+    await env.DB.prepare(
+      "UPDATE accounts SET registered_session_id = ?, grade_id = ? WHERE id = ?",
+    ).bind(registration.registeredSessionId, selectedSession.grade_id, account.id).run();
+    account.registered_session_id = registration.registeredSessionId;
+    account.grade_id = selectedSession.grade_id;
+  }
+  const token = await signToken(
+    { sub: account.id, role: account.role, username: account.username, exp: Math.floor(Date.now() / 1000) + SESSION_TTL_SECONDS },
+    env.SESSION_SIGNING_KEY,
+  );
+  return json({ account: publicAccount(account), token });
+}
+
+async function registrationSessions(env) {
+  const result = await env.DB.prepare(
+    "SELECT id, grade_id, subject, title FROM sessions ORDER BY grade_id, subject, title LIMIT 1000",
+  ).all();
+  return json({
+    sessions: (result.results || []).map((session) => ({
+      id: session.id,
+      gradeId: session.grade_id,
+      subject: session.subject,
+      title: session.title,
+    })),
+  });
 }
 
 async function handleLogin(request, env) {
@@ -205,9 +252,11 @@ async function handleLogin(request, env) {
     .bind(username)
     .first();
   const valid = account ? await verifyPassword(password, account.password_hash) : false;
-  if (!account || !valid || !account.activated) {
+  const expiryTime = account?.expires_at ? Date.parse(`${account.expires_at.replace(' ', 'T')}Z`) : null;
+  const expired = expiryTime !== null && (!Number.isFinite(expiryTime) || expiryTime <= Date.now());
+  if (!account || !valid || !account.activated || expired) {
     await env.DB.prepare("INSERT INTO login_attempts (username, succeeded) VALUES (?, 0)").bind(username).run();
-    return json({ error: "Invalid username or password, or account is not activated." }, 401);
+    return json({ error: "Invalid username or password, or account is not activated or has expired." }, 401);
   }
 
   await env.DB.prepare("DELETE FROM login_attempts WHERE username = ? COLLATE NOCASE AND succeeded = 0").bind(username).run();
@@ -216,6 +265,16 @@ async function handleLogin(request, env) {
     env.SESSION_SIGNING_KEY,
   );
   return json({ account: publicAccount(account), token });
+}
+
+async function getCurrentAccount(request, env) {
+  const claims = await authenticate(request, env, null);
+  if (!claims || !["student", "educator"].includes(claims.role)) {
+    return json({ error: "Student or educator authentication required." }, 401);
+  }
+  const account = await env.DB.prepare("SELECT * FROM accounts WHERE id = ?").bind(claims.sub).first();
+  if (!account || account.role !== claims.role) return json({ error: "Account not found." }, 404);
+  return json({ account: publicAccount(account) });
 }
 
 async function directorAccounts(request, env) {
@@ -244,6 +303,14 @@ async function updateAccount(request, env, accountId) {
   if (typeof body?.paid === "boolean") {
     updates.push("paid = ?");
     values.push(Number(body.paid));
+  }
+  if (typeof body?.registeredSessionId === "string") {
+    const session = await env.DB.prepare("SELECT id, grade_id FROM sessions WHERE id = ?")
+      .bind(body.registeredSessionId)
+      .first();
+    if (!session) return json({ error: "Choose a valid registered session." }, 400);
+    updates.push("registered_session_id = ?", "grade_id = ?");
+    values.push(session.id, session.grade_id);
   }
   if (typeof body?.password === "string") {
     if (!body.password || body.password.length > MAX_PASSWORD_LENGTH) {
@@ -298,14 +365,22 @@ async function deleteSession(request, env, sessionId) {
   return json({ deleted: true });
 }
 
-async function listSessions(url, env) {
+async function listSessions(url, env, request) {
   const gradeId = url.searchParams.get("gradeId") || "";
   const liveOnly = url.searchParams.get("live") === "true";
   if (!/^[a-z0-9_-]{1,40}$/.test(gradeId)) return json({ error: "A valid gradeId is required." }, 400);
 
-  const query = liveOnly
-    ? "SELECT * FROM sessions WHERE grade_id = ? AND is_live = 1 ORDER BY live_starts_at ASC LIMIT 20"
-    : "SELECT * FROM sessions WHERE grade_id = ? AND is_live = 0 ORDER BY RANDOM() LIMIT 20";
+  if (liveOnly) {
+    const sessionId = url.searchParams.get("sessionId") || "";
+    const access = await registeredLiveSession(request, env, sessionId);
+    if (access.error) return access.error;
+    if (access.session.grade_id !== gradeId) {
+      return json({ error: "Live access is limited to your registered session." }, 403);
+    }
+    return json({ sessions: [publicSession(access.session)] });
+  }
+
+  const query = "SELECT * FROM sessions WHERE grade_id = ? AND is_live = 0 ORDER BY RANDOM() LIMIT 20";
   const result = await env.DB.prepare(query).bind(gradeId).all();
   return json({
     sessions: (result.results || []).map(publicSession),
@@ -346,7 +421,32 @@ async function cloudflareStreamRequest(env, path, init) {
   return { configured: true, result: body.result };
 }
 
+async function registeredLiveSession(request, env, sessionId) {
+  const claims = await authenticate(request, env, null);
+  if (!claims || !["student", "educator"].includes(claims.role)) {
+    return { error: json({ error: "Sign in with an activated student or educator account." }, 401) };
+  }
+  const account = await env.DB.prepare(
+    "SELECT id, role, activated, expires_at, registered_session_id FROM accounts WHERE id = ?",
+  ).bind(claims.sub).first();
+  const expiryTime = account?.expires_at ? Date.parse(`${account.expires_at.replace(' ', 'T')}Z`) : null;
+  if (!account || !account.activated || (expiryTime !== null && (!Number.isFinite(expiryTime) || expiryTime <= Date.now()))) {
+    return { error: json({ error: "Your account must be activated by the Director and not expired to join live sessions." }, 403) };
+  }
+  if (!sessionId || account.registered_session_id !== sessionId) {
+    return { error: json({ error: "Live access is limited to your registered session." }, 403) };
+  }
+  const session = await env.DB.prepare(
+    "SELECT * FROM sessions WHERE id = ? AND is_live = 1",
+  ).bind(sessionId).first();
+  if (!session) return { error: json({ error: "Your registered session is not currently live." }, 403) };
+  return { account, session };
+}
+
 async function getLiveStream(request, env) {
+  const sessionId = new URL(request.url).searchParams.get("sessionId") || "";
+  const access = await registeredLiveSession(request, env, sessionId);
+  if (access.error) return access.error;
   const stream = await env.DB.prepare("SELECT input_uid FROM live_stream_config WHERE id = 1").first();
   const customerCode = env.STREAM_CUSTOMER_CODE;
   if (!stream || !customerCode) {
@@ -524,13 +624,15 @@ async function handle(request, env) {
   if (request.method === "GET" && path === "/api/health") return json({ status: "ok" });
   if (request.method === "POST" && path === "/api/auth/register") return handleRegister(request, env);
   if (request.method === "POST" && path === "/api/auth/login") return handleLogin(request, env);
+  if (request.method === "GET" && path === "/api/auth/me") return getCurrentAccount(request, env);
+  if (request.method === "GET" && path === "/api/registration/sessions") return registrationSessions(env);
   if (request.method === "GET" && path === "/api/director/accounts") return directorAccounts(request, env);
   if (request.method === "GET" && path === "/api/director/sessions") return directorSessions(request, env);
   if (request.method === "POST" && path === "/api/director/sessions") return createSessions(request, env);
   if (request.method === "POST" && path === "/api/director/live-stream") return ensureLiveStream(request, env);
   if (request.method === "PUT" && path === "/api/director/live-stream/config") return configureLiveStreamInput(request, env);
   if (request.method === "GET" && path === "/api/live-stream") return getLiveStream(request, env);
-  if (request.method === "GET" && path === "/api/sessions") return listSessions(url, env);
+  if (request.method === "GET" && path === "/api/sessions") return listSessions(url, env, request);
 
   const accountMatch = path.match(/^\/api\/director\/accounts\/([0-9a-f-]{36})$/i);
   if (request.method === "PATCH" && accountMatch) return updateAccount(request, env, accountMatch[1]);

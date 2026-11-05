@@ -4,8 +4,8 @@ import { translations } from '../translations';
 import { LEBANESE_GRADE_LEVELS } from '../data/mockGradesAndSessions';
 import { GradeSessionsView } from './GradeSessionsView';
 import { DirectorSessionsPanel } from './DirectorSessionsPanel';
-import { getDirectorAccounts, loginAccount, setupLiveStream, updateDirectorAccount } from '../services/cloudflareApi';
-import type { CloudflareAccount, LiveStreamSetup } from '../services/cloudflareApi';
+import { getDirectorAccounts, getRegistrationSessions, loginAccount, setupLiveStream, updateDirectorAccount } from '../services/cloudflareApi';
+import type { CloudflareAccount, LiveStreamSetup, RegistrationSession } from '../services/cloudflareApi';
 import {
   Clock,
   GraduationCap,
@@ -23,6 +23,8 @@ interface CoursesHubProps {
   onStartPractice: (exam: any) => void;
   onEnterLiveClassroom?: (session?: LiveSessionInfo) => void;
   directorLoginRequest: number;
+  registeredAccount: CloudflareAccount | null;
+  sessionToken: string;
 }
 
 type DirectorRow = CloudflareAccount;
@@ -30,6 +32,8 @@ type DirectorRow = CloudflareAccount;
 export const CoursesHub: React.FC<CoursesHubProps> = ({
   currentLang,
   directorLoginRequest,
+  registeredAccount,
+  sessionToken,
 }) => {
   const t = translations[currentLang];
   const isRTL = currentLang === 'ar';
@@ -43,6 +47,7 @@ export const CoursesHub: React.FC<CoursesHubProps> = ({
   );
   const [studentRows, setStudentRows] = useState<DirectorRow[]>([]);
   const [educatorRows, setEducatorRows] = useState<DirectorRow[]>([]);
+  const [registrationSessions, setRegistrationSessions] = useState<RegistrationSession[]>([]);
   const [directorLoading, setDirectorLoading] = useState(false);
   const [directorDataError, setDirectorDataError] = useState('');
   const [directorMessage, setDirectorMessage] = useState('');
@@ -75,11 +80,12 @@ export const CoursesHub: React.FC<CoursesHubProps> = ({
     let active = true;
     setDirectorLoading(true);
     setDirectorDataError('');
-    getDirectorAccounts(directorToken)
-      .then(({ students, educators }) => {
+    Promise.all([getDirectorAccounts(directorToken), getRegistrationSessions()])
+      .then(([{ students, educators }, { sessions }]) => {
         if (!active) return;
         setStudentRows(students);
         setEducatorRows(educators);
+        setRegistrationSessions(sessions);
       })
       .catch((error) => {
         if (active) setDirectorDataError(error instanceof Error ? error.message : 'Unable to load registrations.');
@@ -108,7 +114,7 @@ export const CoursesHub: React.FC<CoursesHubProps> = ({
     }
   };
 
-  const updateAccount = async (account: DirectorRow, update: { activated?: boolean; paid?: boolean; renew?: boolean; password?: string }) => {
+  const updateAccount = async (account: DirectorRow, update: { activated?: boolean; paid?: boolean; renew?: boolean; password?: string; registeredSessionId?: string }) => {
     if (!directorToken) return;
     setDirectorDataError('');
     setDirectorMessage('');
@@ -158,6 +164,7 @@ export const CoursesHub: React.FC<CoursesHubProps> = ({
             <th className="px-3 py-3 text-left font-black text-slate-700">{t.emailLabel}</th>
             <th className="px-3 py-3 text-left font-black text-slate-700">{t.phoneNumber}</th>
             <th className="px-3 py-3 text-left font-black text-slate-700">{currentLang === 'ar' ? 'المدرسة / المادة' : currentLang === 'fr' ? 'École / matière' : 'School / subject'}</th>
+            <th className="px-3 py-3 text-left font-black text-slate-700">{t.registeredSessionLabel}</th>
             <th className="px-3 py-3 text-left font-black text-slate-700">{t.joiningDate}</th>
             <th className="px-3 py-3 text-left font-black text-slate-700">{t.expiryDate}</th>
             <th className="px-3 py-3 text-left font-black text-slate-700">{currentLang === 'ar' ? 'مفعّل' : currentLang === 'fr' ? 'Activé' : 'Activated'}</th>
@@ -176,6 +183,21 @@ export const CoursesHub: React.FC<CoursesHubProps> = ({
               <td className="px-3 py-3 text-slate-700">{row.email}</td>
               <td className="px-3 py-3 text-slate-700">{row.phone || '—'}</td>
               <td className="px-3 py-3 text-slate-700">{row.schoolOrSubject || '—'}</td>
+              <td className="px-3 py-3 text-slate-700">
+                <select
+                  aria-label={`${row.fullName} ${t.registeredSessionLabel}`}
+                  value={row.registeredSessionId || ''}
+                  onChange={(event) => void updateAccount(row, { registeredSessionId: event.target.value })}
+                  className="max-w-56 rounded border border-slate-300 bg-white p-1.5 text-[10px]"
+                >
+                  <option value="">{t.registrationChooseSession}</option>
+                  {registrationSessions.map((session) => (
+                    <option key={session.id} value={session.id}>
+                      {session.gradeId.toUpperCase()} · {session.subject} — {session.title}
+                    </option>
+                  ))}
+                </select>
+              </td>
               <td className="px-3 py-3 text-slate-700">{formatDate(row.createdAt)}</td>
               <td className="px-3 py-3 text-slate-700">
                 <div>{formatDate(row.expiresAt)}</div>
@@ -203,7 +225,7 @@ export const CoursesHub: React.FC<CoursesHubProps> = ({
           ))}
           {rows.length === 0 && (
             <tr>
-              <td colSpan={10} className="px-4 py-8 text-center text-slate-500">
+              <td colSpan={11} className="px-4 py-8 text-center text-slate-500">
                 {currentLang === 'ar' ? 'لا توجد تسجيلات بعد.' : currentLang === 'fr' ? 'Aucune inscription pour le moment.' : 'No registrations yet.'}
               </td>
             </tr>
@@ -218,6 +240,8 @@ export const CoursesHub: React.FC<CoursesHubProps> = ({
       <GradeSessionsView
         currentLang={currentLang}
         selectedGrade={activeGradeForSessions}
+        registeredAccount={registeredAccount}
+        sessionToken={sessionToken}
         onBack={() => setActiveGradeForSessions(null)}
       />
     );
