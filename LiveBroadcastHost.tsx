@@ -40,8 +40,7 @@ export const LiveBroadcastHost: React.FC<LiveBroadcastHostProps> = ({ currentLan
         activeCall = client.call('livestream', stream.callId);
         await activeCall.getOrCreate();
         if (!active) return;
-        await activeCall.join();
-        if (active) setCall(activeCall);
+        setCall(activeCall);
       } catch {
         if (active) setError(t.liveVideoError);
         if (client) await client.disconnectUser().catch(() => undefined);
@@ -68,7 +67,9 @@ export const LiveBroadcastHost: React.FC<LiveBroadcastHostProps> = ({ currentLan
   const startBroadcast = async () => {
     if (!call) return;
     setError('');
+    setIsConnecting(true);
     try {
+      await call.join();
       await call.camera.enable();
       await call.microphone.enable();
       await call.goLive({ start_hls: true });
@@ -76,6 +77,8 @@ export const LiveBroadcastHost: React.FC<LiveBroadcastHostProps> = ({ currentLan
       setIsLive(true);
     } catch {
       setError(t.liveVideoError);
+    } finally {
+      setIsConnecting(false);
     }
   };
 
