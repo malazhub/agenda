@@ -11,6 +11,7 @@ interface HeaderProps {
   userProfile: UserProfile;
   onRoleChange: (role: 'student' | 'teacher') => void;
   onOpenRegister: () => void;
+  signedInName?: string;
   onOpenArchiveSessions?: () => void;
 }
 
@@ -18,7 +19,8 @@ export const Header: React.FC<HeaderProps> = ({
   currentLang,
   onLanguageChange,
   onTabChange,
-  onOpenRegister
+  onOpenRegister,
+  signedInName,
 }) => {
   const t = translations[currentLang];
 
@@ -35,6 +37,11 @@ export const Header: React.FC<HeaderProps> = ({
               <UserPlus className="w-3.5 h-3.5" />
               <span>{t.registerBtn}</span>
             </button>
+            {signedInName && (
+              <span className="max-w-40 truncate text-xs font-bold text-slate-700" title={signedInName}>
+                {signedInName}
+              </span>
+            )}
           </div>
 
           {/* Middle of Top Bar: Agenda without 'A' logo and without dot, with 'التعليم والدروس الخصوصية' in RED, YELLOW, BLUE */}
