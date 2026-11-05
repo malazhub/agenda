@@ -9,10 +9,10 @@ interface LiveVideoPlayerProps {
   currentLang: Language;
   stream: LiveStreamStatus;
   sessionToken: string;
-  sessionId: string;
+  gradeId: string;
 }
 
-export const LiveVideoPlayer: React.FC<LiveVideoPlayerProps> = ({ currentLang, stream, sessionToken, sessionId }) => {
+export const LiveVideoPlayer: React.FC<LiveVideoPlayerProps> = ({ currentLang, stream, sessionToken, gradeId }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [playlistUrl, setPlaylistUrl] = useState('');
   const [error, setError] = useState('');
@@ -32,7 +32,7 @@ export const LiveVideoPlayer: React.FC<LiveVideoPlayerProps> = ({ currentLang, s
         client = new VideoClient({
           apiKey: stream.apiKey,
           token: stream.token,
-          tokenProvider: async () => (await getLiveStreamStatus(sessionToken, sessionId)).token,
+          tokenProvider: async () => (await getLiveStreamStatus(sessionToken, gradeId)).token,
           user: { id: stream.userId, name: stream.userName },
         });
         const call = client.call('livestream', stream.callId);
@@ -53,7 +53,7 @@ export const LiveVideoPlayer: React.FC<LiveVideoPlayerProps> = ({ currentLang, s
       subscription?.unsubscribe();
       if (client) void client.disconnectUser().catch(() => undefined);
     };
-  }, [retryKey, sessionId, sessionToken, stream.apiKey, stream.callId, stream.token, stream.userId, stream.userName, t.liveVideoError]);
+  }, [retryKey, gradeId, sessionToken, stream.apiKey, stream.callId, stream.token, stream.userId, stream.userName, t.liveVideoError]);
 
   useEffect(() => {
     const video = videoRef.current;

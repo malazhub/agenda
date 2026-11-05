@@ -57,6 +57,11 @@ function fakeEnvironment() {
         const session = sessions.get(this.values[0]);
         return session ? { id: session.id, grade_id: session.grade_id } : null;
       }
+      if (this.sql.includes('SELECT grade_id FROM sessions WHERE grade_id')) {
+        return [...sessions.values()].some((item) => item.grade_id === this.values[0])
+          ? { grade_id: this.values[0] }
+          : null;
+      }
       if (this.sql.includes('SELECT * FROM sessions WHERE id = ? AND is_live = 1')) {
         const session = sessions.get(this.values[0]);
         return session?.is_live ? session : null;
@@ -65,6 +70,9 @@ function fakeEnvironment() {
     }
 
     async all() {
+      if (this.sql.includes('SELECT DISTINCT grade_id FROM sessions')) {
+        return { results: [...new Set([...sessions.values()].map((item) => item.grade_id))].map((grade_id) => ({ grade_id })) };
+      }
       if (this.sql.includes('SELECT id, grade_id, subject, title FROM sessions')) {
         return { results: [...sessions.values()] };
       }
@@ -269,6 +277,53 @@ test('registration hashes credentials and rejects duplicate usernames', async ()
   });
   assert.equal(sharedStream.status, 200);
   assert.equal((await sharedStream.json()).status, 'waiting');
+});
+
+test('grade registration loads available grades and grants grade-scoped live access', async () => {
+  const { env, accounts, sessions } = fakeEnvironment();
+  const grades = await send(env, '/api/registration/grades');
+  assert.equal(grades.status, 200);
+  assert.deepEqual(await grades.json(), { grades: ['eb8'] });
+
+  const registration = await send(env, '/api/auth/register', {
+    method: 'POST',
+    body: {
+      username: 'grade.student',
+      password: 'no restrictions !',
+      role: 'student',
+      fullName: 'Grade Student',
+      email: 'grade@example.com',
+      phone: '+1 555 0100',
+      schoolOrSubject: 'Grade 8',
+      gradeId: 'eb8',
+    },
+  });
+  assert.equal(registration.status, 201);
+  const { account, token } = await registration.json();
+  assert.equal(account.gradeId, 'eb8');
+  assert.equal(account.registeredSessionId, null);
+  assert.equal(accounts.get(account.id).grade_id, 'eb8');
+
+  const directorLogin = await send(env, '/api/auth/login', {
+    method: 'POST',
+    body: { username: 'director', password: 'DirectorPassword#2026' },
+  });
+  const { token: directorToken } = await directorLogin.json();
+  await send(env, `/api/director/accounts/${account.id}`, {
+    method: 'PATCH',
+    token: directorToken,
+    body: { activated: true },
+  });
+  const liveStatus = await send(env, '/api/live-stream?gradeId=eb8', { token });
+  assert.equal(liveStatus.status, 200);
+  assert.equal((await liveStatus.json()).status, 'waiting');
+  sessions.get('test-registration-session').is_live = 1;
+  const liveCatalog = await send(env, '/api/sessions?gradeId=eb8&live=true&sessionId=test-registration-session', { token });
+  assert.equal(liveCatalog.status, 200);
+  assert.equal((await liveCatalog.json()).sessions[0].id, 'test-registration-session');
+
+  const wrongGrade = await send(env, '/api/live-stream?gradeId=eb7', { token });
+  assert.equal(wrongGrade.status, 403);
 });
 
 test('Director login reads persisted role tables and saves status updates', async () => {

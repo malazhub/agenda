@@ -2,8 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { Language } from '../types';
 import { translations } from '../translations';
 import { UserPlus, X, CheckCircle2, CreditCard, ArrowLeft, ArrowRight } from 'lucide-react';
-import { getRegistrationSessions, loginAccount, registerAccount } from '../services/cloudflareApi';
-import type { CloudflareAccount, RegistrationSession } from '../services/cloudflareApi';
+import { getRegistrationGrades, loginAccount, registerAccount } from '../services/cloudflareApi';
+import type { CloudflareAccount } from '../services/cloudflareApi';
 
 interface RegisterModalProps {
   isOpen: boolean;
@@ -26,9 +26,9 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
   const [schoolOrSubject, setSchoolOrSubject] = useState('');
-  const [registeredSessionId, setRegisteredSessionId] = useState('');
-  const [registrationSessions, setRegistrationSessions] = useState<RegistrationSession[]>([]);
-  const [isLoadingSessions, setIsLoadingSessions] = useState(false);
+  const [registeredGradeId, setRegisteredGradeId] = useState('');
+  const [registrationGrades, setRegistrationGrades] = useState<string[]>([]);
+  const [isLoadingGrades, setIsLoadingGrades] = useState(false);
   const [showPayment, setShowPayment] = useState(false);
   const [isLogin, setIsLogin] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -37,16 +37,16 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
   useEffect(() => {
     if (!isOpen) return;
     let active = true;
-    setIsLoadingSessions(true);
-    getRegistrationSessions()
-      .then(({ sessions }) => {
-        if (active) setRegistrationSessions(sessions);
+    setIsLoadingGrades(true);
+    getRegistrationGrades()
+      .then(({ grades }) => {
+        if (active) setRegistrationGrades(grades);
       })
       .catch(() => {
         if (active) setError(t.registrationServiceUnavailable);
       })
       .finally(() => {
-        if (active) setIsLoadingSessions(false);
+        if (active) setIsLoadingGrades(false);
       });
     return () => {
       active = false;
@@ -64,8 +64,8 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!isLogin && !registeredSessionId) {
-      setError(t.registrationChooseSession);
+    if (!isLogin && !registeredGradeId) {
+      setError(t.registrationChooseGrade);
       return;
     }
     setIsSubmitting(true);
@@ -81,7 +81,7 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
             email,
             phone,
             schoolOrSubject,
-            registeredSessionId,
+            gradeId: registeredGradeId,
           });
       if (isLogin && account.role === 'director') {
         setError(t.directorSignInSeparate);
@@ -101,7 +101,7 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
           : /registered for another session/i.test(message)
             ? t.registrationSessionConflict
             : /(?:invalid.*session|session.*invalid|choose a valid session)/i.test(message)
-              ? t.registrationChooseSession
+              ? t.registrationChooseGrade
             : /already registered|already exists/i.test(message)
           ? t.registrationUsernameTaken
           : /complete the required|invalid .* fields/i.test(message)
@@ -195,24 +195,6 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
             </div>
           </div>}
 
-          {!isLogin && <div className="rounded-xl border border-indigo-100 bg-indigo-50 p-3 space-y-2">
-            <div className="flex items-center justify-between gap-2">
-              <span className="text-xs font-black text-indigo-950">{t.paymentTitle}</span>
-              <button type="button" onClick={() => setShowPayment(true)} className="text-xs font-bold text-indigo-700 underline">
-                {t.paymentBtn}
-              </button>
-            </div>
-            <p className="text-xs font-semibold text-indigo-900">{t.paymentDescription}</p>
-            <a
-              href="https://payments.suyool.com/RluEji2qtjDlMKyk9xm4G"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex rounded-lg bg-indigo-700 px-3 py-2 text-xs font-black text-white hover:bg-indigo-800"
-            >
-              {t.paymentProvider}
-            </a>
-          </div>}
-
           <div>
             <label className="block text-xs font-bold text-slate-700 mb-1">
               {t.usernameLabel}
@@ -232,22 +214,22 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
           </div>
 
           {!isLogin && <div>
-            <label className="block text-xs font-bold text-slate-700 mb-1" htmlFor="registration-session">
-              {t.registeredSessionLabel}
+            <label className="block text-xs font-bold text-slate-700 mb-1" htmlFor="registration-grade">
+              {t.registeredGradeLabel}
             </label>
             <select
-              id="registration-session"
+              id="registration-grade"
               required
-              value={registeredSessionId}
-              onChange={(event) => setRegisteredSessionId(event.target.value)}
+              value={registeredGradeId}
+              onChange={(event) => setRegisteredGradeId(event.target.value)}
               className="w-full text-xs p-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:outline-emerald-600 font-medium"
             >
               <option value="">
-                {isLoadingSessions ? t.registrationLoadingSessions : registrationSessions.length ? t.registrationChooseSession : t.registrationNoSessions}
+                {isLoadingGrades ? t.registrationLoadingGrades : registrationGrades.length ? t.registrationChooseGrade : t.registrationNoGrades}
               </option>
-              {registrationSessions.map((session) => (
-                <option key={session.id} value={session.id}>
-                  {session.gradeId.toUpperCase()} · {session.subject} — {session.title}
+              {registrationGrades.map((gradeId) => (
+                <option key={gradeId} value={gradeId}>
+                  {gradeId.toUpperCase()}
                 </option>
               ))}
             </select>
@@ -338,7 +320,7 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
           <div className="pt-2">
             <button
               type="submit"
-              disabled={isSubmitting || (!isLogin && (isLoadingSessions || registrationSessions.length === 0))}
+              disabled={isSubmitting || (!isLogin && (isLoadingGrades || registrationGrades.length === 0))}
               className="w-full bg-emerald-700 hover:bg-emerald-800 disabled:opacity-60 text-white font-bold py-2.5 px-4 rounded-xl text-xs transition cursor-pointer flex items-center justify-center gap-1.5"
             >
               <CheckCircle2 className="w-4 h-4" />
@@ -359,6 +341,23 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
           >
             {isLogin ? t.switchToRegister : t.signInPrompt}
           </button>
+          {!isLogin && <div className="rounded-xl border border-indigo-100 bg-indigo-50 p-3 space-y-2">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-xs font-black text-indigo-950">{t.paymentTitle}</span>
+              <button type="button" onClick={() => setShowPayment(true)} className="text-xs font-bold text-indigo-700 underline">
+                {t.paymentBtn}
+              </button>
+            </div>
+            <p className="text-xs font-semibold text-indigo-900">{t.paymentDescription}</p>
+            <a
+              href="https://payments.suyool.com/RluEji2qtjDlMKyk9xm4G"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex rounded-lg bg-indigo-700 px-3 py-2 text-xs font-black text-white hover:bg-indigo-800"
+            >
+              {t.paymentProvider}
+            </a>
+          </div>}
         </form>
         )}
       </div>
