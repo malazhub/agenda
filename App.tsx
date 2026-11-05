@@ -182,6 +182,7 @@ export default function App() {
         userProfile={userProfile}
         onRoleChange={(role) => setUserProfile(prev => ({ ...prev, role }))}
         onOpenRegister={() => setIsRegisterOpen(true)}
+        signedInName={registeredAccount?.fullName}
         onOpenArchiveSessions={() => setIsArchiveSessionsOpen(true)}
       />
 
