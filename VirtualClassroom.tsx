@@ -68,14 +68,47 @@ export const VirtualClassroom: React.FC<VirtualClassroomProps> = ({
     { id: 'st_5', name: 'Céline Khater', isLive: false }
   ]);
 
-  // Available grade sessions (e.g. Grade 12 LH)
-  const gradeLiveSessions = [
-    { id: 'sess_1', teacherId: 't_malaz', teacherName: 'Prof. Malaz', subject: 'Mathematics (Grade 12 LH)', isLiveNow: true },
-    { id: 'sess_2', teacherId: 't_jad', teacherName: 'Prof. Jad Khoury', subject: 'Physics (Grade 12 LH)', isLiveNow: true },
-    { id: 'sess_3', teacherId: 't_samer', teacherName: 'Prof. Samer Daher', subject: 'Chemistry (Grade 12 LH)', isLiveNow: false },
-    { id: 'sess_4', teacherId: 't_rima', teacherName: 'Prof. Rima Kassir', subject: 'Philosophy (Grade 12 LH)', isLiveNow: true },
-    { id: 'sess_5', teacherId: 't_hadi', teacherName: 'Prof. Hadi Zein', subject: 'Biology (Grade 12 LH)', isLiveNow: false },
+  // Student's registered educator and grade from registration
+  const myRegisteredEducatorId = localStorage.getItem('registered_educator_id') || 'edu_1';
+  const myRegisteredEducatorName = localStorage.getItem('registered_educator_name') || 'Prof. Malaz';
+  const myRegisteredGrade = localStorage.getItem('registered_grade') || 'Grade 12 LH';
+  const [accessDeniedMessage, setAccessDeniedMessage] = useState<string | null>(null);
+
+  // All live classrooms by Grade and Educator
+  const allLiveClassrooms = [
+    { id: 'sess_1', educatorId: 'edu_1', educatorName: 'Prof. Malaz', grade: 'Grade 12 LH', subject: 'Mathematics', isLiveNow: true },
+    { id: 'sess_2', educatorId: 'edu_2', educatorName: 'Prof. Jad Khoury', grade: 'Grade 12 LH', subject: 'Mathematics', isLiveNow: true },
+    { id: 'sess_3', educatorId: 'edu_3', educatorName: 'Prof. Samer Daher', grade: 'Grade 12 LH', subject: 'Physics', isLiveNow: true },
+    { id: 'sess_4', educatorId: 'edu_4', educatorName: 'Prof. Rima Kassir', grade: 'Grade 12 LH', subject: 'Philosophy', isLiveNow: true },
+    { id: 'sess_5', educatorId: 'edu_5', educatorName: 'Prof. Hadi Zein', grade: 'Grade 12 LH', subject: 'Arabic Literature', isLiveNow: true },
+    { id: 'sess_6', educatorId: 'edu_6', educatorName: 'Prof. Samer Daher', grade: 'Grade 12 GS', subject: 'Advanced Physics', isLiveNow: true },
+    { id: 'sess_7', educatorId: 'edu_7', educatorName: 'Prof. Jad Khoury', grade: 'Grade 12 GS', subject: 'Pure Mathematics', isLiveNow: true },
+    { id: 'sess_8', educatorId: 'edu_8', educatorName: 'Mme. Céline', grade: 'Grade 12 LS', subject: 'Biology & Genetics', isLiveNow: true },
+    { id: 'sess_9', educatorId: 'edu_9', educatorName: 'Prof. Malaz', grade: 'Grade 11', subject: 'Mathematics Core', isLiveNow: true },
   ];
+
+  const handleJoinClassroom = (classroom: typeof allLiveClassrooms[0]) => {
+    // If the user is an educator / teacher, allow entering their classroom
+    if (teacher) {
+      setIsSessionStarted(true);
+      setIsTimerRunning(true);
+      return;
+    }
+
+    // If student: check if this is their registered educator
+    if (classroom.educatorId === myRegisteredEducatorId || classroom.educatorName === myRegisteredEducatorName) {
+      setAccessDeniedMessage(null);
+      setIsSessionStarted(true);
+      setIsTimerRunning(true);
+    } else {
+      // Fire error: block entry and tell them to go to their registered room
+      const msg = currentLang === 'ar'
+        ? `توجه إلى صفك الدراسي! أنت مسجل مع الأستاذ (${myRegisteredEducatorName}) في (${myRegisteredGrade}). لا يمكنك دخول صف (${classroom.educatorName}).`
+        : `Go to your classroom! You are registered with ${myRegisteredEducatorName} for ${myRegisteredGrade}. You cannot join ${classroom.educatorName}'s room.`;
+      setAccessDeniedMessage(msg);
+      alert(msg);
+    }
+  };
 
   const toggleFullScreen = () => {
     if (!mainClassroomRef.current) return;
@@ -513,69 +546,76 @@ export const VirtualClassroom: React.FC<VirtualClassroomProps> = ({
             )}
           </div>
 
-          {/* 5 Sessions for Grade 12 LH */}
+          {/* Warning Banner if user clicked wrong room */}
+          {accessDeniedMessage && (
+            <div className="p-3 bg-rose-50 border-2 border-rose-300 rounded-2xl text-rose-800 text-xs font-bold flex items-center gap-2 animate-bounce">
+              <span>⚠️</span>
+              <span>{accessDeniedMessage}</span>
+            </div>
+          )}
+
+          {/* Student's Assigned Room Notice */}
+          {!teacher && (
+            <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-2xl flex items-center justify-between text-xs font-semibold text-emerald-900">
+              <span>
+                {currentLang === 'ar' 
+                  ? `أنت مسجل مع الأستاذ: ${myRegisteredEducatorName} (${myRegisteredGrade})`
+                  : `Your Assigned Classroom: ${myRegisteredEducatorName} (${myRegisteredGrade})`}
+              </span>
+              <span className="text-[10px] bg-emerald-200 text-emerald-800 px-2 py-0.5 rounded-md font-bold">
+                {currentLang === 'ar' ? 'صفك المعتمد' : 'Your Enrolled Class'}
+              </span>
+            </div>
+          )}
+
+          {/* All Live Classrooms Listed by Grade & Educator */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {gradeLiveSessions.map((sess) => {
-              const isMyEducator = selectedTeacherId === sess.teacherId;
+            {allLiveClassrooms.map((room) => {
+              const isMyClassroom = room.educatorId === myRegisteredEducatorId || room.educatorName === myRegisteredEducatorName;
 
               return (
-                <div key={sess.id} className="p-4 rounded-2xl border border-slate-200 bg-slate-50 space-y-3 flex flex-col justify-between">
+                <div 
+                  key={room.id} 
+                  className={`p-4 rounded-2xl border transition flex flex-col justify-between space-y-3 ${
+                    isMyClassroom
+                      ? 'bg-emerald-50/60 border-emerald-300 shadow-sm ring-1 ring-emerald-300'
+                      : 'bg-white border-slate-200 shadow-xs'
+                  }`}
+                >
                   <div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-[10px] font-bold uppercase bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded">
-                        {sess.subject}
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span className="text-[10px] font-black uppercase bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-md">
+                        {room.grade}
                       </span>
-                      {sess.isLiveNow ? (
-                        <span className="text-[10px] font-black text-emerald-600 flex items-center gap-1">
-                          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
-                          Live Now
-                        </span>
-                      ) : (
-                        <span className="text-[10px] font-semibold text-slate-400">Scheduled</span>
-                      )}
+                      <span className="text-[10px] font-black text-rose-600 flex items-center gap-1">
+                        <span className="w-2 h-2 rounded-full bg-rose-500 animate-ping" />
+                        LIVE
+                      </span>
                     </div>
-                    <h4 className="font-black text-slate-900 text-sm mt-2">{sess.teacherName}</h4>
+
+                    <h4 className="font-black text-slate-900 text-base">{room.educatorName}</h4>
+                    <p className="text-xs text-slate-600 font-medium">{room.subject}</p>
+                    
+                    {isMyClassroom && (
+                      <span className="inline-block mt-2 text-[10px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded">
+                        ✓ {currentLang === 'ar' ? 'صفك الدراسي المعتمد' : 'Your Registered Classroom'}
+                      </span>
+                    )}
                   </div>
 
-                  <div>
-                    {teacher ? (
-                      // Educator Button: Open Session Live
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setIsSessionStarted(true);
-                          setIsTimerRunning(true);
-                        }}
-                        className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs py-2.5 rounded-xl transition cursor-pointer flex items-center justify-center gap-2 shadow-sm"
-                      >
-                        <Video className="w-4 h-4" />
-                        <span>{currentLang === 'ar' ? 'فتح الحصة المباشرة (Open Session Live)' : 'Open Session Live'}</span>
-                      </button>
-                    ) : (
-                      // Student Rules: Join only if assigned
-                      isMyEducator ? (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setIsSessionStarted(true);
-                            setIsTimerRunning(true);
-                          }}
-                          className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs py-2.5 rounded-xl transition cursor-pointer flex items-center justify-center gap-2 shadow-sm"
-                        >
-                          <Video className="w-4 h-4" />
-                          <span>{currentLang === 'ar' ? 'انضمام لحصة أستاذك (Join)' : 'Join Live Session'}</span>
-                        </button>
-                      ) : (
-                        <button
-                          type="button"
-                          disabled
-                          onClick={() => alert(currentLang === 'ar' ? 'لا يمكنك الانضمام إلا لأستاذك المسجل معه في هذا الصف!' : 'You can only join your registered educator session!')}
-                          className="w-full bg-slate-200 text-slate-400 font-bold text-xs py-2 rounded-xl cursor-not-allowed"
-                        >
-                          {currentLang === 'ar' ? 'غير مسجل مع هذا الأستاذ' : 'Join Restricted (Different Educator)'}
-                        </button>
-                      )
-                    )}
+                  <div className="pt-2">
+                    <button
+                      type="button"
+                      onClick={() => handleJoinClassroom(room)}
+                      className={`w-full py-2.5 rounded-xl font-black text-xs transition cursor-pointer flex items-center justify-center gap-1.5 shadow-sm ${
+                        isMyClassroom || teacher
+                          ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                          : 'bg-slate-800 hover:bg-slate-900 text-slate-100'
+                      }`}
+                    >
+                      <Video className="w-4 h-4" />
+                      <span>{currentLang === 'ar' ? 'انضمام (Join)' : 'Join Classroom'}</span>
+                    </button>
                   </div>
                 </div>
               );
