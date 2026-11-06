@@ -465,9 +465,19 @@ export const VirtualClassroom: React.FC<VirtualClassroomProps> = ({
 
   return (
     <div className="space-y-4" ref={mainClassroomRef}>
-      {/* Grade Sessions Lobby: Shown before clicking "Open Session Live" / "Join" */}
+      {/* Grade Sessions Lobby: Shown ONLY after entering Live Broadcast Room */}
       {!isSessionStarted ? (
         <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm space-y-6 text-start">
+          {/* Back to Main Screen Arrow */}
+          <button
+            type="button"
+            onClick={onLeaveClassroom}
+            className="inline-flex items-center gap-2 text-xs font-bold text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded-xl transition cursor-pointer"
+          >
+            <span>←</span>
+            <span>{currentLang === 'ar' ? 'العودة للشاشة الرئيسية' : 'Back to Main Screen'}</span>
+          </button>
+
           <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-100 pb-4">
             <div>
               <h2 className="text-xl font-black text-slate-900">
