@@ -358,6 +358,9 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
                         } else {
                           setError(null);
                           setSelectedEducatorId(edu.id);
+                          localStorage.setItem('registered_educator_id', edu.id);
+                          localStorage.setItem('registered_educator_name', edu.name);
+                          localStorage.setItem('registered_grade', registeredGradeId || 'Grade 12 LH');
                         }
                       }}
                       className={`p-2.5 rounded-xl border text-start transition cursor-pointer flex flex-col justify-between ${
