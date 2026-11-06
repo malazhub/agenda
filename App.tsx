@@ -163,6 +163,26 @@ export default function App() {
     showToast(`${account.fullName}: ${account.activated ? t.accountSignedIn : t.registrationPendingActivation}`);
   };
 
+  const handleSignOut = () => {
+    sessionStorage.removeItem('agenda-session-token');
+    setSessionToken('');
+    setRegisteredAccount(null);
+    setUserProfile({
+      name: '',
+      email: '',
+      role: 'student',
+      grade: 'BAC_SG',
+      schoolSystem: 'Francophone',
+      schoolName: '',
+      freeTrialsRemaining: 3,
+      completedSessions: 0,
+      savedExamCount: 0,
+      preferredLanguage: currentLang
+    });
+    setIsClassroomActive(false);
+    showToast(currentLang === 'ar' ? 'تم تسجيل الخروج والعودة للشاشة الرئيسية' : 'Signed out successfully');
+  };
+
   return (
     <div className={`min-h-screen bg-slate-50 flex flex-col ${isRTL ? 'font-[Cairo]' : 'font-[Plus_Jakarta_Sans]'}`}>
       {/* Toast Notification */}
@@ -184,6 +204,7 @@ export default function App() {
         onOpenRegister={() => setIsRegisterOpen(true)}
         signedInName={registeredAccount?.fullName}
         onOpenArchiveSessions={() => setIsArchiveSessionsOpen(true)}
+        onSignOut={handleSignOut}
       />
 
       {/* Main Content: Courses Hub or Live Classroom */}
