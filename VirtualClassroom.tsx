@@ -53,10 +53,43 @@ export const VirtualClassroom: React.FC<VirtualClassroomProps> = ({
 }) => {
   const t = translations[currentLang];
 
+  // Fullscreen & Active Session controls
+  const mainClassroomRef = useRef<HTMLDivElement>(null);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [isSessionStarted, setIsSessionStarted] = useState(false);
+  const [selectedTeacherId, setSelectedTeacherId] = useState<string>(teacher?.id || 't_malaz');
+
+  // Enrolled student attendance roster (Live vs Absent)
+  const [studentsAttendance, setStudentsAttendance] = useState([
+    { id: 'st_1', name: 'Bilal Ahmad', isLive: true },
+    { id: 'st_2', name: 'كريم منصور (You)', isLive: true },
+    { id: 'st_3', name: 'نور حداد', isLive: false },
+    { id: 'st_4', name: 'Marc Abou-Jaoudé', isLive: true },
+    { id: 'st_5', name: 'Céline Khater', isLive: false }
+  ]);
+
+  // Available grade sessions (e.g. Grade 12 LH)
+  const gradeLiveSessions = [
+    { id: 'sess_1', teacherId: 't_malaz', teacherName: 'Prof. Malaz', subject: 'Mathematics (Grade 12 LH)', isLiveNow: true },
+    { id: 'sess_2', teacherId: 't_jad', teacherName: 'Prof. Jad Khoury', subject: 'Physics (Grade 12 LH)', isLiveNow: true },
+    { id: 'sess_3', teacherId: 't_samer', teacherName: 'Prof. Samer Daher', subject: 'Chemistry (Grade 12 LH)', isLiveNow: false },
+    { id: 'sess_4', teacherId: 't_rima', teacherName: 'Prof. Rima Kassir', subject: 'Philosophy (Grade 12 LH)', isLiveNow: true },
+    { id: 'sess_5', teacherId: 't_hadi', teacherName: 'Prof. Hadi Zein', subject: 'Biology (Grade 12 LH)', isLiveNow: false },
+  ];
+
+  const toggleFullScreen = () => {
+    if (!mainClassroomRef.current) return;
+    if (!document.fullscreenElement) {
+      mainClassroomRef.current.requestFullscreen().then(() => setIsFullscreen(true)).catch(() => {});
+    } else {
+      document.exitFullscreen().then(() => setIsFullscreen(false)).catch(() => {});
+    }
+  };
+
   // Synchronized 45-minute countdown timer (2700 seconds)
   const initialDuration = 45 * 60;
   const [timeLeft, setTimeLeft] = useState(initialDuration);
-  const [isTimerRunning, setIsTimerRunning] = useState(true);
+  const [isTimerRunning, setIsTimerRunning] = useState(false);
 
   // AV controls & real video streams
   const [isMicOn, setIsMicOn] = useState(true);
@@ -431,8 +464,120 @@ export const VirtualClassroom: React.FC<VirtualClassroomProps> = ({
   };
 
   return (
-    <div className="space-y-4">
-      {/* 1. SYNCHRONIZED BUILT-IN SESSION TIMER (VISIBLE TO ALL STUDENTS AND EDUCATORS) */}
+    <div className="space-y-4" ref={mainClassroomRef}>
+      {/* Grade Sessions Lobby: Shown before clicking "Open Session Live" / "Join" */}
+      {!isSessionStarted ? (
+        <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm space-y-6 text-start">
+          <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-100 pb-4">
+            <div>
+              <h2 className="text-xl font-black text-slate-900">
+                {currentLang === 'ar' ? 'حصص البث المباشر — Grade 12 LH' : 'Live Sessions Catalog — Grade 12 LH'}
+              </h2>
+              <p className="text-xs text-slate-500 font-medium mt-1">
+                {teacher 
+                  ? (currentLang === 'ar' ? 'لوحة الأستاذ: تفقد حضور الطلاب واضغط فتح الحصة المباشرة' : 'Teacher Panel: Check student attendance and start live video session')
+                  : (currentLang === 'ar' ? 'يحق للطالب الانضمام فقط لصف الأستاذ المسجل معه' : 'Students can only join the session of their selected registered educator')}
+              </p>
+            </div>
+
+            {/* Teacher Roster: Live vs Absent */}
+            {teacher && (
+              <div className="bg-slate-50 border border-slate-200 p-3 rounded-2xl">
+                <span className="block text-xs font-bold text-slate-800 mb-1">
+                  {currentLang === 'ar' ? 'حالة حضور طلاب صفك الآن:' : 'Student Attendance Status:'}
+                </span>
+                <div className="flex flex-wrap gap-2">
+                  {studentsAttendance.map(st => (
+                    <span 
+                      key={st.id} 
+                      className={`text-[11px] px-2 py-0.5 rounded-md font-bold flex items-center gap-1 ${
+                        st.isLive ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-700'
+                      }`}
+                    >
+                      <span>{st.name}</span>
+                      <span>{st.isLive ? '● Live' : 'Absent'}</span>
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* 5 Sessions for Grade 12 LH */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {gradeLiveSessions.map((sess) => {
+              const isMyEducator = selectedTeacherId === sess.teacherId;
+
+              return (
+                <div key={sess.id} className="p-4 rounded-2xl border border-slate-200 bg-slate-50 space-y-3 flex flex-col justify-between">
+                  <div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] font-bold uppercase bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded">
+                        {sess.subject}
+                      </span>
+                      {sess.isLiveNow ? (
+                        <span className="text-[10px] font-black text-emerald-600 flex items-center gap-1">
+                          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
+                          Live Now
+                        </span>
+                      ) : (
+                        <span className="text-[10px] font-semibold text-slate-400">Scheduled</span>
+                      )}
+                    </div>
+                    <h4 className="font-black text-slate-900 text-sm mt-2">{sess.teacherName}</h4>
+                  </div>
+
+                  <div>
+                    {teacher ? (
+                      // Educator Button: Open Session Live
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsSessionStarted(true);
+                          setIsTimerRunning(true);
+                        }}
+                        className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs py-2.5 rounded-xl transition cursor-pointer flex items-center justify-center gap-2 shadow-sm"
+                      >
+                        <Video className="w-4 h-4" />
+                        <span>{currentLang === 'ar' ? 'فتح الحصة المباشرة (Open Session Live)' : 'Open Session Live'}</span>
+                      </button>
+                    ) : (
+                      // Student Rules: Join only if assigned
+                      isMyEducator ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsSessionStarted(true);
+                            setIsTimerRunning(true);
+                          }}
+                          className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs py-2.5 rounded-xl transition cursor-pointer flex items-center justify-center gap-2 shadow-sm"
+                        >
+                          <Video className="w-4 h-4" />
+                          <span>{currentLang === 'ar' ? 'انضمام لحصة أستاذك (Join)' : 'Join Live Session'}</span>
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          disabled
+                          onClick={() => alert(currentLang === 'ar' ? 'لا يمكنك الانضمام إلا لأستاذك المسجل معه في هذا الصف!' : 'You can only join your registered educator session!')}
+                          className="w-full bg-slate-200 text-slate-400 font-bold text-xs py-2 rounded-xl cursor-not-allowed"
+                        >
+                          {currentLang === 'ar' ? 'غير مسجل مع هذا الأستاذ' : 'Join Restricted (Different Educator)'}
+                        </button>
+                      )
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ) : null}
+
+      {/* Synchronized Live Classroom View */}
+      {isSessionStarted && (
+        <>
+          {/* 1. SYNCHRONIZED BUILT-IN SESSION TIMER (VISIBLE TO ALL STUDENTS AND EDUCATORS) */}
       <div className="bg-linear-to-r from-slate-900 via-indigo-950 to-blue-950 text-white p-4 rounded-3xl shadow-xl border-2 border-indigo-500/30 space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-4">
           {/* Educator & Room Info */}
@@ -517,6 +662,16 @@ export const VirtualClassroom: React.FC<VirtualClassroomProps> = ({
               title={isVideoOn ? 'Turn Video Off' : 'Turn Video On'}
             >
               {isVideoOn ? <Video className="w-4 h-4" /> : <VideoOff className="w-4 h-4" />}
+            </button>
+
+            {/* Fullscreen Button */}
+            <button
+              onClick={toggleFullScreen}
+              className="p-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 transition cursor-pointer flex items-center gap-1 text-xs font-bold"
+              title="Full Screen Click"
+            >
+              <Maximize2 className="w-4 h-4" />
+              <span className="hidden sm:inline">{isFullscreen ? 'Exit' : 'Full Screen'}</span>
             </button>
 
             {/* Split Screen Reference Toggle */}
@@ -1157,6 +1312,8 @@ export const VirtualClassroom: React.FC<VirtualClassroomProps> = ({
             </div>
           </div>
         </div>
+      )}
+        </>
       )}
     </div>
   );
