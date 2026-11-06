@@ -27,6 +27,13 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
   const [password, setPassword] = useState('');
   const [schoolOrSubject, setSchoolOrSubject] = useState('');
   const [registeredGradeId, setRegisteredGradeId] = useState('');
+  const [selectedEducatorId, setSelectedEducatorId] = useState<string>('');
+  const [educatorsList] = useState<Array<{ id: string; name: string; subject: string; gradeId: string; currentStudents: number; maxStudents: number }>>([
+    { id: 'edu_1', name: 'Prof. Malaz', subject: 'Mathematics', gradeId: 'g12_lh', currentStudents: 18, maxStudents: 25 },
+    { id: 'edu_2', name: 'Prof. Jad Khoury', subject: 'Mathematics', gradeId: 'g12_lh', currentStudents: 25, maxStudents: 25 },
+    { id: 'edu_3', name: 'Prof. Samer Daher', subject: 'Physics', gradeId: 'g12_lh', currentStudents: 14, maxStudents: 20 },
+    { id: 'edu_4', name: 'Prof. Rima Kassir', subject: 'Philosophy', gradeId: 'g12_lh', currentStudents: 20, maxStudents: 20 }
+  ]);
   const [registrationGrades, setRegistrationGrades] = useState<string[]>([]);
   const [isLoadingGrades, setIsLoadingGrades] = useState(false);
   const [showPayment, setShowPayment] = useState(false);
@@ -125,16 +132,25 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
               <button
                 type="button"
                 onClick={() => setShowPayment(false)}
-                className="inline-flex items-center gap-2 text-sm font-bold text-white"
+                className="inline-flex items-center gap-2 text-sm font-bold text-white cursor-pointer"
               >
                 {currentLang === 'ar' ? <ArrowRight className="h-4 w-4" /> : <ArrowLeft className="h-4 w-4" />}
                 <span>{t.registerBtn}</span>
               </button>
             ) : (
-              <>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleClose}
+                  className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-300 hover:text-white transition cursor-pointer mr-1"
+                  title="Back to Home"
+                >
+                  {currentLang === 'ar' ? <ArrowRight className="h-4 w-4" /> : <ArrowLeft className="h-4 w-4" />}
+                  <span>{currentLang === 'ar' ? 'الرئيسية' : 'Home'}</span>
+                </button>
                 <UserPlus className="w-4 h-4 text-emerald-400" />
                 <h2 className="text-base font-bold">{isLogin ? t.signInLabel : t.registerBtn}</h2>
-              </>
+              </div>
             )}
           </div>
           <button
@@ -316,6 +332,59 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
             </div>
           )}
 
+          {/* Educator 2-Column Selection Grid for Students */}
+          {!isLogin && role === 'student' && (
+            <div className="space-y-2 pt-1">
+              <label className="block text-xs font-bold text-slate-700">
+                {currentLang === 'ar' ? 'اختر الأستاذ المسؤول (الحد الأقصى محدد من الإدارة):' : 'Select Educator (Subject & Grade):'}
+              </label>
+
+              <div className="grid grid-cols-2 gap-2">
+                {educatorsList.map((edu) => {
+                  const isSelected = selectedEducatorId === edu.id;
+                  const isFull = edu.currentStudents >= edu.maxStudents;
+
+                  return (
+                    <button
+                      key={edu.id}
+                      type="button"
+                      onClick={() => {
+                        if (isFull) {
+                          setError(
+                            currentLang === 'ar'
+                              ? `الصف ممتلئ لدى الأستاذ (${edu.name})! لقد وصل للحد الأقصى (${edu.maxStudents} طالب). يرجى اختيار أستاذ آخر.`
+                              : `Class is full for ${edu.name} (${edu.currentStudents}/${edu.maxStudents}). Please select another educator.`
+                          );
+                        } else {
+                          setError(null);
+                          setSelectedEducatorId(edu.id);
+                        }
+                      }}
+                      className={`p-2.5 rounded-xl border text-start transition cursor-pointer flex flex-col justify-between ${
+                        isSelected
+                          ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm ring-2 ring-emerald-300'
+                          : isFull
+                          ? 'bg-slate-100 border-slate-200 text-slate-400 cursor-not-allowed opacity-80'
+                          : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between w-full">
+                        <span className="font-bold text-xs truncate">{edu.name}</span>
+                        {isSelected && <span className="text-[10px] font-black">✓</span>}
+                      </div>
+                      <span className={`text-[10px] ${isSelected ? 'text-emerald-100' : 'text-slate-500'}`}>
+                        {edu.subject}
+                      </span>
+                      <span className={`text-[9px] mt-1 font-semibold ${isFull ? 'text-rose-600' : isSelected ? 'text-emerald-100' : 'text-slate-400'}`}>
+                        {isFull ? (currentLang === 'ar' ? 'الصف ممتلئ' : 'Class Full') : `${edu.currentStudents}/${edu.maxStudents} ${currentLang === 'ar' ? 'طالب' : 'Students'}`}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           {/* Submit */}
           <div className="pt-2">
             <button
@@ -341,23 +410,18 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
           >
             {isLogin ? t.switchToRegister : t.signInPrompt}
           </button>
-          {!isLogin && <div className="rounded-xl border border-indigo-100 bg-indigo-50 p-3 space-y-2">
-            <div className="flex items-center justify-between gap-2">
-              <span className="text-xs font-black text-indigo-950">{t.paymentTitle}</span>
-              <button type="button" onClick={() => setShowPayment(true)} className="text-xs font-bold text-indigo-700 underline">
+          {!isLogin && (
+            <div className="rounded-xl border border-indigo-100 bg-indigo-50 p-2.5 flex items-center justify-between">
+              <span className="text-xs font-bold text-indigo-950">{t.paymentTitle}</span>
+              <button 
+                type="button" 
+                onClick={() => setShowPayment(true)} 
+                className="text-xs font-bold text-indigo-700 hover:text-indigo-900 underline cursor-pointer"
+              >
                 {t.paymentBtn}
               </button>
             </div>
-            <p className="text-xs font-semibold text-indigo-900">{t.paymentDescription}</p>
-            <a
-              href="https://payments.suyool.com/RluEji2qtjDlMKyk9xm4G"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex rounded-lg bg-indigo-700 px-3 py-2 text-xs font-black text-white hover:bg-indigo-800"
-            >
-              {t.paymentProvider}
-            </a>
-          </div>}
+          )}
         </form>
         )}
       </div>
