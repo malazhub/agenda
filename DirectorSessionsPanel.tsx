@@ -163,21 +163,67 @@ export const DirectorSessionsPanel: React.FC<DirectorSessionsPanelProps> = ({ cu
         <p className="rounded-xl border border-slate-200 bg-white p-5 text-center text-xs text-slate-500">{t.empty}</p>
       ) : (
         <div className="space-y-2">
-          {gradeSessions.map((session) => (
-            <article key={session.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white p-3">
-              <div className="min-w-0">
-                <p className="text-[10px] font-bold uppercase text-indigo-600">{session.subject}</p>
-                <p className="truncate text-sm font-bold text-slate-800">{session.title}</p>
-                <a className="text-xs text-slate-500 underline" href={session.sourceUrl} target="_blank" rel="noreferrer">{session.sourceName}</a>
-              </div>
-              <div className="flex items-center gap-3">
-                {session.isLive && <span className="text-[10px] font-black text-rose-600">{t.liveBadge}</span>}
-                <button type="button" onClick={() => void removeSession(session)} className="inline-flex items-center gap-1 rounded-lg bg-red-50 px-3 py-2 text-xs font-bold text-red-700 hover:bg-red-100">
-                  <Trash2 className="h-3.5 w-3.5" />{t.delete}
-                </button>
-              </div>
-            </article>
-          ))}
+          {gradeSessions.map((session) => {
+            const studentCountKey = `students_count_${session.id}`;
+            const maxCountKey = `max_students_${session.id}`;
+            const currentStudents = parseInt(localStorage.getItem(studentCountKey) || '14', 10);
+            const currentMax = parseInt(localStorage.getItem(maxCountKey) || '25', 10);
+
+            return (
+              <article key={session.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white p-3 shadow-xs">
+                <div className="min-w-0 flex-1">
+                  <p className="text-[10px] font-bold uppercase text-indigo-600">{session.subject}</p>
+                  <p className="truncate text-sm font-bold text-slate-800">{session.title}</p>
+                  <a className="text-xs text-slate-500 underline" href={session.sourceUrl} target="_blank" rel="noreferrer">{session.sourceName}</a>
+                </div>
+
+                {/* Director Columns: Number of Students & Maximum Allowed */}
+                <div className="flex items-center gap-4 bg-slate-50 p-2 rounded-xl border border-slate-200 text-xs">
+                  <div className="text-center">
+                    <span className="block text-[10px] font-semibold text-slate-500">
+                      {currentLang === 'ar' ? 'عدد الطلاب' : 'Students Enrolled'}
+                    </span>
+                    <span className="font-black text-emerald-700 text-sm">{currentStudents}</span>
+                  </div>
+
+                  <div className="text-center">
+                    <span className="block text-[10px] font-semibold text-slate-500">
+                      {currentLang === 'ar' ? 'الحد الأقصى' : 'Max Allowed'}
+                    </span>
+                    <input
+                      type="number"
+                      min={1}
+                      max={150}
+                      defaultValue={currentMax}
+                      id={`input-max-${session.id}`}
+                      className="w-16 text-center border border-slate-300 rounded-md font-bold text-xs p-0.5 bg-white"
+                    />
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const input = document.getElementById(`input-max-${session.id}`) as HTMLInputElement;
+                      if (input) {
+                        localStorage.setItem(maxCountKey, input.value);
+                        alert(currentLang === 'ar' ? `تم تحديث الحد الأقصى إلى ${input.value}` : `Max students updated to ${input.value}`);
+                      }
+                    }}
+                    className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[10px] px-2.5 py-1 rounded-md cursor-pointer"
+                  >
+                    {currentLang === 'ar' ? 'تثبيت' : 'Save'}
+                  </button>
+                </div>
+
+                <div className="flex items-center gap-3">
+                  {session.isLive && <span className="text-[10px] font-black text-rose-600">{t.liveBadge}</span>}
+                  <button type="button" onClick={() => void removeSession(session)} className="inline-flex items-center gap-1 rounded-lg bg-red-50 px-3 py-2 text-xs font-bold text-red-700 hover:bg-red-100 cursor-pointer">
+                    <Trash2 className="h-3.5 w-3.5" />{t.delete}
+                  </button>
+                </div>
+              </article>
+            );
+          })}
         </div>
       )}
     </div>
