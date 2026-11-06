@@ -1,7 +1,7 @@
 import React from 'react';
 import { Language, UserProfile } from '../types';
 import { translations } from '../translations';
-import { UserPlus } from 'lucide-react';
+import { UserPlus, LogOut } from 'lucide-react';
 
 interface HeaderProps {
   currentLang: Language;
@@ -13,6 +13,7 @@ interface HeaderProps {
   onOpenRegister: () => void;
   signedInName?: string;
   onOpenArchiveSessions?: () => void;
+  onSignOut?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -21,6 +22,7 @@ export const Header: React.FC<HeaderProps> = ({
   onTabChange,
   onOpenRegister,
   signedInName,
+  onSignOut,
 }) => {
   const t = translations[currentLang];
 
@@ -28,39 +30,34 @@ export const Header: React.FC<HeaderProps> = ({
     <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200 shadow-xs">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 py-2.5">
         <div className="grid grid-cols-1 md:grid-cols-3 items-center gap-3">
-          {/* Left Side: Register action */}
+          {/* Left Side: Register OR Sign Out action */}
           <div className="flex flex-wrap items-center gap-2 justify-start order-2 md:order-1">
-            <button
-              {currentUser && currentUser.role !== 'guest' ? (
-          /* Sign Out Card (Replaces Register when user is logged in) */
-          <div className="flex items-center gap-2 bg-slate-100 border border-slate-200 rounded-xl px-3 py-1.5 shadow-sm">
-            <span className="text-xs font-semibold text-slate-700">{currentUser.name}</span>
-            <span className="text-[10px] uppercase font-bold text-slate-500 bg-slate-200 px-1.5 py-0.5 rounded">
-              {currentUser.role}
-            </span>
-            <button
-              onClick={onSignOut}
-              className="ml-2 flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-rose-50 text-rose-600 hover:bg-rose-100 hover:text-rose-700 font-medium text-xs transition"
-              title="Sign out and return to guest mode"
-            >
-              <LogOut className="w-3.5 h-3.5" />
-              <span>Sign Out</span>
-            </button>
-          </div>
-        ) : (
-          /* Register Card (Returns when logged out / in guest mode) */
-          <button
-            onClick={onOpenRegister}
-            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-600 text-white font-medium text-sm hover:bg-indigo-700 transition"
-          >
-            <UserPlus className="w-4 h-4" />
-            <span>Register</span>
-          </button>
-        )}
-            {signedInName && (
-              <span className="max-w-40 truncate text-xs font-bold text-slate-700" title={signedInName}>
-                {signedInName}
-              </span>
+            {signedInName ? (
+              /* Sign Out Card (Displayed when user is signed in) */
+              <div className="flex items-center gap-2 bg-slate-100 border border-slate-200 rounded-xl px-3 py-1.5 shadow-xs">
+                <span className="max-w-40 truncate text-xs font-bold text-slate-800" title={signedInName}>
+                  {signedInName}
+                </span>
+                <button
+                  type="button"
+                  onClick={onSignOut}
+                  className="ml-1 flex items-center gap-1 px-2.5 py-1 rounded-lg bg-rose-50 text-rose-600 hover:bg-rose-100 hover:text-rose-700 font-bold text-xs transition cursor-pointer"
+                  title="Sign out and return to guest mode"
+                >
+                  <LogOut className="w-3.5 h-3.5" />
+                  <span>{currentLang === 'ar' ? 'خروج' : currentLang === 'fr' ? 'Quitter' : 'Sign Out'}</span>
+                </button>
+              </div>
+            ) : (
+              /* Register Card (Returns when in guest mode / signed out) */
+              <button
+                type="button"
+                onClick={onOpenRegister}
+                className="flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-600 text-white font-medium text-sm hover:bg-indigo-700 transition cursor-pointer shadow-xs"
+              >
+                <UserPlus className="w-4 h-4" />
+                <span>{t.registerBtn}</span>
+              </button>
             )}
           </div>
 
@@ -86,6 +83,7 @@ export const Header: React.FC<HeaderProps> = ({
           <div className="flex items-center justify-end gap-2 order-3">
             {/* Arabic: Vibrant Emerald Green */}
             <button
+              type="button"
               onClick={() => onLanguageChange('ar')}
               className={`px-3 py-1.5 rounded-xl text-xs font-black transition cursor-pointer border ${
                 currentLang === 'ar'
@@ -98,6 +96,7 @@ export const Header: React.FC<HeaderProps> = ({
 
             {/* French: Vibrant Royal Blue */}
             <button
+              type="button"
               onClick={() => onLanguageChange('fr')}
               className={`px-3 py-1.5 rounded-xl text-xs font-black transition cursor-pointer border ${
                 currentLang === 'fr'
@@ -110,6 +109,7 @@ export const Header: React.FC<HeaderProps> = ({
 
             {/* English: Vibrant Amber / Orange */}
             <button
+              type="button"
               onClick={() => onLanguageChange('en')}
               className={`px-3 py-1.5 rounded-xl text-xs font-black transition cursor-pointer border ${
                 currentLang === 'en'
