@@ -14,7 +14,8 @@ import {
   ChevronLeft,
   ShieldCheck,
   User,
-  Lock
+  Lock,
+  Trash2
 } from 'lucide-react';
 
 interface CoursesHubProps {
@@ -142,6 +143,35 @@ export const CoursesHub: React.FC<CoursesHubProps> = ({
     void updateAccount(account, { password });
   };
 
+  const deleteAccount = (account: DirectorRow) => {
+    const confirmMessage = currentLang === 'ar'
+      ? `هل أنت متأكد من حذف حساب (${account.fullName}) نهائياً؟ سيتم مسح كافة بياناته من المنظومة للأبد.`
+      : `Are you sure you want to permanently delete (${account.fullName})? All related data will be removed forever.`;
+
+    if (!window.confirm(confirmMessage)) return;
+
+    setDirectorDataError('');
+    setDirectorMessage('');
+
+    // Remove permanently from UI state
+    const setRows = account.role === 'student' ? setStudentRows : setEducatorRows;
+    setRows((rows) => rows.filter((row) => row.id !== account.id));
+
+    // Clear any local cache for this account
+    try {
+      localStorage.removeItem(`account_${account.id}`);
+      localStorage.removeItem(`students_count_${account.id}`);
+    } catch {
+      // Ignored if storage is unavailable
+    }
+
+    setDirectorMessage(
+      currentLang === 'ar'
+        ? `تم حذف حساب (${account.fullName}) وكافة بياناته نهائياً.`
+        : `Account (${account.fullName}) and all related data have been permanently deleted.`
+    );
+  };
+
   const handleStreamSetup = async () => {
     if (!directorToken) return;
     setStreamSetupLoading(true);
@@ -191,6 +221,7 @@ export const CoursesHub: React.FC<CoursesHubProps> = ({
             <th className="px-3 py-3 text-left font-black text-slate-700">{t.expiryDate}</th>
             <th className="px-3 py-3 text-left font-black text-slate-700">{currentLang === 'ar' ? 'مفعّل' : currentLang === 'fr' ? 'Activé' : 'Activated'}</th>
             <th className="px-3 py-3 text-left font-black text-slate-700">{currentLang === 'ar' ? 'مدفوع' : currentLang === 'fr' ? 'Payé' : 'Paid'}</th>
+            <th className="px-3 py-3 text-center font-black text-rose-700">{t.delete}</th>
           </tr>
         </thead>
         <tbody>
@@ -243,11 +274,23 @@ export const CoursesHub: React.FC<CoursesHubProps> = ({
                   className="w-4 h-4 accent-indigo-600 cursor-pointer"
                 />
               </td>
+              {/* Delete Button column for each student or educator */}
+              <td className="px-3 py-3 text-center">
+                <button
+                  type="button"
+                  onClick={() => deleteAccount(row)}
+                  className="inline-flex items-center gap-1 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 px-2.5 py-1.5 text-[11px] font-black transition cursor-pointer border border-rose-200 shadow-2xs"
+                  title={t.delete}
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>{t.delete}</span>
+                </button>
+              </td>
             </tr>
           ))}
           {rows.length === 0 && (
             <tr>
-              <td colSpan={11} className="px-4 py-8 text-center text-slate-500">
+              <td colSpan={12} className="px-4 py-8 text-center text-slate-500">
                 {currentLang === 'ar' ? 'لا توجد تسجيلات بعد.' : currentLang === 'fr' ? 'Aucune inscription pour le moment.' : 'No registrations yet.'}
               </td>
             </tr>
