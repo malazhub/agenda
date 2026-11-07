@@ -206,19 +206,18 @@ export const CoursesHub: React.FC<CoursesHubProps> = ({
     }
   };
   const openSharedLiveRoom = () => {
-    if (!registeredAccount || !sessionToken) {
-      onShowMessage(t.liveRoomRegistrationRequired);
-      return;
-    }
-    if (onEnterLiveClassroom) {
-      onEnterLiveClassroom();
-    } else {
-      const registeredGrade = LEBANESE_GRADE_LEVELS.find((grade) => grade.id === registeredAccount.gradeId);
-      if (registeredGrade) {
-        setActiveGradeTab('live');
-        setActiveGradeForSessions(registeredGrade);
-      }
-    }
+    // 1. Find the user's registered grade dynamically (case-insensitive) or fallback to Grade 12 LH
+    const targetGrade = LEBANESE_GRADE_LEVELS.find((g) => {
+      if (!registeredAccount?.gradeId) return false;
+      const cleanAccGrade = registeredAccount.gradeId.toLowerCase().replace(/[^a-z0-9]/g, '');
+      const cleanGId = g.id.toLowerCase().replace(/[^a-z0-9]/g, '');
+      const cleanGName = g.name.en.toLowerCase().replace(/[^a-z0-9]/g, '');
+      return cleanGId === cleanAccGrade || cleanGName.includes(cleanAccGrade);
+    }) || LEBANESE_GRADE_LEVELS[0];
+
+    // 2. Open the screen with the 2 buttons (Saved Sessions & Live Session), activating the Live Session tab
+    setActiveGradeTab('live');
+    setActiveGradeForSessions(targetGrade);
   };
 
   const renderDirectorTable = (title: string, rows: DirectorRow[]) => (
