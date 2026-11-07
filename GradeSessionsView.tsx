@@ -277,6 +277,77 @@ export const GradeSessionsView: React.FC<GradeSessionsViewProps> = ({
     startLiveCall(session);
   };
 
+  // Verification checks for registration and payment
+  const isSignedIn = Boolean(registeredAccount && sessionToken);
+  const isPaidAndActivated = Boolean(registeredAccount?.activated && !accountExpired);
+
+  // Educator authorization check
+  const handleEducatorOpenRoom = (session: any) => {
+    if (!isSignedIn) {
+      alert(currentLang === 'ar' ? 'يجب تسجيل الدخول كأستاذ لفتح البث المباشر.' : 'Please sign in with your educator account to open the live session.');
+      return;
+    }
+    if (registeredAccount?.role !== 'educator') {
+      alert(currentLang === 'ar' ? 'هذه الخاصية مخصصة للأساتذة المسجلين فقط.' : 'Only registered educators can open this live room.');
+      return;
+    }
+    if (!isPaidAndActivated) {
+      alert(currentLang === 'ar' ? 'حسابك بانتظار تفعيل الإدارة وتأكيد الدفع.' : 'Your educator account is pending Director activation and payment confirmation.');
+      return;
+    }
+    startLiveCall(session);
+  };
+
+  // Student authorization check (Paid, activated, and signed with this particular educator)
+  const handleStudentJoinRoom = (session: any) => {
+    // 1. Must be signed in
+    if (!isSignedIn) {
+      alert(
+        currentLang === 'ar'
+          ? 'لا يمكنك الدخول! يجب تسجيل الدخول بحساب مسجل ومفعّل للانضمام إلى البث المباشر.'
+          : 'Access Denied: You must sign in with a registered account to join this live session.'
+      );
+      return;
+    }
+
+    // 2. Must be paid and activated by Director
+    if (!isPaidAndActivated) {
+      alert(
+        currentLang === 'ar'
+          ? 'لا يمكنك الانضمام! حسابك بانتظار تأكيد الدفع وتفعيل الإدارة.'
+          : 'Access Denied: Your account is pending payment confirmation and Director activation.'
+      );
+      return;
+    }
+
+    // 3. Must be a student
+    if (registeredAccount?.role !== 'student') {
+      alert(
+        currentLang === 'ar'
+          ? 'أنت مسجل كأستاذ وليس كطالب لهذا الصف.'
+          : 'You are signed in as an educator, not an enrolled student.'
+      );
+      return;
+    }
+
+    // 4. Must match the particular educator selected during registration
+    const assignedEducator = myRegisteredEducator || registeredAccount?.schoolOrSubject || '';
+    const isSignedForThisEducator = assignedEducator &&
+      session.educatorName.trim().toLowerCase() === assignedEducator.trim().toLowerCase();
+
+    if (!isSignedForThisEducator && assignedEducator) {
+      alert(
+        currentLang === 'ar'
+          ? `لا يمكنك الانضمام! أنت مسجل مع الأستاذ (${assignedEducator}). لا يحق لك دخول صف أستاذ آخر.`
+          : `Access Denied: You are registered with ${assignedEducator}. You cannot join another educator's room.`
+      );
+      return;
+    }
+
+    // All registration & payment validations passed -> join conference!
+    startLiveCall(session);
+  };
+
   const endLiveCall = () => {
     if (localStreamRef.current) {
       localStreamRef.current.getTracks().forEach(track => track.stop());
