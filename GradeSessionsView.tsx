@@ -206,6 +206,77 @@ export const GradeSessionsView: React.FC<GradeSessionsViewProps> = ({
     }
   };
 
+  // Verification checks for registration and payment
+  const isSignedIn = Boolean(registeredAccount && sessionToken);
+  const isPaidAndActivated = Boolean(registeredAccount?.activated && !accountExpired);
+
+  // Educator authorization check
+  const handleEducatorOpenRoom = (session: any) => {
+    if (!isSignedIn) {
+      alert(currentLang === 'ar' ? 'يجب تسجيل الدخول كأستاذ لفتح البث المباشر.' : 'Please sign in with your educator account to open the live session.');
+      return;
+    }
+    if (registeredAccount?.role !== 'educator') {
+      alert(currentLang === 'ar' ? 'هذه الخاصية مخصصة للأساتذة المسجلين فقط.' : 'Only registered educators can open this live room.');
+      return;
+    }
+    if (!isPaidAndActivated) {
+      alert(currentLang === 'ar' ? 'حسابك بانتظار تفعيل الإدارة وتأكيد الدفع.' : 'Your educator account is pending Director activation and payment confirmation.');
+      return;
+    }
+    startLiveCall(session);
+  };
+
+  // Student authorization check (Paid, activated, and signed with this particular educator)
+  const handleStudentJoinRoom = (session: any) => {
+    // 1. Must be signed in
+    if (!isSignedIn) {
+      alert(
+        currentLang === 'ar'
+          ? 'لا يمكنك الدخول! يجب تسجيل الدخول بحساب مسجل ومفعّل للانضمام إلى البث المباشر.'
+          : 'Access Denied: You must sign in with a registered account to join this live session.'
+      );
+      return;
+    }
+
+    // 2. Must be paid and activated by Director
+    if (!isPaidAndActivated) {
+      alert(
+        currentLang === 'ar'
+          ? 'لا يمكنك الانضمام! حسابك بانتظار تأكيد الدفع وتفعيل الإدارة.'
+          : 'Access Denied: Your account is pending payment confirmation and Director activation.'
+      );
+      return;
+    }
+
+    // 3. Must be a student
+    if (registeredAccount?.role !== 'student') {
+      alert(
+        currentLang === 'ar'
+          ? 'أنت مسجل كأستاذ وليس كطالب لهذا الصف.'
+          : 'You are signed in as an educator, not an enrolled student.'
+      );
+      return;
+    }
+
+    // 4. Must match the particular educator selected during registration
+    const assignedEducator = myRegisteredEducator || registeredAccount?.schoolOrSubject || '';
+    const isSignedForThisEducator = assignedEducator &&
+      session.educatorName.trim().toLowerCase() === assignedEducator.trim().toLowerCase();
+
+    if (!isSignedForThisEducator && assignedEducator) {
+      alert(
+        currentLang === 'ar'
+          ? `لا يمكنك الانضمام! أنت مسجل مع الأستاذ (${assignedEducator}). لا يحق لك دخول صف أستاذ آخر.`
+          : `Access Denied: You are registered with ${assignedEducator}. You cannot join another educator's room.`
+      );
+      return;
+    }
+
+    // All registration & payment validations passed -> join conference!
+    startLiveCall(session);
+  };
+
   const endLiveCall = () => {
     if (localStreamRef.current) {
       localStreamRef.current.getTracks().forEach(track => track.stop());
@@ -398,7 +469,7 @@ export const GradeSessionsView: React.FC<GradeSessionsViewProps> = ({
                   </p>
                 </div>
 
-                {/* Direct Action for Student: Join Live Session directly into the conference room */}
+                {/* Direct Action for Student: Join Live Session (Strictly verified) */}
                 {!isEducator && (
                   <button
                     type="button"
@@ -407,7 +478,7 @@ export const GradeSessionsView: React.FC<GradeSessionsViewProps> = ({
                         myRegisteredEducator && s.educatorName.trim().toLowerCase() === myRegisteredEducator.trim().toLowerCase()
                       ) || liveSessionsList[0];
                       if (mySession) {
-                        startLiveCall(mySession);
+                        handleStudentJoinRoom(mySession);
                       }
                     }}
                     className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2.5 rounded-xl text-xs font-black transition cursor-pointer flex items-center gap-2 shadow-sm"
@@ -460,13 +531,13 @@ export const GradeSessionsView: React.FC<GradeSessionsViewProps> = ({
                         )}
                       </div>
 
-                      {/* Action Button: Educator Open Live vs Student Join */}
+                      {/* Action Button: Strictly Verified Educator Open Live vs Student Join */}
                       <div>
                         {isEducator ? (
                           isEducatorOwnRoom ? (
                             <button
                               type="button"
-                              onClick={() => startLiveCall(session)}
+                              onClick={() => handleEducatorOpenRoom(session)}
                               className="w-full rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white py-2.5 text-xs font-black transition cursor-pointer flex items-center justify-center gap-2 shadow-sm"
                             >
                               <Video className="w-4 h-4" />
@@ -481,7 +552,7 @@ export const GradeSessionsView: React.FC<GradeSessionsViewProps> = ({
                           isMyAssignedRoom ? (
                             <button
                               type="button"
-                              onClick={() => startLiveCall(session)}
+                              onClick={() => handleStudentJoinRoom(session)}
                               className="w-full rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white py-2.5 text-xs font-black transition cursor-pointer flex items-center justify-center gap-2 shadow-sm"
                             >
                               <Video className="w-4 h-4" />
@@ -490,8 +561,8 @@ export const GradeSessionsView: React.FC<GradeSessionsViewProps> = ({
                           ) : (
                             <button
                               type="button"
-                              disabled
-                              className="w-full rounded-xl bg-slate-100 text-slate-400 py-2.5 text-xs font-bold cursor-not-allowed flex items-center justify-center gap-1.5"
+                              onClick={() => handleStudentJoinRoom(session)}
+                              className="w-full rounded-xl bg-slate-100 text-slate-400 hover:bg-slate-200 py-2.5 text-xs font-bold cursor-not-allowed flex items-center justify-center gap-1.5 transition"
                               title="You did not sign for this educator"
                             >
                               <Lock className="w-3.5 h-3.5" />
