@@ -386,20 +386,35 @@ export const GradeSessionsView: React.FC<GradeSessionsViewProps> = ({
                   <div className="flex items-center gap-2">
                     <Radio className="w-4 h-4 text-rose-500 animate-pulse" />
                     <h3 className="font-black text-base">
-                      {currentLang === 'ar' ? 'الحصص المباشرة لهذا الصف' : 'Live Sessions Catalog'}
+                      {isEducator
+                        ? (currentLang === 'ar' ? 'بدء الحصة المباشرة' : 'Start Live Session')
+                        : (currentLang === 'ar' ? 'الانضمام إلى الحصة المباشرة' : 'Join Live Session')}
                     </h3>
                   </div>
                   <p className="text-xs text-slate-400 mt-1">
                     {isEducator
                       ? (currentLang === 'ar' ? `لوحة الأستاذ: اضغط افتح الحصة المباشرة لبدء البث في مادة (${educatorSubject})` : `Educator: Open live video session for ${educatorSubject}`)
-                      : (currentLang === 'ar' ? 'يمكن للطالب فقط الانضمام إلى حصة الأستاذ المعتمد له' : 'Students can only join their assigned educator live room')}
+                      : (currentLang === 'ar' ? 'اضغط زر الانضمام للدخول مباشرة إلى الغرفة المباشرة مع أستاذك' : 'Click Join to enter the live conference room with your educator')}
                   </p>
                 </div>
 
-                {!isEducator && myRegisteredEducator && (
-                  <span className="bg-emerald-950 text-emerald-400 border border-emerald-800 px-3 py-1.5 rounded-xl text-xs font-bold">
-                    {currentLang === 'ar' ? `أستاذك المعتمد: ${myRegisteredEducator}` : `Your Assigned Educator: ${myRegisteredEducator}`}
-                  </span>
+                {/* Direct Action for Student: Join Live Session directly into the conference room */}
+                {!isEducator && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const mySession = liveSessionsList.find(s => 
+                        myRegisteredEducator && s.educatorName.trim().toLowerCase() === myRegisteredEducator.trim().toLowerCase()
+                      ) || liveSessionsList[0];
+                      if (mySession) {
+                        startLiveCall(mySession);
+                      }
+                    }}
+                    className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2.5 rounded-xl text-xs font-black transition cursor-pointer flex items-center gap-2 shadow-sm"
+                  >
+                    <Video className="w-4 h-4" />
+                    <span>{currentLang === 'ar' ? 'الانضمام للحصة المباشرة' : 'Join Live Session'}</span>
+                  </button>
                 )}
               </div>
 
