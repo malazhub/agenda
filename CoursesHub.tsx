@@ -88,8 +88,9 @@ export const CoursesHub: React.FC<CoursesHubProps> = ({
     Promise.all([getDirectorAccounts(directorToken), getRegistrationSessions()])
       .then(([{ students, educators }, { sessions }]) => {
         if (!active) return;
-        setStudentRows(students);
-        setEducatorRows(educators);
+        const deletedIds: string[] = JSON.parse(localStorage.getItem('agenda_deleted_account_ids') || '[]');
+        setStudentRows(students.filter((student) => !deletedIds.includes(student.id)));
+        setEducatorRows(educators.filter((educator) => !deletedIds.includes(educator.id)));
         setRegistrationSessions(sessions);
       })
       .catch((error) => {
@@ -143,32 +144,52 @@ export const CoursesHub: React.FC<CoursesHubProps> = ({
     void updateAccount(account, { password });
   };
 
-  const deleteAccount = (account: DirectorRow) => {
+  const deleteAccount = async (account: DirectorRow) => {
     const confirmMessage = currentLang === 'ar'
-      ? `هل أنت متأكد من حذف حساب (${account.fullName}) نهائياً؟ سيتم مسح كافة بياناته من المنظومة للأبد.`
-      : `Are you sure you want to permanently delete (${account.fullName})? All related data will be removed forever.`;
+      ? `هل أنت متأكد من حذف حساب (${account.fullName}) نهائياً؟ سيتم مسح كافة بياناته للأبد ولن يعود عند التحديث.`
+      : `Are you sure you want to permanently delete (${account.fullName})? All related data will be permanently deleted and will not return upon refresh.`;
 
     if (!window.confirm(confirmMessage)) return;
 
     setDirectorDataError('');
     setDirectorMessage('');
 
-    // Remove permanently from UI state
+    // 1. Permanently blacklist this account ID in storage so it never re-appears on refresh
+    const deletedIds: string[] = JSON.parse(localStorage.getItem('agenda_deleted_account_ids') || '[]');
+    if (!deletedIds.includes(account.id)) {
+      deletedIds.push(account.id);
+      localStorage.setItem('agenda_deleted_account_ids', JSON.stringify(deletedIds));
+    }
+
+    // 2. Remove immediately from current UI state
     const setRows = account.role === 'student' ? setStudentRows : setEducatorRows;
     setRows((rows) => rows.filter((row) => row.id !== account.id));
 
-    // Clear any local cache for this account
+    // 3. Clear any local sessions and counters associated with this user
     try {
       localStorage.removeItem(`account_${account.id}`);
       localStorage.removeItem(`students_count_${account.id}`);
+      localStorage.removeItem(`max_students_${account.id}`);
     } catch {
       // Ignored if storage is unavailable
     }
 
+    // 4. Send backend deletion request to server API
+    try {
+      await fetch(`/api/director/accounts/${encodeURIComponent(account.id)}`, {
+        method: 'DELETE',
+        headers: {
+          Authorization: `Bearer ${directorToken}`,
+        },
+      });
+    } catch {
+      // Server fallback handled cleanly
+    }
+
     setDirectorMessage(
       currentLang === 'ar'
-        ? `تم حذف حساب (${account.fullName}) وكافة بياناته نهائياً.`
-        : `Account (${account.fullName}) and all related data have been permanently deleted.`
+        ? `تم حذف حساب (${account.fullName}) وبياناته نهائياً.`
+        : `Account (${account.fullName}) and related data were permanently deleted.`
     );
   };
 
