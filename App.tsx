@@ -214,6 +214,8 @@ export default function App() {
             currentLang={currentLang}
             teacher={selectedTeacherForBooking || MOCK_TEACHERS[0]}
             onLeaveClassroom={() => setIsClassroomActive(false)}
+            currentUserRole={registeredAccount?.role === 'educator' ? 'educator' : 'student'}
+            currentUserName={registeredAccount?.fullName || userProfile.name}
           />
         ) : (
           <CoursesHub
