@@ -210,17 +210,15 @@ export const CoursesHub: React.FC<CoursesHubProps> = ({
       onShowMessage(t.liveRoomRegistrationRequired);
       return;
     }
-    if (registeredAccount.role === 'director') {
-      onShowMessage(t.liveRoomGradeRequired);
-      return;
+    if (onEnterLiveClassroom) {
+      onEnterLiveClassroom();
+    } else {
+      const registeredGrade = LEBANESE_GRADE_LEVELS.find((grade) => grade.id === registeredAccount.gradeId);
+      if (registeredGrade) {
+        setActiveGradeTab('live');
+        setActiveGradeForSessions(registeredGrade);
+      }
     }
-    const registeredGrade = LEBANESE_GRADE_LEVELS.find((grade) => grade.id === registeredAccount.gradeId);
-    if (!registeredGrade) {
-      onShowMessage(t.liveRoomGradeRequired);
-      return;
-    }
-    setActiveGradeTab('live');
-    setActiveGradeForSessions(registeredGrade);
   };
 
   const renderDirectorTable = (title: string, rows: DirectorRow[]) => (
