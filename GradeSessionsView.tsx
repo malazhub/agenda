@@ -165,7 +165,7 @@ export const GradeSessionsView: React.FC<GradeSessionsViewProps> = ({
     };
   }, [selectedGrade.id, activeTab, reloadKey]);
 
-  // 45-minute countdown timer (fixed variable name from t to prev to avoid shadowing)
+  // 45-minute countdown timer
   useEffect(() => {
     let interval: any = null;
     if (timerRunning && timeLeft > 0) {
@@ -301,8 +301,22 @@ export const GradeSessionsView: React.FC<GradeSessionsViewProps> = ({
       {/* IN-CALL VIDEO CLASSROOM VIEW (Active Video Session) */}
       {inLiveConference && activeCallSession ? (
         <div className="bg-slate-900 rounded-3xl overflow-hidden shadow-2xl flex flex-col h-[82vh] text-white">
-          <div className="px-6 py-4 bg-slate-800/90 backdrop-blur-md flex items-center justify-between border-b border-slate-700">
+          <div className="px-6 py-4 bg-slate-800/90 backdrop-blur-md flex flex-wrap items-center justify-between border-b border-slate-700 gap-3">
             <div className="flex items-center gap-3">
+              {/* Back to Main Screen Arrow */}
+              <button
+                type="button"
+                onClick={() => {
+                  endLiveCall();
+                  onBack();
+                }}
+                className="flex items-center gap-1.5 bg-slate-700 hover:bg-slate-600 text-slate-200 hover:text-white font-bold px-3 py-1.5 rounded-xl transition cursor-pointer text-xs shadow-xs"
+                title={currentLang === 'ar' ? 'العودة للشاشة الرئيسية' : 'Back to Main Screen'}
+              >
+                {isRTL ? <ArrowRight className="w-4 h-4" /> : <ArrowLeft className="w-4 h-4" />}
+                <span>{currentLang === 'ar' ? 'الرئيسية' : 'Main Screen'}</span>
+              </button>
+
               <span className="flex h-3 w-3 relative">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
                 <span className="relative inline-flex rounded-full h-3 w-3 bg-rose-500"></span>
@@ -452,7 +466,7 @@ export const GradeSessionsView: React.FC<GradeSessionsViewProps> = ({
             </div>
           </div>
 
-          {/* TAB 1: LIVE SESSIONS (Educator Open Live vs Student Join dedicated session) */}
+          {/* TAB 1: LIVE SESSIONS (Full, Consistent List for both Student and Educator) */}
           {activeTab === 'live' ? (
             <div className="space-y-4">
               <div className="bg-slate-900 text-white rounded-3xl p-5 border border-slate-800 flex flex-wrap items-center justify-between gap-3 shadow-md">
@@ -462,37 +476,24 @@ export const GradeSessionsView: React.FC<GradeSessionsViewProps> = ({
                     <h3 className="font-black text-base">
                       {isEducator
                         ? (currentLang === 'ar' ? 'بدء الحصة المباشرة' : 'Start Live Session')
-                        : (currentLang === 'ar' ? 'الانضمام إلى الحصة المباشرة' : 'Join Live Session')}
+                        : (currentLang === 'ar' ? 'الحصص المباشرة المتاحة' : 'Live Classroom Sessions')}
                     </h3>
                   </div>
                   <p className="text-xs text-slate-400 mt-1">
                     {isEducator
-                      ? (currentLang === 'ar' ? `لوحة الأستاذ: اضغط افتح الحصة المباشرة لبدء البث في مادة (${educatorSubject})` : `Educator: Open live video session for ${educatorSubject}`)
-                      : (currentLang === 'ar' ? 'اضغط زر الانضمام للدخول مباشرة إلى الغرفة المباشرة مع أستاذك' : 'Click Join to enter the live conference room with your educator')}
+                      ? (currentLang === 'ar' ? `لوحة الأستاذ: افتح حصتك المباشرة لبدء البث في مادة (${educatorSubject})` : `Educator: Open your live video session for ${educatorSubject}`)
+                      : (currentLang === 'ar' ? 'اختر حصة أستاذك المعتمد من القائمة أدناه للانضمام للبث المباشر' : 'Select your registered educator from the list below to join the live session')}
                   </p>
                 </div>
 
-                {/* Direct Action for Student: Join Live Session directly into the conference room */}
-                {!isEducator && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const mySession = liveSessionsList.find(s => 
-                        myRegisteredEducator && s.educatorName.trim().toLowerCase() === myRegisteredEducator.trim().toLowerCase()
-                      ) || liveSessionsList[0];
-                      if (mySession) {
-                        handleStudentJoinRoom(mySession);
-                      }
-                    }}
-                    className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2.5 rounded-xl text-xs font-black transition cursor-pointer flex items-center gap-2 shadow-sm"
-                  >
-                    <Video className="w-4 h-4" />
-                    <span>{currentLang === 'ar' ? 'الانضمام للحصة المباشرة' : 'Join Live Session'}</span>
-                  </button>
+                {!isEducator && myRegisteredEducator && (
+                  <span className="bg-emerald-950 text-emerald-400 border border-emerald-800 px-3 py-1.5 rounded-xl text-xs font-bold">
+                    {currentLang === 'ar' ? `أستاذك المعتمد: ${myRegisteredEducator}` : `Your Assigned Educator: ${myRegisteredEducator}`}
+                  </span>
                 )}
               </div>
 
-              {/* Grid of Live Sessions */}
+              {/* Grid of Live Sessions: Shows all live rooms consistently */}
               <div className="grid gap-4 md:grid-cols-2">
                 {liveSessionsList.map((session) => {
                   const isMyAssignedRoom = myRegisteredEducator && 
