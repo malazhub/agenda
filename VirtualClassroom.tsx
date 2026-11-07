@@ -35,6 +35,8 @@ interface VirtualClassroomProps {
   activeExam?: OfficialExam;
   activeQuestion?: ExamQuestion;
   onLeaveClassroom: () => void;
+  currentUserRole?: 'student' | 'educator' | 'teacher';
+  currentUserName?: string;
 }
 
 interface OnlineStudent {
@@ -49,9 +51,14 @@ export const VirtualClassroom: React.FC<VirtualClassroomProps> = ({
   teacher,
   activeExam,
   activeQuestion,
-  onLeaveClassroom
+  onLeaveClassroom,
+  currentUserRole = 'student',
+  currentUserName = ''
 }) => {
   const t = translations[currentLang];
+  const isEducator = currentUserRole === 'educator' || currentUserRole === 'teacher';
+
+  // Synchronized 45-minute countdown timer (2700 seconds)
 
   // Fullscreen & Active Session controls
   const mainClassroomRef = useRef<HTMLDivElement>(null);
