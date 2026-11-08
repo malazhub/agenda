@@ -1,7 +1,7 @@
 import React from 'react';
 import { Language, UserProfile } from '../types';
 import { translations } from '../translations';
-import { UserPlus, LogOut } from 'lucide-react';
+import { UserPlus, LogOut, Share2 } from 'lucide-react';
 
 interface HeaderProps {
   currentLang: Language;
@@ -79,8 +79,39 @@ export const Header: React.FC<HeaderProps> = ({
             </div>
           </div>
 
-          {/* Right Side: 3 Languages with 3 DIFFERENT DISTINCT COLORS */}
+          {/* Right Side: Share Button & 3 Languages */}
           <div className="flex items-center justify-end gap-2 order-3">
+            {/* Share Agenda Platform Button */}
+            <button
+              type="button"
+              onClick={async () => {
+                const shareUrl = 'https://malazhub.github.io/agenda/';
+                const shareData = {
+                  title: 'Agenda',
+                  text: currentLang === 'ar' ? 'منصة Agenda للتعليم والدروس الخصوصية' : 'Agenda Educational Platform',
+                  url: shareUrl,
+                };
+                if (navigator.share) {
+                  try {
+                    await navigator.share(shareData);
+                  } catch {}
+                } else {
+                  await navigator.clipboard.writeText(shareUrl);
+                  alert(
+                    currentLang === 'ar'
+                      ? 'تم نسخ رابط المنصة: https://malazhub.github.io/agenda/'
+                      : currentLang === 'fr'
+                      ? 'Lien copié: https://malazhub.github.io/agenda/'
+                      : 'Link copied: https://malazhub.github.io/agenda/'
+                  );
+                }
+              }}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-black bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-200 transition cursor-pointer shadow-2xs mr-1"
+              title="Share Agenda"
+            >
+              <Share2 className="w-3.5 h-3.5" />
+              <span>{currentLang === 'ar' ? 'مشاركة' : currentLang === 'fr' ? 'Partager' : 'Share'}</span>
+            </button>
             {/* Arabic: Vibrant Emerald Green */}
             <button
               type="button"
