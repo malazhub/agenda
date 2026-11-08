@@ -13,14 +13,7 @@ export interface CloudflareAccount {
   activated: boolean;
   paid: boolean;
 }
-export async function deleteDirectorAccount(token: string, accountId: string): Promise<void> {
-  await apiFetch(`/api/director/accounts/${encodeURIComponent(accountId)}`, {
-    method: 'DELETE',
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
-  });
-}
+
 export interface AuthResponse {
   account: CloudflareAccount;
   token: string;
@@ -153,6 +146,13 @@ export function updateDirectorAccount(
     method: 'PATCH',
     headers: authHeaders(token),
     body: JSON.stringify(update),
+  });
+}
+
+export function deleteDirectorAccount(token: string, accountId: string): Promise<{ deleted: boolean }> {
+  return request(`/api/director/accounts/${encodeURIComponent(accountId)}`, {
+    method: 'DELETE',
+    headers: authHeaders(token),
   });
 }
 
