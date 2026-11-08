@@ -7,6 +7,7 @@ import {
   ArrowLeft, 
   ArrowRight, 
   Video, 
+  VideoOff,
   FileText, 
   ExternalLink, 
   RefreshCw, 
@@ -91,9 +92,12 @@ export const GradeSessionsView: React.FC<GradeSessionsViewProps> = ({
   // In-call conference state
   const [inLiveConference, setInLiveConference] = useState(false);
   const [activeCallSession, setActiveCallSession] = useState<any>(null);
-  const [timeLeft, setTimeLeft] = useState(45 * 60); // 45-minute timer
+  const [timeLeft, setTimeLeft] = useState(45 * 60); // 45-minute countdown timer
   const [timerRunning, setTimerRunning] = useState(false);
   const [isMicOn, setIsMicOn] = useState(true);
+  const [isVideoOn, setIsVideoOn] = useState(true);
+  const [hasCameraActive, setHasCameraActive] = useState(false);
+  const [cameraLoading, setCameraLoading] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -129,7 +133,6 @@ export const GradeSessionsView: React.FC<GradeSessionsViewProps> = ({
       }
     } catch {}
 
-    // If user is Educator, ensure their session is in the list
     if (isEducator) {
       const mySessionIndex = list.findIndex(s => cleanText(s.educatorName) === cleanText(educatorName));
       if (mySessionIndex === -1) {
@@ -143,7 +146,6 @@ export const GradeSessionsView: React.FC<GradeSessionsViewProps> = ({
       }
     }
 
-    // Default fallback sessions
     if (list.length === 0) {
       list = [
         {
@@ -201,55 +203,74 @@ export const GradeSessionsView: React.FC<GradeSessionsViewProps> = ({
     return () => clearInterval(interval);
   }, [timerRunning, timeLeft]);
 
-  // ACTIVATE LIVE CAMERA VIDEO STREAM AUTOMATICALLY WHEN IN CONFERENCE
-  useEffect(() => {
-    let stream: MediaStream | null = null;
-    let isMounted = true;
-
-    if (inLiveConference) {
-      const activateLiveCamera = async () => {
-        try {
-          // Attempt video & audio capture, fallback to video only if mic is busy
-          try {
-            stream = await navigator.mediaDevices.getUserMedia({
-              video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } },
-              audio: true
-            });
-          } catch {
-            stream = await navigator.mediaDevices.getUserMedia({
-              video: true,
-              audio: false
-            });
-          }
-
-          if (!isMounted) {
-            stream.getTracks().forEach(t => t.stop());
-            return;
-          }
-
-          localStreamRef.current = stream;
-
-          if (videoRef.current) {
-            videoRef.current.srcObject = stream;
-            videoRef.current.muted = true; // Required by browsers to autoplay without blocking
-            await videoRef.current.play().catch(() => {});
-          }
-        } catch (err) {
-          console.error("Camera access failed or permission denied:", err);
-        }
-      };
-
-      void activateLiveCamera();
-    }
-
-    return () => {
-      isMounted = false;
-      if (stream) {
-        stream.getTracks().forEach(t => t.stop());
+  // ACTIVATE CAMERA WITH ROBUST FALLBACK
+  const requestCameraAccess = async () => {
+    setCameraLoading(true);
+    try {
+      let stream: MediaStream | null = null;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } },
+          audio: true
+        });
+      } catch {
+        // Fallback to video only if microphone is busy or not allowed
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: true,
+          audio: false
+        });
       }
+
+      localStreamRef.current = stream;
+      setHasCameraActive(true);
+      setIsVideoOn(true);
+
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        videoRef.current.muted = true; // Required by browsers to autoplay local video
+        videoRef.current.onloadedmetadata = () => {
+          videoRef.current?.play().catch(() => {});
+        };
+        await videoRef.current.play().catch(() => {});
+      }
+    } catch (err) {
+      console.warn("Camera access failed or permission denied:", err);
+      setHasCameraActive(false);
+    } finally {
+      setCameraLoading(false);
+    }
+  };
+
+  // Toggle Video Camera On / Off
+  const toggleVideo = () => {
+    if (localStreamRef.current) {
+      const tracks = localStreamRef.current.getVideoTracks();
+      if (tracks.length > 0) {
+        const nextState = !isVideoOn;
+        tracks.forEach(track => { track.enabled = nextState; });
+        setIsVideoOn(nextState);
+      } else {
+        void requestCameraAccess();
+      }
+    } else {
+      void requestCameraAccess();
+    }
+  };
+
+  // Automatically request camera when entering live conference
+  useEffect(() => {
+    if (inLiveConference) {
+      void requestCameraAccess();
+    } else {
       if (localStreamRef.current) {
         localStreamRef.current.getTracks().forEach(t => t.stop());
         localStreamRef.current = null;
+      }
+      setHasCameraActive(false);
+    }
+    return () => {
+      if (localStreamRef.current) {
+        localStreamRef.current.getTracks().forEach(t => t.stop());
       }
     };
   }, [inLiveConference]);
@@ -278,6 +299,7 @@ export const GradeSessionsView: React.FC<GradeSessionsViewProps> = ({
     }
   };
 
+  // Launch live conference call
   const startLiveCall = (session: any) => {
     setActiveCallSession(session);
     setInLiveConference(true);
@@ -365,7 +387,7 @@ export const GradeSessionsView: React.FC<GradeSessionsViewProps> = ({
     window.open(url, '_blank', 'noopener,noreferrer');
   };
 
-  // Real attendees list (Zero hardcoded names)
+  // Real attendees list only (Zero hardcoded mock names)
   const realAttendees: Array<{ id: string; name: string; isLive: boolean }> = [];
   if (!isEducator && isSignedIn) {
     realAttendees.push({
@@ -436,18 +458,65 @@ export const GradeSessionsView: React.FC<GradeSessionsViewProps> = ({
           {/* Video Stage Full Width on Top, Attendance Placed Directly BELOW the Video */}
           <div className="flex-1 flex flex-col overflow-y-auto">
             {/* Live Video Stage */}
-            <div className="w-full bg-black flex items-center justify-center relative p-3 min-h-[50vh] sm:min-h-[58vh]">
+            <div className="w-full bg-slate-950 flex items-center justify-center relative p-3 min-h-[50vh] sm:min-h-[58vh] rounded-2xl overflow-hidden border border-slate-800">
               <video
                 ref={videoRef}
                 autoPlay
                 playsInline
                 muted
-                className="w-full h-full max-h-[58vh] object-contain rounded-2xl bg-slate-950"
+                className={`w-full h-full max-h-[58vh] object-contain rounded-2xl bg-black transition duration-300 ${
+                  hasCameraActive && isVideoOn ? 'opacity-100' : 'opacity-0'
+                }`}
               />
-              <span className="absolute bottom-5 left-5 bg-black/60 backdrop-blur-xs px-3 py-1 rounded-lg text-xs font-semibold flex items-center gap-2">
-                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                {isEducator ? `${educatorName} (Educator)` : `${registeredAccount?.fullName || 'Student'} (Live)`}
-              </span>
+
+              {/* Status Badge when camera is live */}
+              {hasCameraActive && isVideoOn && (
+                <div className="absolute top-5 right-5 bg-black/60 backdrop-blur-md px-3 py-1.5 rounded-xl text-xs font-bold text-emerald-400 flex items-center gap-2 border border-emerald-500/30">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+                  <span>{currentLang === 'ar' ? 'البث المباشر نشط (1080p HD)' : 'Live Video Stream Active (HD)'}</span>
+                </div>
+              )}
+
+              {/* One-Click Button to Turn On Video Camera if not active */}
+              {(!hasCameraActive || !isVideoOn) && (
+                <div className="absolute inset-0 flex flex-col items-center justify-center p-6 text-center space-y-3 bg-slate-950/90 backdrop-blur-xs">
+                  <div className="w-16 h-16 rounded-full bg-slate-800 border-2 border-slate-700 flex items-center justify-center text-slate-400">
+                    <Video className="w-8 h-8 text-indigo-400" />
+                  </div>
+                  <div className="space-y-1">
+                    <h4 className="text-sm sm:text-base font-black text-white">
+                      {currentLang === 'ar' ? 'الكاميرا المباشرة غير مفعلة' : 'Live Camera Video is Disabled'}
+                    </h4>
+                    <p className="text-xs text-slate-400 max-w-sm">
+                      {currentLang === 'ar'
+                        ? 'اضغط على الزر أدناه لتشغيل الكاميرا والميكروفون فوراً والانضمام بالفيديو'
+                        : 'Click the button below to turn on your camera and microphone to start the live video'}
+                    </p>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => void requestCameraAccess()}
+                    disabled={cameraLoading}
+                    className="bg-indigo-600 hover:bg-indigo-700 text-white font-black px-6 py-3 rounded-2xl transition cursor-pointer text-xs sm:text-sm shadow-xl flex items-center gap-2 transform hover:scale-105 active:scale-95"
+                  >
+                    <Video className="w-4 h-4 text-white" />
+                    <span>
+                      {cameraLoading
+                        ? (currentLang === 'ar' ? 'جارٍ تشغيل الكاميرا...' : 'Connecting to camera...')
+                        : (currentLang === 'ar' ? 'تشغيل الكاميرا الآن (Enable Video)' : 'Turn On Live Camera Now')}
+                    </span>
+                  </button>
+                </div>
+              )}
+
+              {/* User Name Badge on Video */}
+              <div className="absolute bottom-5 left-5 bg-black/70 backdrop-blur-md px-3 py-1.5 rounded-xl text-xs font-bold text-white flex items-center gap-2 border border-white/10">
+                <span className={`w-2 h-2 rounded-full ${hasCameraActive && isVideoOn ? 'bg-emerald-400 animate-pulse' : 'bg-slate-400'}`} />
+                <span>
+                  {isEducator ? `${educatorName} (Educator)` : `${registeredAccount?.fullName || 'Student'} (Live)`}
+                </span>
+              </div>
             </div>
 
             {/* Student Attendance Section BELOW the Video Call (Zero hardcoded names) */}
@@ -457,14 +526,26 @@ export const GradeSessionsView: React.FC<GradeSessionsViewProps> = ({
                   <Users className="w-4 h-4 text-indigo-400" />
                   <span>{currentLang === 'ar' ? 'حضور طلاب الصف المشاركين في الحصة:' : 'Student Attendance in This Live Class:'}</span>
                 </div>
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2">
                   <span className="text-[11px] font-bold bg-emerald-500/20 text-emerald-400 px-2.5 py-0.5 rounded-full border border-emerald-500/30">
                     {currentLang === 'ar' ? `${realAttendees.length} متصلون الآن` : `${realAttendees.length} Live Online`}
                   </span>
+
+                  {/* Camera Toggle Button */}
+                  <button
+                    type="button"
+                    onClick={toggleVideo}
+                    className={`p-2 rounded-xl transition cursor-pointer ${isVideoOn ? 'bg-slate-700 text-slate-200' : 'bg-rose-600 text-white'}`}
+                    title={isVideoOn ? 'Turn Video Off' : 'Turn Video On'}
+                  >
+                    {isVideoOn ? <Video className="w-4 h-4" /> : <VideoOff className="w-4 h-4" />}
+                  </button>
+
+                  {/* Mic Toggle Button */}
                   <button
                     type="button"
                     onClick={() => setIsMicOn(!isMicOn)}
-                    className={`p-2 rounded-xl transition cursor-pointer ${isMicOn ? 'bg-slate-700' : 'bg-rose-600'}`}
+                    className={`p-2 rounded-xl transition cursor-pointer ${isMicOn ? 'bg-slate-700 text-slate-200' : 'bg-rose-600 text-white'}`}
                     title={isMicOn ? 'Mute Mic' : 'Unmute Mic'}
                   >
                     {isMicOn ? <Mic className="w-4 h-4" /> : <MicOff className="w-4 h-4" />}
@@ -472,7 +553,7 @@ export const GradeSessionsView: React.FC<GradeSessionsViewProps> = ({
                 </div>
               </div>
 
-              {/* Attendance Grid */}
+              {/* Dynamic Real Attendees Only */}
               {realAttendees.length === 0 ? (
                 <div className="p-4 text-center text-xs text-slate-400 font-semibold">
                   {currentLang === 'ar' 
