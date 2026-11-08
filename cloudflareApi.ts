@@ -13,7 +13,14 @@ export interface CloudflareAccount {
   activated: boolean;
   paid: boolean;
 }
-
+export async function deleteDirectorAccount(token: string, accountId: string): Promise<void> {
+  await apiFetch(`/api/director/accounts/${encodeURIComponent(accountId)}`, {
+    method: 'DELETE',
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
 export interface AuthResponse {
   account: CloudflareAccount;
   token: string;
