@@ -11,7 +11,20 @@ interface RegisterModalProps {
   currentLang: Language;
   onRegisterSuccess: (account: CloudflareAccount, token: string) => void;
 }
+export async function deleteDirectorAccount(token: string, accountId: string): Promise<void> {
+  const response = await fetch(`${API_BASE_URL}/api/director/accounts/${encodeURIComponent(accountId)}`, {
+    method: 'DELETE',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+  });
 
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.error || `Failed to delete account from Cloudflare (${response.status})`);
+  }
+}
 export const RegisterModal: React.FC<RegisterModalProps> = ({
   isOpen,
   onClose,
