@@ -15,7 +15,9 @@ import {
   ShieldCheck,
   User,
   Lock,
-  Trash2
+  Trash2,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 
 interface CoursesHubProps {
@@ -46,6 +48,7 @@ export const CoursesHub: React.FC<CoursesHubProps> = ({
   const [activeGradeTab, setActiveGradeTab] = useState<'stored' | 'live'>('stored');
   const [directorScreen, setDirectorScreen] = useState<'home' | 'login' | 'dashboard'>('home');
   const [directorForm, setDirectorForm] = useState({ username: '', password: '' });
+  const [showDirectorPassword, setShowDirectorPassword] = useState(false);
   const [directorError, setDirectorError] = useState('');
   const [directorToken, setDirectorToken] = useState(() =>
     typeof window === 'undefined' ? '' : window.sessionStorage.getItem('agenda-director-token') || ''
@@ -206,7 +209,36 @@ export const CoursesHub: React.FC<CoursesHubProps> = ({
     }
   };
   const openSharedLiveRoom = () => {
-    // 1. Find the user's registered grade dynamically (case-insensitive) or fallback to Grade 12 LH
+    // 1. Must be signed in
+    if (!registeredAccount || !sessionToken) {
+      onShowMessage(
+        currentLang === 'ar'
+          ? 'يجب تسجيل الدخول أولاً للوصول إلى غرفة البث المباشر.'
+          : currentLang === 'fr'
+          ? 'Veuillez vous connecter pour accéder à la salle de diffusion.'
+          : 'Please sign in to access the live broadcast room.'
+      );
+      return;
+    }
+
+    // 2. Must be paid and activated by Director
+    const expiryTime = registeredAccount?.expiresAt
+      ? Date.parse(`${registeredAccount.expiresAt.replace(' ', 'T').replace(/Z$/, '')}Z`)
+      : null;
+    const isExpired = expiryTime !== null && (!Number.isFinite(expiryTime) || expiryTime <= Date.now());
+
+    if (!registeredAccount.activated || isExpired) {
+      onShowMessage(
+        currentLang === 'ar'
+          ? 'غرفة البث المباشر متاحة فقط للحسابات المفعّلة والمدفوعة. يرجى انتظار تفعيل الحساب وتأكيد الدفع من الإدارة.'
+          : currentLang === 'fr'
+          ? 'Accès réservé aux comptes activés et payés. En attente de validation du paiement.'
+          : 'Access restricted to active and paid accounts. Please wait for payment confirmation and Director activation.'
+      );
+      return;
+    }
+
+    // 3. User is registered, paid, and active -> open live room!
     const targetGrade = LEBANESE_GRADE_LEVELS.find((g) => {
       if (!registeredAccount?.gradeId) return false;
       const cleanAccGrade = registeredAccount.gradeId.toLowerCase().replace(/[^a-z0-9]/g, '');
@@ -215,7 +247,6 @@ export const CoursesHub: React.FC<CoursesHubProps> = ({
       return cleanGId === cleanAccGrade || cleanGName.includes(cleanAccGrade);
     }) || LEBANESE_GRADE_LEVELS[0];
 
-    // 2. Open the screen with the 2 buttons (Saved Sessions & Live Session), activating the Live Session tab
     setActiveGradeTab('live');
     setActiveGradeForSessions(targetGrade);
   };
@@ -391,14 +422,22 @@ export const CoursesHub: React.FC<CoursesHubProps> = ({
             <div className="relative">
               <Lock className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
               <input
-                type="password"
+                type={showDirectorPassword ? 'text' : 'password'}
                 autoComplete="current-password"
                 required
                 value={directorForm.password}
                 onChange={e => setDirectorForm(prev => ({ ...prev, password: e.target.value }))}
-                className="w-full pl-9 pr-3 py-2.5 border border-slate-200 rounded-xl text-sm text-slate-800 bg-slate-50 focus:outline-indigo-600"
+                className="w-full pl-9 pr-10 py-2.5 border border-slate-200 rounded-xl text-sm text-slate-800 bg-slate-50 focus:outline-indigo-600"
                 placeholder="••••••••"
               />
+              <button
+                type="button"
+                onClick={() => setShowDirectorPassword(!showDirectorPassword)}
+                className="absolute right-3 top-3 text-slate-400 hover:text-slate-700 transition cursor-pointer"
+                title={showDirectorPassword ? 'Hide password' : 'Show password'}
+              >
+                {showDirectorPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
             </div>
           </div>
 
