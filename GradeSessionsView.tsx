@@ -618,30 +618,42 @@ export const GradeSessionsView: React.FC<GradeSessionsViewProps> = ({
                 </div>
               )}
 
-                            {/* CLICKABLE EDUCATOR START LIVE SESSION */}
+                                          {/* CLICKABLE EDUCATOR START LIVE SESSION */}
               {isEducator && (
                 <button
                   type="button"
                   onClick={() => {
-                    const mySession = liveSessionsList.find((session) => {
-                      const sessionEducator = cleanText(session.educatorName);
-                      const currentEducator = cleanText(educatorName);
-
-                      return (
-                        sessionEducator === currentEducator ||
-                        sessionEducator.includes(currentEducator) ||
-                        currentEducator.includes(sessionEducator)
-                      );
-                    });
-
-                    if (!mySession) {
+                    // Require an authenticated educator account
+                    if (!isSignedIn) {
                       alert(
                         currentLang === 'ar'
-                          ? 'لم يتم العثور على حصة مباشرة خاصة بك. يرجى التأكد من إنشاء حصتك من لوحة الإدارة أولاً.'
-                          : 'Your live session was not found. Please make sure your live session has been created in the Director Dashboard first.'
+                          ? 'يرجى تسجيل الدخول بحساب الأستاذ.'
+                          : 'Please sign in with your educator account.'
                       );
                       return;
                     }
+
+                    // Only activated, non-expired accounts may open a class
+                    if (!isPaidAndActivated) {
+                      alert(
+                        currentLang === 'ar'
+                          ? 'حسابك غير مفعل أو انتهت صلاحيته. يرجى مراجعة الإدارة لتفعيل حسابك.'
+                          : 'Your educator account is not activated or has expired. Please contact the Director to activate your account.'
+                      );
+                      return;
+                    }
+
+                    // Open the educator's own class directly.
+                    // Do not require the educator to appear in liveSessionsList.
+                    const mySession = {
+                      id:
+                        registeredAccount?.registeredSessionId ||
+                        `educator_${registeredAccount?.id || cleanText(educatorName)}_${selectedGrade.id}`,
+                      grade: selectedGrade.name[currentLang],
+                      educatorName,
+                      subject: educatorSubject,
+                      isLive: true,
+                    };
 
                     handleEducatorOpenRoom(mySession);
                   }}
@@ -650,7 +662,6 @@ export const GradeSessionsView: React.FC<GradeSessionsViewProps> = ({
                   <div>
                     <div className="flex items-center gap-2">
                       <Radio className="w-5 h-5 text-rose-500 animate-pulse" />
-
                       <h3 className="font-black text-base">
                         {currentLang === 'ar'
                           ? 'بدء الحصة المباشرة'
