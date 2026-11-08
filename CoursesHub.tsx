@@ -7,6 +7,14 @@ import { DirectorSessionsPanel } from './DirectorSessionsPanel';
 import { LiveBroadcastHost } from './LiveBroadcastHost';
 import { getDirectorAccounts, getRegistrationSessions, loginAccount, setupLiveStream, updateDirectorAccount } from '../services/cloudflareApi';
 import type { CloudflareAccount, LiveStreamSetup, RegistrationSession } from '../services/cloudflareApi';
+import { 
+  getDirectorAccounts, 
+  getRegistrationSessions, 
+  loginAccount, 
+  setupLiveStream, 
+  updateDirectorAccount,
+  deleteDirectorAccount // <-- Add this
+} from '../services/cloudflareApi';
 import {
   Clock,
   GraduationCap,
@@ -149,53 +157,34 @@ export const CoursesHub: React.FC<CoursesHubProps> = ({
 
   const deleteAccount = async (account: DirectorRow) => {
     const confirmMessage = currentLang === 'ar'
-      ? `هل أنت متأكد من حذف حساب (${account.fullName}) نهائياً؟ سيتم مسح كافة بياناته للأبد ولن يعود عند التحديث.`
-      : `Are you sure you want to permanently delete (${account.fullName})? All related data will be permanently deleted and will not return upon refresh.`;
+      ? `هل أنت متأكد من حذف حساب (${account.fullName}) نهائياً؟ سيتم مسح كافة بياناته من Cloudflare للأبد.`
+      : `Are you sure you want to permanently delete (${account.fullName})? All data will be removed from Cloudflare.`;
 
     if (!window.confirm(confirmMessage)) return;
 
     setDirectorDataError('');
     setDirectorMessage('');
 
-    // 1. Permanently blacklist this account ID in storage so it never re-appears on refresh
-    const deletedIds: string[] = JSON.parse(localStorage.getItem('agenda_deleted_account_ids') || '[]');
-    if (!deletedIds.includes(account.id)) {
-      deletedIds.push(account.id);
-      localStorage.setItem('agenda_deleted_account_ids', JSON.stringify(deletedIds));
-    }
-
-    // 2. Remove immediately from current UI state
-    const setRows = account.role === 'student' ? setStudentRows : setEducatorRows;
-    setRows((rows) => rows.filter((row) => row.id !== account.id));
-
-    // 3. Clear any local sessions and counters associated with this user
     try {
+      // 1. Call real Cloudflare Worker API to delete permanently from D1 database
+      await deleteDirectorAccount(directorToken, account.id);
+
+      // 2. Remove permanently from UI state
+      const setRows = account.role === 'student' ? setStudentRows : setEducatorRows;
+      setRows((rows) => rows.filter((row) => row.id !== account.id));
+
+      // 3. Clear local storage records
       localStorage.removeItem(`account_${account.id}`);
-      localStorage.removeItem(`students_count_${account.id}`);
-      localStorage.removeItem(`max_students_${account.id}`);
-    } catch {
-      // Ignored if storage is unavailable
-    }
 
-    // 4. Send backend deletion request to server API
-    try {
-      await fetch(`/api/director/accounts/${encodeURIComponent(account.id)}`, {
-        method: 'DELETE',
-        headers: {
-          Authorization: `Bearer ${directorToken}`,
-        },
-      });
-    } catch {
-      // Server fallback handled cleanly
+      setDirectorMessage(
+        currentLang === 'ar'
+          ? `تم حذف حساب (${account.fullName}) من Cloudflare D1 نهائياً.`
+          : `Account (${account.fullName}) was permanently deleted from Cloudflare D1.`
+      );
+    } catch (err) {
+      setDirectorDataError(err instanceof Error ? err.message : 'Failed to delete account from Cloudflare.');
     }
-
-    setDirectorMessage(
-      currentLang === 'ar'
-        ? `تم حذف حساب (${account.fullName}) وبياناته نهائياً.`
-        : `Account (${account.fullName}) and related data were permanently deleted.`
-    );
   };
-
   const handleStreamSetup = async () => {
     if (!directorToken) return;
     setStreamSetupLoading(true);
