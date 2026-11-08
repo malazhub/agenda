@@ -267,7 +267,7 @@ export const CoursesHub: React.FC<CoursesHubProps> = ({
               <td className="px-3 py-3 text-slate-700">{row.username}</td>
               <td className="px-3 py-3 text-slate-700">
                 <span aria-label={t.passwordNotStored}>••••••••</span>
-                <button type="button" onClick={() => resetAccountPassword(row)} className="ms-2 text-indigo-700 underline">{t.resetPassword}</button>
+                <button type="button" onClick={() => resetAccountPassword(row)} className="ms-2 text-indigo-700 underline cursor-pointer">{t.resetPassword}</button>
               </td>
               <td className="px-3 py-3 text-slate-700">{row.email}</td>
               <td className="px-3 py-3 text-slate-700">{row.phone || '—'}</td>
@@ -290,7 +290,7 @@ export const CoursesHub: React.FC<CoursesHubProps> = ({
               <td className="px-3 py-3 text-slate-700">{formatDate(row.createdAt)}</td>
               <td className="px-3 py-3 text-slate-700">
                 <div>{formatDate(row.expiresAt)}</div>
-                <button type="button" onClick={() => void updateAccount(row, { renew: true })} className="mt-1 text-indigo-700 underline">{t.renewMonth}</button>
+                <button type="button" onClick={() => void updateAccount(row, { renew: true })} className="mt-1 text-indigo-700 underline cursor-pointer">{t.renewMonth}</button>
               </td>
               <td className="px-3 py-3">
                 <input
@@ -528,4 +528,82 @@ export const CoursesHub: React.FC<CoursesHubProps> = ({
               <h1 className="text-3xl sm:text-4xl lg:text-5xl font-black tracking-tight text-white leading-tight">
                 {t.heroTitle}
               </h1>
-              <p classNam
+              <p className="text-slate-100 text-sm sm:text-base font-semibold max-w-2xl mx-auto">
+                {t.heroSubtitle}
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={openSharedLiveRoom}
+              className="block w-full text-start bg-slate-950/40 backdrop-blur-md rounded-2xl p-4 sm:p-5 border border-white/20 max-w-2xl mx-auto shadow-lg space-y-1 cursor-pointer transition hover:bg-slate-950/55 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-white"
+            >
+            <div className="flex items-center justify-center gap-2">
+              <Clock className="w-4 h-4 text-amber-300 animate-pulse" />
+              <span className="text-xs font-black text-amber-300 uppercase tracking-wider">
+                {currentLang === 'ar' ? 'غرفة البث المباشر' : currentLang === 'fr' ? 'Salle de diffusion en direct' : 'Live broadcast room'}
+              </span>
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+            </div>
+            <p className="text-sm sm:text-base font-black text-white">
+              {currentLang === 'ar'
+                ? 'افتح غرفة البث المباشر المشتركة لجميع الصفوف'
+                : currentLang === 'fr'
+                  ? 'Ouvrir la salle de diffusion commune à toutes les classes'
+                  : 'Open the shared live room for all grades'}
+            </p>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div className="space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-3 text-start">
+          <div>
+            <h3 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight flex items-center gap-2">
+              <GraduationCap className="w-6 h-6 text-indigo-600" />
+              <span>{currentLang === 'ar' ? 'اختر الصف الأكاديمي' : 'Select Grade Level'}</span>
+            </h3>
+            <p className="text-xs text-slate-500 font-medium mt-0.5">
+              {currentLang === 'ar'
+                ? 'انقر على الصف لعرض موارده التعليمية وغرفة البث المباشر'
+                : currentLang === 'fr'
+                  ? 'Sélectionnez une classe pour consulter ses ressources et le direct'
+                  : 'Select a grade to browse its learning resources and live room'}
+            </p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2.5">
+          {LEBANESE_GRADE_LEVELS.map(grade => (
+            <button
+              key={grade.id}
+              onClick={() => {
+                setActiveGradeTab('stored');
+                setActiveGradeForSessions(grade);
+              }}
+              className="p-3 rounded-2xl text-start transition-all cursor-pointer border bg-white hover:bg-indigo-50/70 hover:border-indigo-400 text-slate-800 shadow-2xs hover:shadow-md hover:shadow-indigo-200"
+            >
+              <div className="flex items-center justify-between gap-1 mb-1.5">
+                <span className="text-[10px] font-black px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 group-hover:bg-indigo-600 group-hover:text-white transition">
+                  {grade.badge}
+                </span>
+                {isRTL ? (
+                  <ChevronLeft className="w-3.5 h-3.5 text-slate-400 group-hover:text-indigo-600 group-hover:-translate-x-0.5 transition-transform" />
+                ) : (
+                  <ChevronRight className="w-3.5 h-3.5 text-slate-400 group-hover:text-indigo-600 group-hover:translate-x-0.5 transition-transform" />
+                )}
+              </div>
+              <h4 className="font-black text-xs leading-tight line-clamp-1 group-hover:text-indigo-900">
+                {grade.name[currentLang]}
+              </h4>
+              <span className="text-[9px] block mt-1 font-semibold text-slate-400 group-hover:text-indigo-600">
+                {grade.cycle[currentLang]}
+              </span>
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+};
