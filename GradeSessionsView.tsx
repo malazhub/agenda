@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Language, GradeLevelDef } from '../types';
 import { translations } from '../translations';
 import { getGradeSessions } from '../services/cloudflareApi';
@@ -7,19 +7,16 @@ import {
   ArrowLeft, 
   ArrowRight, 
   Video, 
-  VideoOff,
   FileText, 
   ExternalLink, 
   RefreshCw, 
   Lock, 
   Maximize2, 
-  Minimize, 
-  Mic, 
-  MicOff, 
   Users, 
   Clock, 
   Radio,
-  CheckCircle2
+  CheckCircle2,
+  PhoneOff
 } from 'lucide-react';
 
 interface GradeSessionsViewProps {
@@ -94,14 +91,6 @@ export const GradeSessionsView: React.FC<GradeSessionsViewProps> = ({
   const [activeCallSession, setActiveCallSession] = useState<any>(null);
   const [timeLeft, setTimeLeft] = useState(45 * 60); // 45-minute countdown timer
   const [timerRunning, setTimerRunning] = useState(false);
-  const [isMicOn, setIsMicOn] = useState(true);
-  const [isVideoOn, setIsVideoOn] = useState(true);
-  const [hasCameraActive, setHasCameraActive] = useState(false);
-  const [cameraLoading, setCameraLoading] = useState(false);
-  const [isFullscreen, setIsFullscreen] = useState(false);
-  const containerRef = useRef<HTMLDivElement>(null);
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const localStreamRef = useRef<MediaStream | null>(null);
 
   // Dynamic live sessions list for this grade
   const [liveSessionsList, setLiveSessionsList] = useState<Array<{
@@ -112,7 +101,6 @@ export const GradeSessionsView: React.FC<GradeSessionsViewProps> = ({
     isLive: boolean;
   }>>([]);
 
-  // Load live sessions from Director's saved sessions + educator's session
   const loadLiveSessions = () => {
     let list: any[] = [];
     try {
@@ -149,14 +137,14 @@ export const GradeSessionsView: React.FC<GradeSessionsViewProps> = ({
     if (list.length === 0) {
       list = [
         {
-          id: `sess_1_${selectedGrade.id}`,
+          id: `sess_malaz_${selectedGrade.id}`,
           grade: selectedGrade.name[currentLang],
           educatorName: 'Prof. Malaz',
           subject: 'Mathematics',
           isLive: true,
         },
         {
-          id: `sess_2_${selectedGrade.id}`,
+          id: `sess_jad_${selectedGrade.id}`,
           grade: selectedGrade.name[currentLang],
           educatorName: 'Prof. Jad Khoury',
           subject: 'Physics',
@@ -203,103 +191,12 @@ export const GradeSessionsView: React.FC<GradeSessionsViewProps> = ({
     return () => clearInterval(interval);
   }, [timerRunning, timeLeft]);
 
-  // ACTIVATE CAMERA WITH ROBUST FALLBACK
-  const requestCameraAccess = async () => {
-    setCameraLoading(true);
-    try {
-      let stream: MediaStream | null = null;
-      try {
-        stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } },
-          audio: true
-        });
-      } catch {
-        // Fallback to video only if microphone is busy or not allowed
-        stream = await navigator.mediaDevices.getUserMedia({
-          video: true,
-          audio: false
-        });
-      }
-
-      localStreamRef.current = stream;
-      setHasCameraActive(true);
-      setIsVideoOn(true);
-
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        videoRef.current.muted = true; // Required by browsers to autoplay local video
-        videoRef.current.onloadedmetadata = () => {
-          videoRef.current?.play().catch(() => {});
-        };
-        await videoRef.current.play().catch(() => {});
-      }
-    } catch (err) {
-      console.warn("Camera access failed or permission denied:", err);
-      setHasCameraActive(false);
-    } finally {
-      setCameraLoading(false);
-    }
-  };
-
-  // Toggle Video Camera On / Off
-  const toggleVideo = () => {
-    if (localStreamRef.current) {
-      const tracks = localStreamRef.current.getVideoTracks();
-      if (tracks.length > 0) {
-        const nextState = !isVideoOn;
-        tracks.forEach(track => { track.enabled = nextState; });
-        setIsVideoOn(nextState);
-      } else {
-        void requestCameraAccess();
-      }
-    } else {
-      void requestCameraAccess();
-    }
-  };
-
-  // Automatically request camera when entering live conference
-  useEffect(() => {
-    if (inLiveConference) {
-      void requestCameraAccess();
-    } else {
-      if (localStreamRef.current) {
-        localStreamRef.current.getTracks().forEach(t => t.stop());
-        localStreamRef.current = null;
-      }
-      setHasCameraActive(false);
-    }
-    return () => {
-      if (localStreamRef.current) {
-        localStreamRef.current.getTracks().forEach(t => t.stop());
-      }
-    };
-  }, [inLiveConference]);
-
-  // Mic track mute/unmute
-  useEffect(() => {
-    if (localStreamRef.current) {
-      localStreamRef.current.getAudioTracks().forEach(track => {
-        track.enabled = isMicOn;
-      });
-    }
-  }, [isMicOn]);
-
   const formatTimer = (secs: number) => {
     const m = Math.floor(secs / 60).toString().padStart(2, '0');
     const s = (secs % 60).toString().padStart(2, '0');
     return `${m}:${s}`;
   };
 
-  const toggleFullscreen = () => {
-    if (!containerRef.current) return;
-    if (!document.fullscreenElement) {
-      containerRef.current.requestFullscreen().then(() => setIsFullscreen(true)).catch(() => {});
-    } else {
-      document.exitFullscreen().then(() => setIsFullscreen(false)).catch(() => {});
-    }
-  };
-
-  // Launch live conference call
   const startLiveCall = (session: any) => {
     setActiveCallSession(session);
     setInLiveConference(true);
@@ -311,10 +208,6 @@ export const GradeSessionsView: React.FC<GradeSessionsViewProps> = ({
   };
 
   const endLiveCall = () => {
-    if (localStreamRef.current) {
-      localStreamRef.current.getTracks().forEach(track => track.stop());
-      localStreamRef.current = null;
-    }
     setInLiveConference(false);
     setTimerRunning(false);
     setTimeLeft(45 * 60);
@@ -344,8 +237,8 @@ export const GradeSessionsView: React.FC<GradeSessionsViewProps> = ({
     if (!isSignedIn) {
       alert(
         currentLang === 'ar'
-          ? 'يجب تسجيل الدخول أولاً بحساب طالب مسجل ومفعّل للانضمام إلى الحصة المباشرة.'
-          : 'Access Denied: You must sign in with a registered student account to join.'
+          ? 'يجب تسجيل الدخول أولاً بحساب طالب للانضمام إلى الحصة المباشرة.'
+          : 'Access Denied: Please sign in with your student account to join.'
       );
       return;
     }
@@ -353,8 +246,8 @@ export const GradeSessionsView: React.FC<GradeSessionsViewProps> = ({
     if (!isPaidAndActivated) {
       alert(
         currentLang === 'ar'
-          ? 'لا يمكنك الدخول! يجب أن يكون حسابك مفعلاً ومدفوعاً من قِبل الإدارة للانضمام إلى الحصة المباشرة.'
-          : 'Access Denied: Only active and paid accounts can join the live session. Please wait for payment activation.'
+          ? 'لا يمكنك الدخول! يجب أن يكون حسابك مفعلاً ومدفوعاً من قِبل الإدارة.'
+          : 'Access Denied: Your account is pending activation by the Director.'
       );
       return;
     }
@@ -375,7 +268,7 @@ export const GradeSessionsView: React.FC<GradeSessionsViewProps> = ({
   // Educator opens the live room
   const handleEducatorOpenRoom = (session: any) => {
     if (!isSignedIn) {
-      alert(currentLang === 'ar' ? 'يجب تسجيل الدخول كأستاذ لفتح البث المباشر.' : 'Please sign in with your educator account to open the live session.');
+      alert(currentLang === 'ar' ? 'يجب تسجيل الدخول كأستاذ لفتح البث المباشر.' : 'Please sign in with your educator account.');
       return;
     }
     startLiveCall(session);
@@ -387,23 +280,23 @@ export const GradeSessionsView: React.FC<GradeSessionsViewProps> = ({
     window.open(url, '_blank', 'noopener,noreferrer');
   };
 
-  // Real attendees list only (Zero hardcoded mock names)
-  const realAttendees: Array<{ id: string; name: string; isLive: boolean }> = [];
-  if (!isEducator && isSignedIn) {
-    realAttendees.push({
-      id: registeredAccount?.id || 'current_user',
-      name: registeredAccount?.fullName || 'You (Student)',
-      isLive: true,
-    });
-  }
+  // Unique Room Name for this class
+  const liveRoomName = activeCallSession 
+    ? `Agenda-${cleanText(selectedGrade.id)}-${cleanText(activeCallSession.educatorName)}`
+    : `Agenda-Classroom-${cleanText(selectedGrade.id)}`;
+
+  const currentParticipantName = isEducator
+    ? `${educatorName} (Teacher)`
+    : `${registeredAccount?.fullName || 'Bilal'} (Student)`;
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-300 text-start" ref={containerRef}>
+    <div className="space-y-6 animate-in fade-in duration-300 text-start">
       
-      {/* IN-CALL VIDEO CLASSROOM VIEW */}
+      {/* REAL 2-DEVICE LIVE VIDEO CLASSROOM (Malaz & Bilal connect live across devices) */}
       {inLiveConference && activeCallSession ? (
-        <div className="bg-slate-900 rounded-3xl overflow-hidden shadow-2xl flex flex-col h-[82vh] text-white">
-          <div className="px-6 py-4 bg-slate-800/90 backdrop-blur-md flex flex-wrap items-center justify-between border-b border-slate-700 gap-3">
+        <div className="bg-slate-900 rounded-3xl overflow-hidden shadow-2xl flex flex-col h-[88vh] text-white">
+          {/* Top Bar: Timer, Info, Leave Button */}
+          <div className="px-6 py-3.5 bg-slate-800/95 backdrop-blur-md flex flex-wrap items-center justify-between border-b border-slate-700 gap-3">
             <div className="flex items-center gap-3">
               <button
                 type="button"
@@ -411,11 +304,11 @@ export const GradeSessionsView: React.FC<GradeSessionsViewProps> = ({
                   endLiveCall();
                   onBack();
                 }}
-                className="flex items-center gap-1.5 bg-slate-700 hover:bg-slate-600 text-slate-200 hover:text-white font-bold px-3 py-1.5 rounded-xl transition cursor-pointer text-xs shadow-xs"
-                title={currentLang === 'ar' ? 'العودة للشاشة الرئيسية' : 'Back to Main Screen'}
+                className="flex items-center gap-1.5 bg-slate-700 hover:bg-slate-600 text-slate-200 hover:text-white font-bold px-3 py-1.5 rounded-xl transition cursor-pointer text-xs"
+                title="Back"
               >
                 {isRTL ? <ArrowRight className="w-4 h-4" /> : <ArrowLeft className="w-4 h-4" />}
-                <span>{currentLang === 'ar' ? 'الرئيسية' : 'Main Screen'}</span>
+                <span>{currentLang === 'ar' ? 'الرئيسية' : 'Main'}</span>
               </button>
 
               <span className="flex h-3 w-3 relative">
@@ -430,6 +323,7 @@ export const GradeSessionsView: React.FC<GradeSessionsViewProps> = ({
               </div>
             </div>
 
+            {/* 45-Minute Timer */}
             <div className="flex items-center gap-2 bg-slate-950 px-4 py-2 rounded-xl border border-slate-700 font-mono text-sm text-amber-400 font-black">
               <Clock className="w-4 h-4 text-amber-400" />
               <span>{formatTimer(timeLeft)}</span>
@@ -438,138 +332,35 @@ export const GradeSessionsView: React.FC<GradeSessionsViewProps> = ({
             <div className="flex items-center gap-2">
               <button
                 type="button"
-                onClick={toggleFullscreen}
-                className="p-2.5 rounded-xl bg-slate-700 hover:bg-slate-600 transition text-slate-200 cursor-pointer"
-                title="Full Screen"
-              >
-                {isFullscreen ? <Minimize className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
-              </button>
-
-              <button
-                type="button"
                 onClick={endLiveCall}
-                className="bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs px-4 py-2 rounded-xl transition cursor-pointer"
+                className="bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs px-4 py-2 rounded-xl transition cursor-pointer flex items-center gap-1.5 shadow-md"
               >
-                {t.endSession}
+                <PhoneOff className="w-4 h-4" />
+                <span>{t.endSession}</span>
               </button>
             </div>
           </div>
 
-          {/* Video Stage Full Width on Top, Attendance Placed Directly BELOW the Video */}
-          <div className="flex-1 flex flex-col overflow-y-auto">
-            {/* Live Video Stage */}
-            <div className="w-full bg-slate-950 flex items-center justify-center relative p-3 min-h-[50vh] sm:min-h-[58vh] rounded-2xl overflow-hidden border border-slate-800">
-              <video
-                ref={videoRef}
-                autoPlay
-                playsInline
-                muted
-                className={`w-full h-full max-h-[58vh] object-contain rounded-2xl bg-black transition duration-300 ${
-                  hasCameraActive && isVideoOn ? 'opacity-100' : 'opacity-0'
-                }`}
-              />
+          {/* WebRTC Video Room: Real bidirectional video/audio between Teacher & Student */}
+          <div className="flex-1 w-full bg-black relative">
+            <iframe
+              src={`https://meet.jit.si/${liveRoomName}#userInfo.displayName="${encodeURIComponent(currentParticipantName)}"&config.prejoinPageEnabled=false&config.startWithAudioMuted=false&config.startWithVideoMuted=false&config.disableDeepLinking=true`}
+              allow="camera; microphone; fullscreen; display-capture; autoplay"
+              className="w-full h-full border-0"
+              title="Live Classroom Video Call"
+            />
+          </div>
 
-              {/* Status Badge when camera is live */}
-              {hasCameraActive && isVideoOn && (
-                <div className="absolute top-5 right-5 bg-black/60 backdrop-blur-md px-3 py-1.5 rounded-xl text-xs font-bold text-emerald-400 flex items-center gap-2 border border-emerald-500/30">
-                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
-                  <span>{currentLang === 'ar' ? 'البث المباشر نشط (1080p HD)' : 'Live Video Stream Active (HD)'}</span>
-                </div>
-              )}
-
-              {/* One-Click Button to Turn On Video Camera if not active */}
-              {(!hasCameraActive || !isVideoOn) && (
-                <div className="absolute inset-0 flex flex-col items-center justify-center p-6 text-center space-y-3 bg-slate-950/90 backdrop-blur-xs">
-                  <div className="w-16 h-16 rounded-full bg-slate-800 border-2 border-slate-700 flex items-center justify-center text-slate-400">
-                    <Video className="w-8 h-8 text-indigo-400" />
-                  </div>
-                  <div className="space-y-1">
-                    <h4 className="text-sm sm:text-base font-black text-white">
-                      {currentLang === 'ar' ? 'الكاميرا المباشرة غير مفعلة' : 'Live Camera Video is Disabled'}
-                    </h4>
-                    <p className="text-xs text-slate-400 max-w-sm">
-                      {currentLang === 'ar'
-                        ? 'اضغط على الزر أدناه لتشغيل الكاميرا والميكروفون فوراً والانضمام بالفيديو'
-                        : 'Click the button below to turn on your camera and microphone to start the live video'}
-                    </p>
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={() => void requestCameraAccess()}
-                    disabled={cameraLoading}
-                    className="bg-indigo-600 hover:bg-indigo-700 text-white font-black px-6 py-3 rounded-2xl transition cursor-pointer text-xs sm:text-sm shadow-xl flex items-center gap-2 transform hover:scale-105 active:scale-95"
-                  >
-                    <Video className="w-4 h-4 text-white" />
-                    <span>
-                      {cameraLoading
-                        ? (currentLang === 'ar' ? 'جارٍ تشغيل الكاميرا...' : 'Connecting to camera...')
-                        : (currentLang === 'ar' ? 'تشغيل الكاميرا الآن (Enable Video)' : 'Turn On Live Camera Now')}
-                    </span>
-                  </button>
-                </div>
-              )}
-
-              {/* User Name Badge on Video */}
-              <div className="absolute bottom-5 left-5 bg-black/70 backdrop-blur-md px-3 py-1.5 rounded-xl text-xs font-bold text-white flex items-center gap-2 border border-white/10">
-                <span className={`w-2 h-2 rounded-full ${hasCameraActive && isVideoOn ? 'bg-emerald-400 animate-pulse' : 'bg-slate-400'}`} />
-                <span>
-                  {isEducator ? `${educatorName} (Educator)` : `${registeredAccount?.fullName || 'Student'} (Live)`}
-                </span>
-              </div>
+          {/* Real Live Attendance Bar Below the Video */}
+          <div className="bg-slate-800 px-6 py-3 border-t border-slate-700 flex flex-wrap items-center justify-between text-xs text-slate-300">
+            <div className="flex items-center gap-2">
+              <Users className="w-4 h-4 text-indigo-400" />
+              <span className="font-bold">{currentLang === 'ar' ? 'أنت متصل الآن في الغرفة:' : 'Connected in Room:'}</span>
+              <span className="text-emerald-400 font-semibold">{currentParticipantName}</span>
             </div>
-
-            {/* Student Attendance Section BELOW the Video Call (Zero hardcoded names) */}
-            <div className="w-full bg-slate-800 p-4 border-t border-slate-700">
-              <div className="flex flex-wrap items-center justify-between pb-3 border-b border-slate-700 gap-2">
-                <div className="flex items-center gap-2 text-xs font-black uppercase text-slate-300">
-                  <Users className="w-4 h-4 text-indigo-400" />
-                  <span>{currentLang === 'ar' ? 'حضور طلاب الصف المشاركين في الحصة:' : 'Student Attendance in This Live Class:'}</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-[11px] font-bold bg-emerald-500/20 text-emerald-400 px-2.5 py-0.5 rounded-full border border-emerald-500/30">
-                    {currentLang === 'ar' ? `${realAttendees.length} متصلون الآن` : `${realAttendees.length} Live Online`}
-                  </span>
-
-                  {/* Camera Toggle Button */}
-                  <button
-                    type="button"
-                    onClick={toggleVideo}
-                    className={`p-2 rounded-xl transition cursor-pointer ${isVideoOn ? 'bg-slate-700 text-slate-200' : 'bg-rose-600 text-white'}`}
-                    title={isVideoOn ? 'Turn Video Off' : 'Turn Video On'}
-                  >
-                    {isVideoOn ? <Video className="w-4 h-4" /> : <VideoOff className="w-4 h-4" />}
-                  </button>
-
-                  {/* Mic Toggle Button */}
-                  <button
-                    type="button"
-                    onClick={() => setIsMicOn(!isMicOn)}
-                    className={`p-2 rounded-xl transition cursor-pointer ${isMicOn ? 'bg-slate-700 text-slate-200' : 'bg-rose-600 text-white'}`}
-                    title={isMicOn ? 'Mute Mic' : 'Unmute Mic'}
-                  >
-                    {isMicOn ? <Mic className="w-4 h-4" /> : <MicOff className="w-4 h-4" />}
-                  </button>
-                </div>
-              </div>
-
-              {/* Dynamic Real Attendees Only */}
-              {realAttendees.length === 0 ? (
-                <div className="p-4 text-center text-xs text-slate-400 font-semibold">
-                  {currentLang === 'ar' 
-                    ? 'لا يوجد طلاب متصلون حالياً في هذه الحصة المباشرة. في انتظار انضمام الطلاب...'
-                    : 'No students currently connected to this live room. Waiting for students to join...'}
-                </div>
-              ) : (
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2.5 mt-3 text-xs">
-                  {realAttendees.map((st) => (
-                    <div key={st.id} className="flex items-center justify-between p-2.5 rounded-xl bg-slate-700/60 border border-slate-600/40">
-                      <span className="font-semibold text-slate-200 truncate">{st.name}</span>
-                      <span className="text-[10px] text-emerald-400 font-bold bg-emerald-950/60 px-2 py-0.5 rounded-md">● Live</span>
-                    </div>
-                  ))}
-                </div>
-              )}
+            <div className="flex items-center gap-2 text-[11px] text-slate-400">
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+              <span>{currentLang === 'ar' ? 'الاتصال المباشر بالصوت والصورة نشط بين الأستاذ والطلاب' : 'Live two-way video & audio is active'}</span>
             </div>
           </div>
         </div>
@@ -593,7 +384,7 @@ export const GradeSessionsView: React.FC<GradeSessionsViewProps> = ({
                     {selectedGrade.cycle[currentLang]}
                   </span>
                   <span className="text-xs font-bold text-slate-500">
-                    {currentLang === 'ar' ? 'منهاج رسمي لبناني معتمد' : currentLang === 'fr' ? 'Programme officiel libanais' : 'Certified Official Curriculum'}
+                    {currentLang === 'ar' ? 'منهاج رسمي لبناني معتمد' : 'Certified Official Curriculum'}
                   </span>
                 </div>
                 <h2 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
@@ -611,7 +402,7 @@ export const GradeSessionsView: React.FC<GradeSessionsViewProps> = ({
                 }`}
               >
                 <FileText className="w-4 h-4" />
-                <span>{currentLang === 'ar' ? 'الموارد التعليمية' : currentLang === 'fr' ? 'Ressources pédagogiques' : 'Learning resources'}</span>
+                <span>{currentLang === 'ar' ? 'الموارد التعليمية' : 'Learning resources'}</span>
               </button>
 
               <button
@@ -623,7 +414,7 @@ export const GradeSessionsView: React.FC<GradeSessionsViewProps> = ({
               >
                 <span className="w-2 h-2 rounded-full bg-rose-400 animate-ping inline-block" />
                 <Video className="w-4 h-4" />
-                <span>{currentLang === 'ar' ? 'الحصص المباشرة' : currentLang === 'fr' ? 'Sessions en direct' : 'Live Sessions'}</span>
+                <span>{currentLang === 'ar' ? 'الحصص المباشرة' : 'Live Sessions'}</span>
               </button>
             </div>
           </div>
@@ -768,7 +559,7 @@ export const GradeSessionsView: React.FC<GradeSessionsViewProps> = ({
             /* TAB 2: STORED RESOURCES */
             isLoading ? (
               <div className="bg-white rounded-3xl border border-slate-200 p-10 text-center text-slate-500 text-sm">
-                {currentLang === 'ar' ? 'جارٍ تحميل الحصص...' : currentLang === 'fr' ? 'Chargement des sessions...' : 'Loading sessions...'}
+                {currentLang === 'ar' ? 'جارٍ تحميل الحصص...' : 'Loading sessions...'}
               </div>
             ) : error ? (
               <div role="alert" className="bg-white rounded-3xl border border-red-200 p-6 text-center space-y-3">
@@ -778,13 +569,13 @@ export const GradeSessionsView: React.FC<GradeSessionsViewProps> = ({
                   className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2 text-xs font-bold text-white cursor-pointer"
                 >
                   <RefreshCw className="w-3.5 h-3.5" />
-                  {currentLang === 'ar' ? 'إعادة المحاولة' : currentLang === 'fr' ? 'Réessayer' : 'Retry'}
+                  {currentLang === 'ar' ? 'إعادة المحاولة' : 'Retry'}
                 </button>
               </div>
             ) : storedSessions.length === 0 ? (
               <div className="bg-white rounded-3xl border border-slate-200 p-10 text-center space-y-2">
                 <p className="text-sm font-bold text-slate-800">
-                  {currentLang === 'ar' ? 'لا توجد حصص محفوظة لهذا الصف حتى الآن.' : currentLang === 'fr' ? 'Aucune session enregistrée pour ce niveau.' : 'No stored sessions are available for this grade yet.'}
+                  {currentLang === 'ar' ? 'لا توجد حصص محفوظة لهذا الصف حتى الآن.' : 'No stored sessions are available for this grade yet.'}
                 </p>
               </div>
             ) : (
