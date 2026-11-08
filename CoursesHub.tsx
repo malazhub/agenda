@@ -5,7 +5,7 @@ import { LEBANESE_GRADE_LEVELS } from '../data/mockGradesAndSessions';
 import { GradeSessionsView } from './GradeSessionsView';
 import { DirectorSessionsPanel } from './DirectorSessionsPanel';
 import { LiveBroadcastHost } from './LiveBroadcastHost';
-import { getDirectorAccounts, getRegistrationSessions, loginAccount, setupLiveStream, updateDirectorAccount } from '../services/cloudflareApi';
+import { getDirectorAccounts, getRegistrationSessions, loginAccount, setupLiveStream, updateDirectorAccount, deleteDirectorAccount } from '../services/cloudflareApi';
 import type { CloudflareAccount, LiveStreamSetup, RegistrationSession } from '../services/cloudflareApi';
 import { 
   getDirectorAccounts, 
