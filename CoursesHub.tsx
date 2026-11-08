@@ -5,16 +5,15 @@ import { LEBANESE_GRADE_LEVELS } from '../data/mockGradesAndSessions';
 import { GradeSessionsView } from './GradeSessionsView';
 import { DirectorSessionsPanel } from './DirectorSessionsPanel';
 import { LiveBroadcastHost } from './LiveBroadcastHost';
-import { getDirectorAccounts, getRegistrationSessions, loginAccount, setupLiveStream, updateDirectorAccount, deleteDirectorAccount } from '../services/cloudflareApi';
-import type { CloudflareAccount, LiveStreamSetup, RegistrationSession } from '../services/cloudflareApi';
 import { 
   getDirectorAccounts, 
   getRegistrationSessions, 
   loginAccount, 
   setupLiveStream, 
   updateDirectorAccount,
-  deleteDirectorAccount // <-- Add this
+  deleteDirectorAccount 
 } from '../services/cloudflareApi';
+import type { CloudflareAccount, LiveStreamSetup, RegistrationSession } from '../services/cloudflareApi';
 import {
   Clock,
   GraduationCap,
@@ -48,6 +47,7 @@ export const CoursesHub: React.FC<CoursesHubProps> = ({
   registeredAccount,
   sessionToken,
   onShowMessage,
+  onEnterLiveClassroom,
 }) => {
   const t = translations[currentLang];
   const isRTL = currentLang === 'ar';
@@ -99,9 +99,8 @@ export const CoursesHub: React.FC<CoursesHubProps> = ({
     Promise.all([getDirectorAccounts(directorToken), getRegistrationSessions()])
       .then(([{ students, educators }, { sessions }]) => {
         if (!active) return;
-        const deletedIds: string[] = JSON.parse(localStorage.getItem('agenda_deleted_account_ids') || '[]');
-        setStudentRows(students.filter((student) => !deletedIds.includes(student.id)));
-        setEducatorRows(educators.filter((educator) => !deletedIds.includes(educator.id)));
+        setStudentRows(students);
+        setEducatorRows(educators);
         setRegistrationSessions(sessions);
       })
       .catch((error) => {
@@ -145,6 +144,33 @@ export const CoursesHub: React.FC<CoursesHubProps> = ({
     }
   };
 
+  // Permanent Delete: Calls Cloudflare Worker to delete the row from D1 database
+  const deleteAccount = async (account: DirectorRow) => {
+    const confirmMessage = currentLang === 'ar'
+      ? `هل أنت متأكد من حذف حساب (${account.fullName}) نهائياً؟ سيتم مسح بياناته من Cloudflare للأبد.`
+      : `Are you sure you want to permanently delete (${account.fullName})? All data will be removed from Cloudflare.`;
+
+    if (!window.confirm(confirmMessage)) return;
+
+    setDirectorDataError('');
+    setDirectorMessage('');
+
+    try {
+      await deleteDirectorAccount(directorToken, account.id);
+
+      const setRows = account.role === 'student' ? setStudentRows : setEducatorRows;
+      setRows((rows) => rows.filter((row) => row.id !== account.id));
+
+      setDirectorMessage(
+        currentLang === 'ar'
+          ? `تم حذف حساب (${account.fullName}) من Cloudflare نهائياً.`
+          : `Account (${account.fullName}) was permanently deleted from Cloudflare.`
+      );
+    } catch (err) {
+      setDirectorDataError(err instanceof Error ? err.message : 'Failed to delete account from Cloudflare.');
+    }
+  };
+
   const resetAccountPassword = (account: DirectorRow) => {
     const password = window.prompt(`${t.resetPassword} — ${account.username}`);
     if (password === null) return;
@@ -155,36 +181,6 @@ export const CoursesHub: React.FC<CoursesHubProps> = ({
     void updateAccount(account, { password });
   };
 
-  const deleteAccount = async (account: DirectorRow) => {
-    const confirmMessage = currentLang === 'ar'
-      ? `هل أنت متأكد من حذف حساب (${account.fullName}) نهائياً؟ سيتم مسح كافة بياناته من Cloudflare للأبد.`
-      : `Are you sure you want to permanently delete (${account.fullName})? All data will be removed from Cloudflare.`;
-
-    if (!window.confirm(confirmMessage)) return;
-
-    setDirectorDataError('');
-    setDirectorMessage('');
-
-    try {
-      // 1. Call real Cloudflare Worker API to delete permanently from D1 database
-      await deleteDirectorAccount(directorToken, account.id);
-
-      // 2. Remove permanently from UI state
-      const setRows = account.role === 'student' ? setStudentRows : setEducatorRows;
-      setRows((rows) => rows.filter((row) => row.id !== account.id));
-
-      // 3. Clear local storage records
-      localStorage.removeItem(`account_${account.id}`);
-
-      setDirectorMessage(
-        currentLang === 'ar'
-          ? `تم حذف حساب (${account.fullName}) من Cloudflare D1 نهائياً.`
-          : `Account (${account.fullName}) was permanently deleted from Cloudflare D1.`
-      );
-    } catch (err) {
-      setDirectorDataError(err instanceof Error ? err.message : 'Failed to delete account from Cloudflare.');
-    }
-  };
   const handleStreamSetup = async () => {
     if (!directorToken) return;
     setStreamSetupLoading(true);
@@ -197,8 +193,10 @@ export const CoursesHub: React.FC<CoursesHubProps> = ({
       setStreamSetupLoading(false);
     }
   };
+
+  // Restrict opening "Live Broadcast Room" to registered, active, and paid accounts only
   const openSharedLiveRoom = () => {
-    // 1. Must be signed in
+    // 1. Must be registered and signed in
     if (!registeredAccount || !sessionToken) {
       onShowMessage(
         currentLang === 'ar'
@@ -312,11 +310,10 @@ export const CoursesHub: React.FC<CoursesHubProps> = ({
                   className="w-4 h-4 accent-indigo-600 cursor-pointer"
                 />
               </td>
-              {/* Delete Button column for each student or educator */}
               <td className="px-3 py-3 text-center">
                 <button
                   type="button"
-                  onClick={() => deleteAccount(row)}
+                  onClick={() => void deleteAccount(row)}
                   className="inline-flex items-center gap-1 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 px-2.5 py-1.5 text-[11px] font-black transition cursor-pointer border border-rose-200 shadow-2xs"
                   title={t.delete}
                 >
@@ -350,6 +347,7 @@ export const CoursesHub: React.FC<CoursesHubProps> = ({
           setActiveGradeForSessions(null);
           setActiveGradeTab('stored');
         }}
+        onEnterLiveClassroom={onEnterLiveClassroom}
       />
     );
   }
@@ -374,7 +372,7 @@ export const CoursesHub: React.FC<CoursesHubProps> = ({
 
           <button
             onClick={returnToMain}
-            className="text-slate-500 hover:text-slate-800 text-xs font-bold"
+            className="text-slate-500 hover:text-slate-800 text-xs font-bold cursor-pointer"
           >
             {t.backToMain}
           </button>
@@ -464,17 +462,17 @@ export const CoursesHub: React.FC<CoursesHubProps> = ({
 
           <button
             onClick={returnToMain}
-            className="text-slate-600 hover:text-slate-800 text-xs font-bold"
+            className="text-slate-600 hover:text-slate-800 text-xs font-bold cursor-pointer"
           >
             {t.backToMain}
           </button>
         </div>
 
         <div className="flex flex-wrap gap-2">
-          <button type="button" onClick={() => setDirectorTab('accounts')} className={`rounded-xl px-4 py-2 text-xs font-black ${directorTab === 'accounts' ? 'bg-indigo-700 text-white' : 'bg-white text-slate-700 border border-slate-200'}`}>
+          <button type="button" onClick={() => setDirectorTab('accounts')} className={`rounded-xl px-4 py-2 text-xs font-black cursor-pointer ${directorTab === 'accounts' ? 'bg-indigo-700 text-white' : 'bg-white text-slate-700 border border-slate-200'}`}>
             {currentLang === 'ar' ? 'الحسابات' : currentLang === 'fr' ? 'Comptes' : 'Accounts'}
           </button>
-          <button type="button" onClick={() => setDirectorTab('sessions')} className={`rounded-xl px-4 py-2 text-xs font-black ${directorTab === 'sessions' ? 'bg-indigo-700 text-white' : 'bg-white text-slate-700 border border-slate-200'}`}>
+          <button type="button" onClick={() => setDirectorTab('sessions')} className={`rounded-xl px-4 py-2 text-xs font-black cursor-pointer ${directorTab === 'sessions' ? 'bg-indigo-700 text-white' : 'bg-white text-slate-700 border border-slate-200'}`}>
             {t.sessionsTab}
           </button>
         </div>
@@ -482,7 +480,7 @@ export const CoursesHub: React.FC<CoursesHubProps> = ({
         <section className="rounded-2xl border border-rose-200 bg-white p-4 space-y-3">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <h3 className="font-black text-slate-900">{t.liveBroadcast}</h3>
-            <button type="button" onClick={() => void handleStreamSetup()} disabled={streamSetupLoading} className="rounded-xl bg-rose-600 px-4 py-2 text-xs font-black text-white disabled:opacity-60">
+            <button type="button" onClick={() => void handleStreamSetup()} disabled={streamSetupLoading} className="rounded-xl bg-rose-600 px-4 py-2 text-xs font-black text-white disabled:opacity-60 cursor-pointer">
               {streamSetupLoading ? '…' : t.setupLiveBroadcast}
             </button>
           </div>
@@ -530,82 +528,4 @@ export const CoursesHub: React.FC<CoursesHubProps> = ({
               <h1 className="text-3xl sm:text-4xl lg:text-5xl font-black tracking-tight text-white leading-tight">
                 {t.heroTitle}
               </h1>
-              <p className="text-slate-100 text-sm sm:text-base font-semibold max-w-2xl mx-auto">
-                {t.heroSubtitle}
-              </p>
-            </div>
-
-            <button
-              type="button"
-              onClick={openSharedLiveRoom}
-              className="block w-full text-start bg-slate-950/40 backdrop-blur-md rounded-2xl p-4 sm:p-5 border border-white/20 max-w-2xl mx-auto shadow-lg space-y-1 cursor-pointer transition hover:bg-slate-950/55 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-white"
-            >
-            <div className="flex items-center justify-center gap-2">
-              <Clock className="w-4 h-4 text-amber-300 animate-pulse" />
-              <span className="text-xs font-black text-amber-300 uppercase tracking-wider">
-                {currentLang === 'ar' ? 'غرفة البث المباشر' : currentLang === 'fr' ? 'Salle de diffusion en direct' : 'Live broadcast room'}
-              </span>
-              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
-            </div>
-            <p className="text-sm sm:text-base font-black text-white">
-              {currentLang === 'ar'
-                ? 'افتح غرفة البث المباشر المشتركة لجميع الصفوف'
-                : currentLang === 'fr'
-                  ? 'Ouvrir la salle de diffusion commune à toutes les classes'
-                  : 'Open the shared live room for all grades'}
-            </p>
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <div className="space-y-4">
-        <div className="flex flex-wrap items-center justify-between gap-3 text-start">
-          <div>
-            <h3 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight flex items-center gap-2">
-              <GraduationCap className="w-6 h-6 text-indigo-600" />
-              <span>{currentLang === 'ar' ? 'اختر الصف الأكاديمي' : 'Select Grade Level'}</span>
-            </h3>
-            <p className="text-xs text-slate-500 font-medium mt-0.5">
-              {currentLang === 'ar'
-                ? 'انقر على الصف لعرض موارده التعليمية وغرفة البث المباشر'
-                : currentLang === 'fr'
-                  ? 'Sélectionnez une classe pour consulter ses ressources et le direct'
-                  : 'Select a grade to browse its learning resources and live room'}
-            </p>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2.5">
-          {LEBANESE_GRADE_LEVELS.map(grade => (
-            <button
-              key={grade.id}
-              onClick={() => {
-                setActiveGradeTab('stored');
-                setActiveGradeForSessions(grade);
-              }}
-              className="p-3 rounded-2xl text-start transition-all cursor-pointer border bg-white hover:bg-indigo-50/70 hover:border-indigo-400 text-slate-800 shadow-2xs hover:shadow-md hover:shadow-indigo-200"
-            >
-              <div className="flex items-center justify-between gap-1 mb-1.5">
-                <span className="text-[10px] font-black px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 group-hover:bg-indigo-600 group-hover:text-white transition">
-                  {grade.badge}
-                </span>
-                {isRTL ? (
-                  <ChevronLeft className="w-3.5 h-3.5 text-slate-400 group-hover:text-indigo-600 group-hover:-translate-x-0.5 transition-transform" />
-                ) : (
-                  <ChevronRight className="w-3.5 h-3.5 text-slate-400 group-hover:text-indigo-600 group-hover:translate-x-0.5 transition-transform" />
-                )}
-              </div>
-              <h4 className="font-black text-xs leading-tight line-clamp-1 group-hover:text-indigo-900">
-                {grade.name[currentLang]}
-              </h4>
-              <span className="text-[9px] block mt-1 font-semibold text-slate-400 group-hover:text-indigo-600">
-                {grade.cycle[currentLang]}
-              </span>
-            </button>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-};
+              <p classNam
