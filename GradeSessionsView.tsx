@@ -618,21 +618,58 @@ export const GradeSessionsView: React.FC<GradeSessionsViewProps> = ({
                 </div>
               )}
 
-              {/* Educator Heading */}
+                            {/* CLICKABLE EDUCATOR START LIVE SESSION */}
               {isEducator && (
-                <div className="bg-slate-900 text-white rounded-3xl p-5 border border-slate-800 flex flex-wrap items-center justify-between gap-3 shadow-md">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const mySession = liveSessionsList.find((session) => {
+                      const sessionEducator = cleanText(session.educatorName);
+                      const currentEducator = cleanText(educatorName);
+
+                      return (
+                        sessionEducator === currentEducator ||
+                        sessionEducator.includes(currentEducator) ||
+                        currentEducator.includes(sessionEducator)
+                      );
+                    });
+
+                    if (!mySession) {
+                      alert(
+                        currentLang === 'ar'
+                          ? 'لم يتم العثور على حصة مباشرة خاصة بك. يرجى التأكد من إنشاء حصتك من لوحة الإدارة أولاً.'
+                          : 'Your live session was not found. Please make sure your live session has been created in the Director Dashboard first.'
+                      );
+                      return;
+                    }
+
+                    handleEducatorOpenRoom(mySession);
+                  }}
+                  className="w-full text-start bg-slate-900 hover:bg-indigo-950 text-white rounded-3xl p-5 border-2 border-slate-800 hover:border-indigo-400 flex flex-wrap items-center justify-between gap-3 shadow-md transition-all cursor-pointer active:scale-[0.99]"
+                >
                   <div>
                     <div className="flex items-center gap-2">
-                      <Radio className="w-4 h-4 text-rose-500 animate-pulse" />
+                      <Radio className="w-5 h-5 text-rose-500 animate-pulse" />
+
                       <h3 className="font-black text-base">
-                        {currentLang === 'ar' ? 'بدء الحصة المباشرة' : 'Start Live Session'}
+                        {currentLang === 'ar'
+                          ? 'بدء الحصة المباشرة'
+                          : 'Start Live Session'}
                       </h3>
                     </div>
-                    <p className="text-xs text-slate-400 mt-1">
-                      {currentLang === 'ar' ? `لوحة الأستاذ: افتح حصتك المباشرة لبدء البث في مادة (${educatorSubject})` : `Educator: Open your live video session for ${educatorSubject}`}
+
+                    <p className="text-xs text-slate-300 mt-2">
+                      {currentLang === 'ar'
+                        ? `اضغط هنا لفتح صفك المباشر وبدء البث في مادة (${educatorSubject})`
+                        : `Click here to open your live classroom and start broadcasting ${educatorSubject}.`}
                     </p>
                   </div>
-                </div>
+
+                  <span className="flex items-center gap-2 bg-rose-600 hover:bg-rose-700 text-white font-black text-xs px-5 py-3 rounded-xl shadow-md">
+                    <Video className="w-4 h-4" />
+                    {currentLang === 'ar' ? 'افتح الحصة الآن' : 'OPEN LIVE CLASS'}
+                  </span>
+                </button>
               )}
 
               {/* Grid of All Live Rooms */}
