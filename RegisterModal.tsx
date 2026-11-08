@@ -49,17 +49,18 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
   const loadOnlyRealRegisteredEducators = () => {
     let list: any[] = [];
 
-    // 1. Pull real educators who registered on the platform
+    // ONLY load educators who actually registered on the platform via the register form
     try {
       const stored = localStorage.getItem('agenda_registered_educators');
       if (stored) {
         const parsed = JSON.parse(stored);
         if (Array.isArray(parsed)) {
-          // Permanently purge any old mock entries from previous browser storage
+          // Permanently purge catalog sessions (dir_edu_) and any old mock entries
           const realOnly = parsed.filter((e: any) => {
-            const n = (e.name || '').toLowerCase();
-            const id = (e.id || '').toLowerCase();
+            const n = String(e.name || '').toLowerCase();
+            const id = String(e.id || '').toLowerCase();
             return (
+              !id.startsWith('dir_edu_') &&
               !id.startsWith('ex_') &&
               !id.startsWith('edu_1') &&
               !id.startsWith('edu_2') &&
@@ -75,30 +76,7 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
       }
     } catch {}
 
-    // 2. Pull real educators added by the Director in the Director panel
-    try {
-      const directorSaved = localStorage.getItem('director_saved_sessions');
-      if (directorSaved) {
-        const parsedSessions = JSON.parse(directorSaved);
-        if (Array.isArray(parsedSessions)) {
-          parsedSessions.forEach((s: any) => {
-            const eduName = (s.title || s.sourceName || '').trim();
-            const isMock = !eduName || eduName.toLowerCase().includes('example') || eduName.toLowerCase().includes('مثال');
-            if (!isMock && !list.some((e: any) => e.name.toLowerCase() === eduName.toLowerCase())) {
-              list.push({
-                id: `dir_edu_${s.id}`,
-                name: eduName,
-                subject: s.subject || 'Academic Subject',
-                gradeId: s.gradeId || '',
-                currentStudents: parseInt(localStorage.getItem(`students_count_${s.id}`) || '0', 10),
-                maxStudents: parseInt(localStorage.getItem(`max_students_${s.id}`) || '25', 10),
-              });
-            }
-          });
-        }
-      }
-    } catch {}
-
+    // DO NOT pull from director_saved_sessions (this removes all 138 catalog sessions)
     return list;
   };
 
