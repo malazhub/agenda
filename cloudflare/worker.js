@@ -446,14 +446,61 @@ async function listSessions(url, env, request) {
   if (!/^[a-z0-9_-]{1,40}$/.test(gradeId)) return json({ error: "A valid gradeId is required." }, 400);
 
   if (liveOnly) {
-    const sessionId = url.searchParams.get("sessionId") || "";
+    if (liveOnly) {
+  const sessionId = url.searchParams.get("sessionId") || "";
+
+  // If a specific session is requested, preserve the existing access check.
+  if (sessionId) {
     const access = await registeredLiveSession(request, env, sessionId);
     if (access.error) return access.error;
+
     if (access.session.grade_id !== gradeId) {
       return json({ error: "Live access is limited to your registered grade." }, 403);
     }
+
     return json({ sessions: [publicSession(access.session)] });
   }
+
+  // Authenticate the student or educator.
+  const claims = await authenticate(request, env, null);
+
+  if (!claims || !["student", "educator"].includes(claims.role)) {
+    return json({ error: "Sign in with an activated student or educator account." }, 401);
+  }
+
+  const account = await env.DB.prepare(
+    "SELECT activated, expires_at, grade_id FROM accounts WHERE id = ?"
+  ).bind(claims.sub).first();
+
+  const expiryTime = account?.expires_at
+    ? Date.parse(`${account.expires_at.replace(" ", "T")}Z`)
+    : null;
+
+  if (
+    !account ||
+    !account.activated ||
+    (expiryTime !== null &&
+      (!Number.isFinite(expiryTime) || expiryTime <= Date.now()))
+  ) {
+    return json({ error: "Your account must be activated and not expired." }, 403);
+  }
+
+  if (account.grade_id !== gradeId) {
+    return json({ error: "Live sessions are limited to your registered grade." }, 403);
+  }
+
+  // Return ALL live sessions for this grade.
+  const result = await env.DB.prepare(
+    `SELECT * FROM sessions
+     WHERE grade_id = ? AND is_live = 1
+     ORDER BY subject, title
+     LIMIT 100`
+  ).bind(gradeId).all();
+
+  return json({
+    sessions: (result.results || []).map(publicSession)
+  });
+}
 
   const query = "SELECT * FROM sessions WHERE grade_id = ? AND is_live = 0 ORDER BY RANDOM() LIMIT 20";
   const result = await env.DB.prepare(query).bind(gradeId).all();
