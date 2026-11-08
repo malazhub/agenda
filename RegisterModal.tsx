@@ -68,7 +68,6 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
       }
     } catch {}
 
-    // Return ONLY verified registered educators - nothing else!
     return realEducators;
   };
 
@@ -80,6 +79,7 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
       setEducatorsList(loadDynamicEducators());
     }
   }, [isOpen]);
+
   const [registrationGrades, setRegistrationGrades] = useState<string[]>([]);
   const [isLoadingGrades, setIsLoadingGrades] = useState(false);
   const [showPayment, setShowPayment] = useState(false);
@@ -154,7 +154,6 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
             maxStudents: 25,
             isExample: false,
           };
-          // Avoid duplicate entries
           if (!currentReal.some((e: any) => e.name.toLowerCase() === newRealEdu.name.toLowerCase())) {
             currentReal.unshift(newRealEdu);
             localStorage.setItem('agenda_registered_educators', JSON.stringify(currentReal));
