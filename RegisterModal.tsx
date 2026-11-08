@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Language } from '../types';
 import { translations } from '../translations';
-import { UserPlus, X, CheckCircle2, CreditCard, ArrowLeft, ArrowRight } from 'lucide-react';
+import { UserPlus, X, CheckCircle2, CreditCard, ArrowLeft, ArrowRight, Eye, EyeOff } from 'lucide-react';
 import { getRegistrationGrades, loginAccount, registerAccount } from '../services/cloudflareApi';
 import type { CloudflareAccount } from '../services/cloudflareApi';
 
@@ -25,6 +25,7 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [schoolOrSubject, setSchoolOrSubject] = useState('');
   const [registeredGradeId, setRegisteredGradeId] = useState('');
   const [selectedEducatorId, setSelectedEducatorId] = useState<string>('');
@@ -301,16 +302,26 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
               <label className="block text-xs font-bold text-slate-700 mb-1">
                 {t.passwordLabel}
               </label>
-              <input
-                type="password"
-                required
-                maxLength={1024}
-                autoComplete={isLogin ? 'current-password' : 'new-password'}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder={t.passwordPlaceholder}
-                className="w-full text-xs p-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:outline-emerald-600 font-medium"
-              />
+              <div className="relative">
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  required
+                  maxLength={1024}
+                  autoComplete={isLogin ? 'current-password' : 'new-password'}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder={t.passwordPlaceholder}
+                  className="w-full text-xs p-2.5 pr-8 bg-slate-50 border border-slate-200 rounded-lg focus:outline-emerald-600 font-medium"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 transition cursor-pointer"
+                  title={showPassword ? 'Hide password' : 'Show password'}
+                >
+                  {showPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                </button>
+              </div>
             </div>
             {!isLogin && <div>
               <label className="block text-xs font-bold text-slate-700 mb-1">
