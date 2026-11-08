@@ -110,63 +110,55 @@ export const GradeSessionsView: React.FC<GradeSessionsViewProps> = ({
     isLive: boolean;
   }>>([]);
 
-  const loadLiveSessions = () => {
-    let list: any[] = [];
-    try {
-      const saved = localStorage.getItem('director_saved_sessions');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) {
-          list = parsed
-            .filter((s: any) => !s.gradeId || s.gradeId.toLowerCase() === selectedGrade.id.toLowerCase())
-            .map((s: any) => ({
-              id: s.id,
-              grade: selectedGrade.name[currentLang],
-              educatorName: s.title || s.sourceName || 'Educator',
-              subject: s.subject || 'Subject',
-              isLive: Boolean(s.isLive),
-            }));
+    useEffect(() => {
+    let active = true;
+
+    const loadLiveSessions = async () => {
+      try {
+        const { sessions } = await getGradeSessions(
+          selectedGrade.id,
+          true,
+          sessionToken
+        );
+
+        if (!active) return;
+
+        const liveSessions = (sessions || [])
+          .filter((session) => session.isLive)
+          .map((session) => ({
+            id: session.id,
+            grade: selectedGrade.name[currentLang],
+            educatorName:
+              session.teacherName ||
+              session.title ||
+              session.sourceName ||
+              'Educator',
+            subject: session.subject || 'Subject',
+            isLive: true,
+          }));
+
+        setLiveSessionsList(liveSessions);
+      } catch (error) {
+        console.error('Failed to load live educator sessions:', error);
+
+        if (active) {
+          setLiveSessionsList([]);
         }
       }
-    } catch {}
+    };
 
-    if (isEducator) {
-      const mySessionIndex = list.findIndex(s => cleanText(s.educatorName) === cleanText(educatorName));
-      if (mySessionIndex === -1) {
-        list.unshift({
-          id: `edu_live_${selectedGrade.id}`,
-          grade: selectedGrade.name[currentLang],
-          educatorName,
-          subject: educatorSubject,
-          isLive: true,
-        });
-      }
-    }
-
-    if (list.length === 0) {
-      list = [
-        {
-          id: `sess_malaz_${selectedGrade.id}`,
-          grade: selectedGrade.name[currentLang],
-          educatorName: 'Prof. Malaz',
-          subject: 'Mathematics',
-          isLive: true,
-        },
-        {
-          id: `sess_jad_${selectedGrade.id}`,
-          grade: selectedGrade.name[currentLang],
-          educatorName: 'Prof. Jad Khoury',
-          subject: 'Physics',
-          isLive: true,
-        }
-      ];
-    }
-    setLiveSessionsList(list);
-  };
-
-  useEffect(() => {
     loadLiveSessions();
-  }, [selectedGrade.id, isEducator, educatorName, reloadKey]);
+
+    return () => {
+      active = false;
+    };
+  }, [
+    selectedGrade.id,
+    selectedGrade.name,
+    currentLang,
+    sessionToken,
+    reloadKey,
+  ]);
 
   // Load stored learning resources
   useEffect(() => {
