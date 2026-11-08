@@ -29,34 +29,65 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
   const [schoolOrSubject, setSchoolOrSubject] = useState('');
   const [registeredGradeId, setRegisteredGradeId] = useState('');
   const [selectedEducatorId, setSelectedEducatorId] = useState<string>('');
+  const [registrationGrades, setRegistrationGrades] = useState<string[]>([]);
+  const [isLoadingGrades, setIsLoadingGrades] = useState(false);
+  const [showPayment, setShowPayment] = useState(false);
+  const [isLogin, setIsLogin] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  // Load ONLY real registered educators (Zero hardcoded names or examples)
-  const loadDynamicEducators = () => {
-    let realEducators: any[] = [];
-    
-    // 1. Pull educators who registered on the platform
+  // Load ONLY real registered educators (Zero hardcoded names, zero mock arrays)
+  const [educatorsList, setEducatorsList] = useState<Array<{
+    id: string;
+    name: string;
+    subject: string;
+    gradeId: string;
+    currentStudents: number;
+    maxStudents: number;
+  }>>([]);
+
+  const loadOnlyRealRegisteredEducators = () => {
+    let list: any[] = [];
+
+    // 1. Pull real educators who registered on the platform
     try {
       const stored = localStorage.getItem('agenda_registered_educators');
       if (stored) {
         const parsed = JSON.parse(stored);
         if (Array.isArray(parsed)) {
-          realEducators = parsed;
+          // Permanently purge any old mock entries from previous browser storage
+          const realOnly = parsed.filter((e: any) => {
+            const n = (e.name || '').toLowerCase();
+            const id = (e.id || '').toLowerCase();
+            return (
+              !id.startsWith('ex_') &&
+              !id.startsWith('edu_1') &&
+              !id.startsWith('edu_2') &&
+              !id.startsWith('edu_3') &&
+              !id.startsWith('edu_4') &&
+              !n.includes('مثال') &&
+              !n.includes('example')
+            );
+          });
+          list = realOnly;
+          localStorage.setItem('agenda_registered_educators', JSON.stringify(realOnly));
         }
       }
     } catch {}
 
-    // 2. Pull educators added and assigned by the Director
+    // 2. Pull real educators added by the Director in the Director panel
     try {
       const directorSaved = localStorage.getItem('director_saved_sessions');
       if (directorSaved) {
         const parsedSessions = JSON.parse(directorSaved);
         if (Array.isArray(parsedSessions)) {
           parsedSessions.forEach((s: any) => {
-            const eduName = s.title || s.sourceName;
-            if (eduName && !realEducators.some(e => e.name.toLowerCase() === eduName.toLowerCase())) {
-              realEducators.push({
+            const eduName = (s.title || s.sourceName || '').trim();
+            const isMock = !eduName || eduName.toLowerCase().includes('example') || eduName.toLowerCase().includes('مثال');
+            if (!isMock && !list.some((e: any) => e.name.toLowerCase() === eduName.toLowerCase())) {
+              list.push({
                 id: `dir_edu_${s.id}`,
-                name: eduName.trim(),
+                name: eduName,
                 subject: s.subject || 'Academic Subject',
                 gradeId: s.gradeId || '',
                 currentStudents: parseInt(localStorage.getItem(`students_count_${s.id}`) || '0', 10),
@@ -68,24 +99,14 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
       }
     } catch {}
 
-    return realEducators;
+    return list;
   };
 
-  const [educatorsList, setEducatorsList] = useState(loadDynamicEducators);
-
-  // Refresh list whenever registration modal opens
   useEffect(() => {
     if (isOpen) {
-      setEducatorsList(loadDynamicEducators());
+      setEducatorsList(loadOnlyRealRegisteredEducators());
     }
   }, [isOpen]);
-
-  const [registrationGrades, setRegistrationGrades] = useState<string[]>([]);
-  const [isLoadingGrades, setIsLoadingGrades] = useState(false);
-  const [showPayment, setShowPayment] = useState(false);
-  const [isLogin, setIsLogin] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -141,7 +162,7 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
         return;
       }
 
-      // If an educator registers, add them to the dynamic list for all students
+      // If a real educator registers, add them to the registered list so students can select them
       if (!isLogin && role === 'educator') {
         try {
           const currentReal = JSON.parse(localStorage.getItem('agenda_registered_educators') || '[]');
@@ -152,7 +173,6 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
             gradeId: registeredGradeId,
             currentStudents: 0,
             maxStudents: 25,
-            isExample: false,
           };
           if (!currentReal.some((e: any) => e.name.toLowerCase() === newRealEdu.name.toLowerCase())) {
             currentReal.unshift(newRealEdu);
@@ -161,7 +181,7 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
         } catch {}
       }
 
-      // If a student registers, save the chosen real educator
+      // If a student registers, link them to the chosen registered educator
       if (!isLogin && role === 'student' && selectedEducatorId) {
         const chosen = educatorsList.find(e => e.id === selectedEducatorId);
         if (chosen) {
@@ -419,24 +439,33 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
             </div>
           )}
 
-          {/* Educator 2-Column Selection Grid for Students (ONLY Real Registered Educators) */}
+          {/* Educator 2-Column Selection Grid for Students (ONLY Real Registered Educators - ZERO Hardcoded Names) */}
           {!isLogin && role === 'student' && (
             <div className="space-y-2 pt-1">
               <div className="flex items-center justify-between">
                 <label className="block text-xs font-bold text-slate-700">
                   {currentLang === 'ar' ? 'اختر الأستاذ المسجل لتعليمك:' : 'Select Your Registered Educator:'}
                 </label>
-                <span className="text-[10px] text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-full font-bold">
-                  {educatorsList.length} {currentLang === 'ar' ? 'أساتذة مسجلون' : 'Registered Educators'}
-                </span>
+                {educatorsList.length > 0 && (
+                  <span className="text-[10px] text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-full font-bold">
+                    {educatorsList.length} {currentLang === 'ar' ? 'أساتذة مسجلون' : 'Registered Educators'}
+                  </span>
+                )}
               </div>
 
               {educatorsList.length === 0 ? (
                 /* Empty state when no educators have registered yet */
-                <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 text-center text-xs text-slate-500 font-semibold">
-                  {currentLang === 'ar'
-                    ? 'لا يوجد أساتذة مسجلون حالياً. سيظهر الأساتذة هنا تلقائياً فور تسجيل حساباتهم.'
-                    : 'No educators registered yet. Registered educators will automatically appear here once their accounts are created.'}
+                <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 text-center text-xs text-slate-500 font-semibold space-y-1">
+                  <p className="font-bold text-slate-700">
+                    {currentLang === 'ar'
+                      ? 'لا يوجد أساتذة مسجلون حالياً.'
+                      : 'No registered educators available yet.'}
+                  </p>
+                  <p className="text-[11px] text-slate-400">
+                    {currentLang === 'ar'
+                      ? 'سيظهر أي أستاذ هنا تلقائياً بمجرد تسجيل حسابه كمعلم.'
+                      : 'Educators will appear here automatically as soon as they register.'}
+                  </p>
                 </div>
               ) : (
                 /* 2-Column Grid showing ONLY real registered educators */
