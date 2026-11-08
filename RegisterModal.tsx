@@ -36,7 +36,7 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Load ONLY real registered educators (Zero hardcoded names, zero mock arrays)
+  // Clean, real educators only (Wipes out the 138 catalog records)
   const [educatorsList, setEducatorsList] = useState<Array<{
     id: string;
     name: string;
@@ -49,34 +49,29 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
   const loadOnlyRealRegisteredEducators = () => {
     let list: any[] = [];
 
-    // ONLY load educators who actually registered on the platform via the register form
+    // Force clear any old catalog sessions that were mistakenly stored
     try {
+      localStorage.removeItem('director_saved_sessions');
+      
       const stored = localStorage.getItem('agenda_registered_educators');
       if (stored) {
         const parsed = JSON.parse(stored);
         if (Array.isArray(parsed)) {
-          // Permanently purge catalog sessions (dir_edu_) and any old mock entries
-          const realOnly = parsed.filter((e: any) => {
+          // Keep only people who registered through the Educator registration form
+          list = parsed.filter((e: any) => {
+            const id = String(e.id || '');
             const n = String(e.name || '').toLowerCase();
-            const id = String(e.id || '').toLowerCase();
             return (
-              !id.startsWith('dir_edu_') &&
-              !id.startsWith('ex_') &&
-              !id.startsWith('edu_1') &&
-              !id.startsWith('edu_2') &&
-              !id.startsWith('edu_3') &&
-              !id.startsWith('edu_4') &&
-              !n.includes('مثال') &&
+              id.startsWith('edu_real_') && 
+              !n.includes('مثال') && 
               !n.includes('example')
             );
           });
-          list = realOnly;
-          localStorage.setItem('agenda_registered_educators', JSON.stringify(realOnly));
+          localStorage.setItem('agenda_registered_educators', JSON.stringify(list));
         }
       }
     } catch {}
 
-    // DO NOT pull from director_saved_sessions (this removes all 138 catalog sessions)
     return list;
   };
 
