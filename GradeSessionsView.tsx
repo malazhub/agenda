@@ -49,7 +49,13 @@ export const GradeSessionsView: React.FC<GradeSessionsViewProps> = ({
   const [reloadKey, setReloadKey] = useState(0);
 
   // Authentication & role detection
+  const expiryTime = registeredAccount?.expiresAt
+    ? Date.parse(`${registeredAccount.expiresAt.replace(' ', 'T').replace(/Z$/, '')}Z`)
+    : null;
+  const accountExpired = expiryTime !== null && (!Number.isFinite(expiryTime) || expiryTime <= Date.now());
   const isSignedIn = Boolean(registeredAccount && sessionToken);
+  const isPaidAndActivated = Boolean(registeredAccount?.activated && !accountExpired);
+
   const isEducator = registeredAccount?.role === 'educator' || localStorage.getItem('registered_account_role') === 'educator';
   const educatorName = registeredAccount?.fullName || localStorage.getItem('registered_educator_name') || 'Prof. Educator';
   const educatorSubject = registeredAccount?.schoolOrSubject || 'Academic Subject';
@@ -62,7 +68,7 @@ export const GradeSessionsView: React.FC<GradeSessionsViewProps> = ({
     '';
   const myRegisteredEducatorId = localStorage.getItem('registered_educator_id') || registeredAccount?.registeredSessionId || '';
 
-  // Helper to normalize educator names for flexible comparison (e.g., "Prof. Malaz" matches "Malaz")
+  // Helper to normalize educator names for flexible comparison
   const cleanText = (str: string) => 
     (str || '')
       .toLowerCase()
@@ -243,12 +249,48 @@ export const GradeSessionsView: React.FC<GradeSessionsViewProps> = ({
         return true;
       }
     }
-    // If no specific educator restriction is set, the student can join the room for their grade
+    // Fallback: if student has no specific educator assigned yet, enable their grade's primary room
     return !myRegisteredEducator && !myRegisteredEducatorId;
   };
 
   // Student's primary assigned session
   const studentPrimarySession = liveSessionsList.find((s, idx) => isStudentSessionMatch(s, idx)) || liveSessionsList[0];
+
+  // Student join validation: Strictly checks Registered, Paid, Active, and Matching Class
+  const handleStudentJoinRoom = (session: any, isMatch: boolean) => {
+    // 1. Must be registered and signed in
+    if (!isSignedIn) {
+      alert(
+        currentLang === 'ar'
+          ? 'يجب تسجيل الدخول أولاً بحساب طالب مسجل ومفعّل للانضمام إلى الحصة المباشرة.'
+          : 'Access Denied: You must sign in with a registered student account to join.'
+      );
+      return;
+    }
+
+    // 2. Must be paid and activated by Director
+    if (!isPaidAndActivated) {
+      alert(
+        currentLang === 'ar'
+          ? 'لا يمكنك الدخول! يجب أن يكون حسابك مفعلاً ومدفوعاً من قِبل الإدارة للانضمام إلى الحصة المباشرة.'
+          : 'Access Denied: Only active and paid accounts can join the live session. Please wait for payment activation.'
+      );
+      return;
+    }
+
+    // 3. Must be enrolled in this specific educator class
+    if (!isMatch) {
+      alert(
+        currentLang === 'ar'
+          ? `لا يمكنك الانضمام! أنت مسجل مع الأستاذ (${myRegisteredEducator || 'أستاذك المعتمد'}). لا يحق لك دخول صف أستاذ آخر.`
+          : `Access Denied: You are registered with ${myRegisteredEducator || 'your assigned educator'}. You cannot join another educator's room.`
+      );
+      return;
+    }
+
+    // All conditions verified -> launch video conference immediately!
+    startLiveCall(session);
+  };
 
   const openSession = (session: StoredSessionRecord) => {
     const s = session as any;
@@ -317,29 +359,46 @@ export const GradeSessionsView: React.FC<GradeSessionsViewProps> = ({
             </div>
           </div>
 
-          <div className="flex-1 flex overflow-hidden">
-            {/* Live Video Call Screen */}
-            <div className="flex-1 bg-black flex items-center justify-center relative p-3">
+          {/* Main Stage: Full-Width Video on Top, Attendance Placed Directly BELOW the Video */}
+          <div className="flex-1 flex flex-col overflow-y-auto">
+            {/* 1. Full-Screen Video Call Area */}
+            <div className="w-full bg-black flex items-center justify-center relative p-3 min-h-[50vh] sm:min-h-[58vh]">
               <video
                 ref={videoRef}
                 autoPlay
                 playsInline
                 muted={isEducator}
-                className="w-full h-full object-contain rounded-2xl bg-slate-950"
+                className="w-full h-full max-h-[58vh] object-contain rounded-2xl bg-slate-950"
               />
               <span className="absolute bottom-5 left-5 bg-black/60 backdrop-blur-xs px-3 py-1 rounded-lg text-xs font-semibold">
                 {isEducator ? `${educatorName} (Educator)` : `${registeredAccount?.fullName || 'Student'} (Live)`}
               </span>
             </div>
 
-            {/* Attendance Sidebar */}
-            <div className="w-64 bg-slate-800 p-4 border-l border-slate-700 flex flex-col">
-              <div className="flex items-center gap-2 pb-3 border-b border-slate-700 text-xs font-black uppercase text-slate-400">
-                <Users className="w-4 h-4 text-indigo-400" />
-                <span>{currentLang === 'ar' ? 'حضور الطلاب' : 'Student Attendance'}</span>
+            {/* 2. Student Attendance Placed Directly BELOW the Video Call */}
+            <div className="w-full bg-slate-800 p-4 border-t border-slate-700">
+              <div className="flex flex-wrap items-center justify-between pb-3 border-b border-slate-700 gap-2">
+                <div className="flex items-center gap-2 text-xs font-black uppercase text-slate-300">
+                  <Users className="w-4 h-4 text-indigo-400" />
+                  <span>{currentLang === 'ar' ? 'حضور طلاب الصف المشاركين في الحصة:' : 'Student Attendance in This Live Class:'}</span>
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className="text-[11px] font-bold bg-emerald-500/20 text-emerald-400 px-2.5 py-0.5 rounded-full border border-emerald-500/30">
+                    {currentLang === 'ar' ? '3 متصلون الآن' : '3 Live Online'}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setIsMicOn(!isMicOn)}
+                    className={`p-2 rounded-xl transition cursor-pointer ${isMicOn ? 'bg-slate-700' : 'bg-rose-600'}`}
+                    title={isMicOn ? 'Mute Mic' : 'Unmute Mic'}
+                  >
+                    {isMicOn ? <Mic className="w-4 h-4" /> : <MicOff className="w-4 h-4" />}
+                  </button>
+                </div>
               </div>
 
-              <div className="space-y-2 mt-3 flex-1 overflow-y-auto text-xs">
+              {/* Attendance Grid below video */}
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2.5 mt-3 text-xs">
                 {[
                   { name: 'Bilal Ahmad', isLive: true },
                   { name: 'كريم منصور', isLive: true },
@@ -347,25 +406,15 @@ export const GradeSessionsView: React.FC<GradeSessionsViewProps> = ({
                   { name: 'Marc Abou-Jaoudé', isLive: true },
                   { name: 'Céline Khater', isLive: false }
                 ].map((st, i) => (
-                  <div key={i} className="flex items-center justify-between p-2 rounded-xl bg-slate-700/50">
-                    <span className="font-semibold text-slate-200">{st.name}</span>
+                  <div key={i} className="flex items-center justify-between p-2.5 rounded-xl bg-slate-700/60 border border-slate-600/40">
+                    <span className="font-semibold text-slate-200 truncate">{st.name}</span>
                     {st.isLive ? (
-                      <span className="text-[10px] text-emerald-400 font-bold">● Live</span>
+                      <span className="text-[10px] text-emerald-400 font-bold bg-emerald-950/60 px-2 py-0.5 rounded-md">● Live</span>
                     ) : (
-                      <span className="text-[10px] text-rose-400">Absent</span>
+                      <span className="text-[10px] text-rose-400 bg-rose-950/40 px-2 py-0.5 rounded-md">Absent</span>
                     )}
                   </div>
                 ))}
-              </div>
-
-              <div className="pt-3 border-t border-slate-700 flex justify-center gap-3">
-                <button
-                  type="button"
-                  onClick={() => setIsMicOn(!isMicOn)}
-                  className={`p-2.5 rounded-xl transition cursor-pointer ${isMicOn ? 'bg-slate-700' : 'bg-rose-600'}`}
-                >
-                  {isMicOn ? <Mic className="w-4 h-4" /> : <MicOff className="w-4 h-4" />}
-                </button>
               </div>
             </div>
           </div>
@@ -431,7 +480,7 @@ export const GradeSessionsView: React.FC<GradeSessionsViewProps> = ({
           {activeTab === 'live' ? (
             <div className="space-y-4">
               
-              {/* 1. STUDENT DIRECT CLICKABLE JOIN CARD (Never static text - 100% Clickable to enter room) */}
+              {/* 1. STUDENT DIRECT CLICKABLE JOIN CARD */}
               {!isEducator && studentPrimarySession && (
                 <div className="bg-linear-to-r from-emerald-950 via-slate-900 to-indigo-950 border-2 border-emerald-400 p-5 rounded-3xl shadow-xl flex flex-wrap items-center justify-between gap-4 text-white">
                   <div className="space-y-1">
@@ -450,7 +499,7 @@ export const GradeSessionsView: React.FC<GradeSessionsViewProps> = ({
                   {/* PROMINENT CLICKABLE BUTTON FOR STUDENT */}
                   <button
                     type="button"
-                    onClick={() => startLiveCall(studentPrimarySession)}
+                    onClick={() => handleStudentJoinRoom(studentPrimarySession, isStudentSessionMatch(studentPrimarySession, 0))}
                     className="bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black px-6 py-3.5 rounded-2xl transition cursor-pointer text-sm shadow-xl flex items-center gap-2 transform hover:scale-105 active:scale-95"
                   >
                     <Video className="w-5 h-5 text-slate-950" />
@@ -539,27 +588,20 @@ export const GradeSessionsView: React.FC<GradeSessionsViewProps> = ({
                             </div>
                           )
                         ) : (
-                          /* STUDENT: If this is the student's room -> 100% Clickable to Join! */
+                          /* STUDENT: Verified Join */
                           isMyAssignedRoom ? (
                             <button
                               type="button"
-                              onClick={() => startLiveCall(session)}
+                              onClick={() => handleStudentJoinRoom(session, true)}
                               className="w-full rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white py-3 text-xs font-black transition cursor-pointer flex items-center justify-center gap-2 shadow-md active:scale-95"
                             >
                               <Video className="w-4 h-4" />
                               <span>{currentLang === 'ar' ? 'انضمام للحصة المباشرة (Join Now)' : 'Join Live Session'}</span>
                             </button>
                           ) : (
-                            /* Other educators' sessions remain locked */
                             <button
                               type="button"
-                              onClick={() => {
-                                alert(
-                                  currentLang === 'ar'
-                                    ? `لا يمكنك الانضمام! أنت مسجل مع الأستاذ (${myRegisteredEducator || studentPrimarySession.educatorName}). يحق لك فقط دخول صف أستاذك.`
-                                    : `Access Denied: You are registered with ${myRegisteredEducator || studentPrimarySession.educatorName}. You cannot join another educator's room.`
-                                );
-                              }}
+                              onClick={() => handleStudentJoinRoom(session, false)}
                               className="w-full rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-500 py-3 text-xs font-bold transition cursor-pointer flex items-center justify-center gap-2 border border-slate-200"
                             >
                               <Lock className="w-3.5 h-3.5 text-slate-400" />
