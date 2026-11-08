@@ -30,31 +30,11 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
   const [registeredGradeId, setRegisteredGradeId] = useState('');
   const [selectedEducatorId, setSelectedEducatorId] = useState<string>('');
 
-  // 1. Only 2 examples kept, each prefixed with "Example: "
-  const exampleEducators = [
-    {
-      id: 'ex_samer_daher',
-      name: currentLang === 'ar' ? 'مثال: Prof. Samer Daher' : currentLang === 'fr' ? 'Exemple : Prof. Samer Daher' : 'Example: Prof. Samer Daher',
-      subject: 'Physics',
-      gradeId: 'g12_lh',
-      currentStudents: 14,
-      maxStudents: 20,
-      isExample: true,
-    },
-    {
-      id: 'ex_rima_kassir',
-      name: currentLang === 'ar' ? 'مثال: Prof. Rima Kassir' : currentLang === 'fr' ? 'Exemple : Prof. Rima Kassir' : 'Example: Prof. Rima Kassir',
-      subject: 'Philosophy',
-      gradeId: 'g12_lh',
-      currentStudents: 18,
-      maxStudents: 20,
-      isExample: true,
-    }
-  ];
-
-  // 2. Load newly registered real educators dynamically from storage + Director sessions
+  // Load ONLY real registered educators (Zero hardcoded names or examples)
   const loadDynamicEducators = () => {
     let realEducators: any[] = [];
+    
+    // 1. Pull educators who registered on the platform
     try {
       const stored = localStorage.getItem('agenda_registered_educators');
       if (stored) {
@@ -65,7 +45,7 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
       }
     } catch {}
 
-    // Pull any educators created by Director
+    // 2. Pull educators added and assigned by the Director
     try {
       const directorSaved = localStorage.getItem('director_saved_sessions');
       if (directorSaved) {
@@ -76,12 +56,11 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
             if (eduName && !realEducators.some(e => e.name.toLowerCase() === eduName.toLowerCase())) {
               realEducators.push({
                 id: `dir_edu_${s.id}`,
-                name: eduName,
+                name: eduName.trim(),
                 subject: s.subject || 'Academic Subject',
                 gradeId: s.gradeId || '',
                 currentStudents: parseInt(localStorage.getItem(`students_count_${s.id}`) || '0', 10),
                 maxStudents: parseInt(localStorage.getItem(`max_students_${s.id}`) || '25', 10),
-                isExample: false,
               });
             }
           });
@@ -89,8 +68,8 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
       }
     } catch {}
 
-    // Real educators listed first, followed by the two examples
-    return [...realEducators, ...exampleEducators];
+    // Return ONLY verified registered educators - nothing else!
+    return realEducators;
   };
 
   const [educatorsList, setEducatorsList] = useState(loadDynamicEducators);
@@ -100,7 +79,7 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
     if (isOpen) {
       setEducatorsList(loadDynamicEducators());
     }
-  }, [isOpen, currentLang]);
+  }, [isOpen]);
   const [registrationGrades, setRegistrationGrades] = useState<string[]>([]);
   const [isLoadingGrades, setIsLoadingGrades] = useState(false);
   const [showPayment, setShowPayment] = useState(false);
@@ -183,14 +162,12 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
         } catch {}
       }
 
-      // If a student registers, save the selected educator
+      // If a student registers, save the chosen real educator
       if (!isLogin && role === 'student' && selectedEducatorId) {
         const chosen = educatorsList.find(e => e.id === selectedEducatorId);
         if (chosen) {
           localStorage.setItem('registered_educator_id', chosen.id);
-          // Store clean name without the "Example:" prefix if an example was picked
-          const cleanName = chosen.name.replace(/^(example:|مثال:|exemple\s*:)\s*/i, '').trim();
-          localStorage.setItem('registered_educator_name', cleanName);
+          localStorage.setItem('registered_educator_name', chosen.name.trim());
           localStorage.setItem('registered_grade', registeredGradeId);
         }
       }
@@ -443,76 +420,76 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
             </div>
           )}
 
-          {/* Educator 2-Column Selection Grid for Students (Real Registered Educators + 2 Examples) */}
+          {/* Educator 2-Column Selection Grid for Students (ONLY Real Registered Educators) */}
           {!isLogin && role === 'student' && (
             <div className="space-y-2 pt-1">
               <div className="flex items-center justify-between">
                 <label className="block text-xs font-bold text-slate-700">
-                  {currentLang === 'ar' ? 'اختر الأستاذ المسؤول:' : 'Select Your Assigned Educator:'}
+                  {currentLang === 'ar' ? 'اختر الأستاذ المسجل لتعليمك:' : 'Select Your Registered Educator:'}
                 </label>
-                <span className="text-[10px] text-slate-400 font-semibold">
-                  {educatorsList.filter(e => !e.isExample).length} {currentLang === 'ar' ? 'أساتذة حقيقيون مسجلون' : 'Real Educators Registered'}
+                <span className="text-[10px] text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-full font-bold">
+                  {educatorsList.length} {currentLang === 'ar' ? 'أساتذة مسجلون' : 'Registered Educators'}
                 </span>
               </div>
 
-              <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto p-1">
-                {educatorsList.map((edu) => {
-                  const isSelected = selectedEducatorId === edu.id;
-                  const isFull = (edu.currentStudents || 0) >= (edu.maxStudents || 25);
+              {educatorsList.length === 0 ? (
+                /* Empty state when no educators have registered yet */
+                <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 text-center text-xs text-slate-500 font-semibold">
+                  {currentLang === 'ar'
+                    ? 'لا يوجد أساتذة مسجلون حالياً. سيظهر الأساتذة هنا تلقائياً فور تسجيل حساباتهم.'
+                    : 'No educators registered yet. Registered educators will automatically appear here once their accounts are created.'}
+                </div>
+              ) : (
+                /* 2-Column Grid showing ONLY real registered educators */
+                <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto p-1">
+                  {educatorsList.map((edu) => {
+                    const isSelected = selectedEducatorId === edu.id;
+                    const isFull = (edu.currentStudents || 0) >= (edu.maxStudents || 25);
 
-                  return (
-                    <button
-                      key={edu.id}
-                      type="button"
-                      onClick={() => {
-                        if (isFull) {
-                          setError(
-                            currentLang === 'ar'
-                              ? `الصف ممتلئ لدى الأستاذ (${edu.name})! لقد وصل للحد الأقصى (${edu.maxStudents} طالب). يرجى اختيار أستاذ آخر.`
-                              : `Class is full for ${edu.name} (${edu.currentStudents}/${edu.maxStudents}). Please select another educator.`
-                          );
-                        } else {
-                          setError(null);
-                          setSelectedEducatorId(edu.id);
-                          const cleanName = edu.name.replace(/^(example:|مثال:|exemple\s*:)\s*/i, '').trim();
-                          localStorage.setItem('registered_educator_id', edu.id);
-                          localStorage.setItem('registered_educator_name', cleanName);
-                          localStorage.setItem('registered_grade', registeredGradeId || 'Grade 12 LH');
-                        }
-                      }}
-                      className={`p-2.5 rounded-xl border text-start transition cursor-pointer flex flex-col justify-between ${
-                        isSelected
-                          ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm ring-2 ring-emerald-300'
-                          : isFull
-                          ? 'bg-slate-100 border-slate-200 text-slate-400 cursor-not-allowed opacity-80'
-                          : edu.isExample
-                          ? 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
-                          : 'bg-white border-indigo-200 text-slate-800 hover:border-indigo-400 hover:bg-indigo-50/50'
-                      }`}
-                    >
-                      <div className="flex items-center justify-between w-full">
-                        <span className="font-bold text-xs truncate">{edu.name}</span>
-                        {isSelected && <span className="text-[10px] font-black">✓</span>}
-                      </div>
+                    return (
+                      <button
+                        key={edu.id}
+                        type="button"
+                        onClick={() => {
+                          if (isFull) {
+                            setError(
+                              currentLang === 'ar'
+                                ? `الصف ممتلئ لدى الأستاذ (${edu.name})! لقد وصل للحد الأقصى (${edu.maxStudents} طالب). يرجى اختيار أستاذ آخر.`
+                                : `Class is full for ${edu.name} (${edu.currentStudents}/${edu.maxStudents}). Please select another educator.`
+                            );
+                          } else {
+                            setError(null);
+                            setSelectedEducatorId(edu.id);
+                            localStorage.setItem('registered_educator_id', edu.id);
+                            localStorage.setItem('registered_educator_name', edu.name.trim());
+                            localStorage.setItem('registered_grade', registeredGradeId || 'Grade 12 LH');
+                          }
+                        }}
+                        className={`p-2.5 rounded-xl border text-start transition cursor-pointer flex flex-col justify-between ${
+                          isSelected
+                            ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm ring-2 ring-emerald-300'
+                            : isFull
+                            ? 'bg-slate-100 border-slate-200 text-slate-400 cursor-not-allowed opacity-80'
+                            : 'bg-white border-slate-200 text-slate-800 hover:border-indigo-400 hover:bg-indigo-50/50'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between w-full">
+                          <span className="font-bold text-xs truncate">{edu.name}</span>
+                          {isSelected && <span className="text-[10px] font-black">✓</span>}
+                        </div>
 
-                      <div className="flex items-center justify-between w-full mt-1">
-                        <span className={`text-[10px] ${isSelected ? 'text-emerald-100' : 'text-slate-500'}`}>
+                        <span className={`text-[10px] mt-1 ${isSelected ? 'text-emerald-100' : 'text-slate-500'}`}>
                           {edu.subject}
                         </span>
-                        {!edu.isExample && (
-                          <span className={`text-[9px] font-black px-1.5 py-0.2 rounded ${isSelected ? 'bg-emerald-800 text-white' : 'bg-indigo-100 text-indigo-700'}`}>
-                            {currentLang === 'ar' ? 'أستاذ معتمد' : 'Real Educator'}
-                          </span>
-                        )}
-                      </div>
 
-                      <span className={`text-[9px] mt-1 font-semibold ${isFull ? 'text-rose-600' : isSelected ? 'text-emerald-100' : 'text-slate-400'}`}>
-                        {isFull ? (currentLang === 'ar' ? 'الصف ممتلئ' : 'Class Full') : `${edu.currentStudents || 0}/${edu.maxStudents || 25} ${currentLang === 'ar' ? 'طالب' : 'Students'}`}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
+                        <span className={`text-[9px] mt-1 font-semibold ${isFull ? 'text-rose-600' : isSelected ? 'text-emerald-100' : 'text-slate-400'}`}>
+                          {isFull ? (currentLang === 'ar' ? 'الصف ممتلئ' : 'Class Full') : `${edu.currentStudents || 0}/${edu.maxStudents || 25} ${currentLang === 'ar' ? 'طالب' : 'Students'}`}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           )}
 
