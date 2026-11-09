@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { Language, GradeLevelDef } from '../types';
 import { translations } from '../translations';
-import { getGradeSessions } from '../services/cloudflareApi';
+import {   getGradeSessions,   setEducatorLiveSession, } from '../services/cloudflareApi';
 import type { CloudflareAccount, StoredSessionRecord } from '../services/cloudflareApi';
 import { 
   ArrowLeft, 
@@ -208,22 +208,53 @@ export const GradeSessionsView: React.FC<GradeSessionsViewProps> = ({
   };
 
   // NATIVE CAMERA & MIC ACTIVATION
-  const startLiveCall = async (session: any) => {
+    const startLiveCall = async (session: any) => {
     setCameraError(null);
+
+    if (isEducator) {
+      if (
+        !sessionToken ||
+        !registeredAccount?.registeredSessionId ||
+        session.id !== registeredAccount.registeredSessionId
+      ) {
+        setCameraError(
+          currentLang === 'ar'
+            ? 'لا توجد حصة مباشرة معينة لحسابك من الإدارة.'
+            : 'No classroom is assigned to your educator account.'
+        );
+        return;
+      }
+
+      try {
+        await setEducatorLiveSession(sessionToken, true);
+        setReloadKey((key) => key + 1);
+      } catch (error) {
+        setCameraError(
+          error instanceof Error
+            ? error.message
+            : 'Unable to publish your live session.'
+        );
+        return;
+      }
+    }
+
     setActiveCallSession(session);
     setInLiveConference(true);
     setTimerRunning(true);
 
     try {
       let stream: MediaStream;
+
       try {
-        // Request video and audio
         stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } },
+          video: {
+            facingMode: 'user',
+            width: { ideal: 1280 },
+            height: { ideal: 720 },
+          },
           audio: true,
         });
       } catch {
-        // Fallback to video only if mic is occupied
         stream = await navigator.mediaDevices.getUserMedia({
           video: true,
           audio: false,
@@ -234,17 +265,38 @@ export const GradeSessionsView: React.FC<GradeSessionsViewProps> = ({
       setIsVideoOn(true);
       setIsMicOn(true);
     } catch (err: any) {
-      console.error("Camera access failed:", err);
-      setCameraError(err.message || "Camera permission denied");
+      console.error('Camera access failed:', err);
+
+      if (isEducator && sessionToken) {
+        try {
+          await setEducatorLiveSession(sessionToken, false);
+          setReloadKey((key) => key + 1);
+        } catch (stopError) {
+          console.error('Could not clear educator live status:', stopError);
+        }
+      }
+
+      setCameraError(err.message || 'Camera permission denied');
     }
   };
 
   // Safely end live call and shut down hardware tracks
-  const endLiveCall = () => {
+    const endLiveCall = () => {
+    if (isEducator && sessionToken && activeCallSession?.id) {
+      void setEducatorLiveSession(sessionToken, false)
+        .then(() => {
+          setReloadKey((key) => key + 1);
+        })
+        .catch((error) => {
+          console.error('Failed to stop educator live session:', error);
+        });
+    }
+
     if (localStream) {
       localStream.getTracks().forEach((track) => track.stop());
       setLocalStream(null);
     }
+
     setInLiveConference(false);
     setTimerRunning(false);
     setTimeLeft(45 * 60);
@@ -647,8 +699,7 @@ export const GradeSessionsView: React.FC<GradeSessionsViewProps> = ({
                     // Do not require the educator to appear in liveSessionsList.
                     const mySession = {
                       id:
-                        registeredAccount?.registeredSessionId ||
-                        `educator_${registeredAccount?.id || cleanText(educatorName)}_${selectedGrade.id}`,
+                        id: registeredAccount?.registeredSessionId || '',
                       grade: selectedGrade.name[currentLang],
                       educatorName,
                       subject: educatorSubject,
