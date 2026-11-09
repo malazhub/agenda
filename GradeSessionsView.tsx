@@ -708,14 +708,13 @@ export const GradeSessionsView: React.FC<GradeSessionsViewProps> = ({
                     // Open the educator's own class directly.
                     // Do not require the educator to appear in liveSessionsList.
                     const mySession = {
-                      id:
-                        id: registeredAccount?.registeredSessionId || '',
+                      id: registeredAccount?.registeredSessionId || '',
                       grade: selectedGrade.name[currentLang],
                       educatorName,
                       subject: educatorSubject,
                       isLive: true,
                     };
-
+                    
                     handleEducatorOpenRoom(mySession);
                   }}
                   className="w-full text-start bg-slate-900 hover:bg-indigo-950 text-white rounded-3xl p-5 border-2 border-slate-800 hover:border-indigo-400 flex flex-wrap items-center justify-between gap-3 shadow-md transition-all cursor-pointer active:scale-[0.99]"
