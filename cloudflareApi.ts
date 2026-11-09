@@ -49,6 +49,7 @@ export interface StoredSessionRecord {
   isLive: boolean;
   liveStartsAt: string | null;
   mediaUrl: string | null;
+  assignedStudents?: string[];
 }
 
 export interface SessionInput {
