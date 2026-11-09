@@ -194,6 +194,20 @@ export function setupLiveStream(token: string): Promise<LiveStreamSetup> {
     headers: authHeaders(token),
   });
 }
+export function setEducatorLiveSession(
+  token: string,
+  isLive: boolean,
+): Promise<{
+  updated: boolean;
+  sessionId: string;
+  isLive: boolean;
+}> {
+  return request('/api/educator/live-session', {
+    method: 'PATCH',
+    headers: authHeaders(token),
+    body: JSON.stringify({ isLive }),
+  });
+}
 
 export function getGradeSessions(
   gradeId: string,
