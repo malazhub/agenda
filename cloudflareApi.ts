@@ -180,7 +180,13 @@ export function getLiveStreamStatus(
   token: string,
   sessionId: string,
 ): Promise<LiveStreamStatus> {
-  return request(
+  if (!token || !sessionId) {
+    return Promise.reject(
+      new Error('A valid login and assigned classroom are required.')
+    );
+  }
+
+  return request<LiveStreamStatus>(
     `/api/live-stream?sessionId=${encodeURIComponent(sessionId)}`,
     {
       headers: authHeaders(token),
