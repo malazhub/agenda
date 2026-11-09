@@ -292,7 +292,7 @@ export const GradeSessionsView: React.FC<GradeSessionsViewProps> = ({
     return !assignedEduName && !assignedSessionId;
   };
 
-  const studentPrimarySession = liveSessionsList.find((s) => isStudentSessionMatch(s)) || liveSessionsList[0];
+  const studentPrimarySession = liveSessionsList.find(   (session) => session.id === assignedSessionId );
 
   // Student join validation
   const handleStudentJoinRoom = (session: any) => {
@@ -749,26 +749,140 @@ export const GradeSessionsView: React.FC<GradeSessionsViewProps> = ({
                               type="button"
                               onClick={() => handleStudentJoinRoom(session)}
                               className="w-full rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white py-3 text-xs font-black transition cursor-pointer flex items-center justify-center gap-2 shadow-md active:scale-95"
-                            >
-                              <Video className="w-4 h-4" />
-                              <span>{currentLang === 'ar' ? 'انضمام للحصة المباشرة (Join Now)' : 'Join Live Session'}</span>
-                            </button>
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={() => handleStudentJoinRoom(session)}
-                              className="w-full rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-500 py-3 text-xs font-bold transition cursor-pointer flex items-center justify-center gap-2 border border-slate-200"
-                            >
-                              <Lock className="w-3.5 h-3.5 text-slate-400" />
-                              <span>{currentLang === 'ar' ? 'غير مسجل مع هذا الأستاذ' : 'Cannot Join (Different Educator)'}</span>
-                            </button>
-                          )
-                        )}
-                      </div>
-                    </article>
-                  );
-                })}
+                            {/* ALL LIVE SESSIONS FOR THIS GRADE */}
+<div className="grid gap-4 md:grid-cols-2">
+  {liveSessionsList.length === 0 ? (
+    <div className="md:col-span-2 rounded-2xl border border-slate-200 bg-white p-8 text-center">
+      <VideoOff className="mx-auto mb-3 h-8 w-8 text-slate-400" />
+      <h3 className="font-black text-slate-800">
+        {currentLang === 'ar' ? 'لا توجد حصص مباشرة حالياً' : 'No live sessions right now'}
+      </h3>
+      <p className="mt-1 text-sm text-slate-500">
+        {currentLang === 'ar'
+          ? 'ستظهر هنا جميع الحصص المباشرة لهذا الصف عندما يبدأ الأستاذ البث.'
+          : 'All live classes for this grade will appear here when educators start broadcasting.'}
+      </p>
+      <button
+        type="button"
+        onClick={() => setReloadKey((key) => key + 1)}
+        className="mt-4 rounded-xl bg-slate-900 px-4 py-2 text-xs font-bold text-white"
+      >
+        {currentLang === 'ar' ? 'تحديث الحصص' : 'Refresh live sessions'}
+      </button>
+    </div>
+  ) : (
+    liveSessionsList.map((session) => {
+      const isMyAssignedRoom =
+        Boolean(assignedSessionId) && session.id === assignedSessionId;
+
+      const isEducatorOwnRoom =
+        isEducator &&
+        Boolean(registeredAccount?.registeredSessionId) &&
+        session.id === registeredAccount.registeredSessionId;
+
+      return (
+        <article
+          key={session.id}
+          className="flex flex-col justify-between space-y-4 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm"
+        >
+          <div>
+            <div className="mb-3 flex items-center justify-between gap-2">
+              <span className="rounded-md bg-indigo-100 px-2.5 py-1 text-xs font-black text-indigo-700">
+                {session.subject}
+              </span>
+              <span className="flex items-center gap-1 rounded-md border border-rose-200 bg-rose-50 px-2 py-1 text-[10px] font-black text-rose-600">
+                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-rose-500" />
+                LIVE
+              </span>
+            </div>
+
+            <h3 className="text-lg font-black text-slate-900">
+              {session.educatorName}
+            </h3>
+
+            <p className="mt-1 text-sm text-slate-500">
+              {currentLang === 'ar' ? 'الصف: ' : 'Grade: '}
+              {session.grade}
+            </p>
+
+            <p className="mt-1 text-sm text-slate-500">
+              {currentLang === 'ar' ? 'المادة: ' : 'Subject: '}
+              {session.subject}
+            </p>
+
+            <div className="mt-4 rounded-xl bg-slate-50 p-3">
+              <p className="mb-2 flex items-center gap-2 text-xs font-black text-slate-700">
+                <Users className="h-4 w-4" />
+                {currentLang === 'ar' ? 'الطلاب المسجلون في هذه الحصة' : 'Students assigned to this session'}
+              </p>
+
+              {session.assignedStudents?.length ? (
+                <ul className="space-y-1">
+                  {session.assignedStudents.map((studentName, index) => (
+                    <li key={`${session.id}-${index}`} className="text-xs text-slate-600">
+                      {index + 1}. {studentName}
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-xs text-slate-400">
+                  {currentLang === 'ar' ? 'لا يوجد طلاب معينون بعد.' : 'No students assigned yet.'}
+                </p>
+              )}
+            </div>
+
+            {isMyAssignedRoom && !isEducator && (
+              <span className="mt-3 inline-flex items-center gap-1 rounded-md bg-emerald-100 px-2.5 py-1 text-[10px] font-black text-emerald-800">
+                <CheckCircle2 className="h-3 w-3" />
+                {currentLang === 'ar' ? 'حصتك المسجلة' : 'Your assigned class'}
+              </span>
+            )}
+          </div>
+
+          {isEducator ? (
+            isEducatorOwnRoom ? (
+              <button
+                type="button"
+                onClick={() => handleEducatorOpenRoom(session)}
+                className="flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 py-3 text-xs font-black text-white"
+              >
+                <Video className="h-4 w-4" />
+                {currentLang === 'ar' ? 'افتح حصتي المباشرة' : 'Open My Live Session'}
+              </button>
+            ) : (
+              <div className="rounded-xl bg-slate-100 py-3 text-center text-xs font-bold text-slate-400">
+                {currentLang === 'ar' ? 'حصة أستاذ آخر' : "Another educator's session"}
               </div>
+            )
+          ) : (
+            <button
+              type="button"
+              disabled={!isMyAssignedRoom}
+              onClick={() => handleStudentJoinRoom(session)}
+              className={`flex w-full items-center justify-center gap-2 rounded-xl py-3 text-xs font-black ${
+                isMyAssignedRoom
+                  ? 'bg-emerald-600 text-white hover:bg-emerald-700'
+                  : 'cursor-not-allowed bg-slate-100 text-slate-400'
+              }`}
+            >
+              {isMyAssignedRoom ? (
+                <>
+                  <Video className="h-4 w-4" />
+                  {currentLang === 'ar' ? 'انضم إلى الحصة' : 'Join Live Session'}
+                </>
+              ) : (
+                <>
+                  <Lock className="h-4 w-4" />
+                  {currentLang === 'ar' ? 'غير مسجل في هذه الحصة' : 'Not assigned to this session'}
+                </>
+              )}
+            </button>
+          )}
+        </article>
+      );
+    })
+  )}
+</div>
             </div>
           ) : (
 
