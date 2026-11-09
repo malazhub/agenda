@@ -766,11 +766,12 @@ export const GradeSessionsView: React.FC<GradeSessionsViewProps> = ({
                           )
                         )}
                       </div>
-                    </article>
+                                        </article>
                   );
                 })}
               </div>
-
+            </div>
+          ) : (
             /* TAB 2: STORED RESOURCES */
             isLoading ? (
               <div className="bg-white rounded-3xl border border-slate-200 p-10 text-center text-slate-500 text-sm">
