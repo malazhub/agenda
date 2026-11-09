@@ -1,8 +1,23 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { Language, GradeLevelDef } from '../types';
 import { translations } from '../translations';
-import {   getGradeSessions,   setEducatorLiveSession, } from '../services/cloudflareApi';
-import type { CloudflareAccount, StoredSessionRecord } from '../services/cloudflareApi';
+import type { Call, StreamVideoClient } from '@stream-io/video-client';
+import { getLiveStreamStatus } from '../services/cloudflareApi';
+import {
+  getGradeSessions,
+  setEducatorLiveSession,
+  getLiveStreamStatus,
+} from '../services/cloudflareApi';
+
+import type {
+  CloudflareAccount,
+  StoredSessionRecord,
+} from '../services/cloudflareApi';
+
+import type {
+  Call,
+  StreamVideoClient,
+} from '@stream-io/video-client';
 import { 
   ArrowLeft, 
   ArrowRight, 
@@ -65,7 +80,7 @@ export const GradeSessionsView: React.FC<GradeSessionsViewProps> = ({
     Date.parse(registeredAccount.expiresAt.replace(' ', 'T').replace(/Z$/, '') + 'Z') <= Date.now()
   );
 
-  const isPaidAndActivated = isAccountActive && !isAccountExpired;
+  const isPaidAndActivated = Boolean(   registeredAccount?.paid === true &&   isAccountActive &&   !isAccountExpired );
 
   // Role detection
   
@@ -92,17 +107,31 @@ const hasValidClassroomAssignment =
       .replace(/[^a-z0-9\u0600-\u06FF]/gi, '')
       .trim();
 
-  // In-call conference state & REAL MediaStream state
-  const [inLiveConference, setInLiveConference] = useState(false);
-  const [activeCallSession, setActiveCallSession] = useState<any>(null);
-  const [localStream, setLocalStream] = useState<MediaStream | null>(null);
-  const [timeLeft, setTimeLeft] = useState(45 * 60); // 45-minute countdown timer
-  const [timerRunning, setTimerRunning] = useState(false);
-  const [isMicOn, setIsMicOn] = useState(true);
-  const [isVideoOn, setIsVideoOn] = useState(true);
-  const [isFullscreen, setIsFullscreen] = useState(false);
-  const [cameraError, setCameraError] = useState<string | null>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
+  // Shared Stream Video classroom state
+const [inLiveConference, setInLiveConference] = useState(false);
+const [activeCallSession, setActiveCallSession] = useState<any>(null);
+
+const [streamClient, setStreamClient] =
+  useState<StreamVideoClient | null>(null);
+
+const [streamCall, setStreamCall] =
+  useState<Call | null>(null);
+
+const [callParticipants, setCallParticipants] =
+  useState<any[]>([]);
+
+const participantsSubscription = useRef<any>(null);
+
+const [timeLeft, setTimeLeft] = useState(45 * 60);
+const [timerRunning, setTimerRunning] = useState(false);
+
+const [isMicOn, setIsMicOn] = useState(false);
+const [isVideoOn, setIsVideoOn] = useState(false);
+
+const [isFullscreen, setIsFullscreen] = useState(false);
+const [cameraError, setCameraError] = useState<string | null>(null);
+
+const containerRef = useRef<HTMLDivElement>(null);
 
   
   // Dynamic live sessions list for this grade
@@ -220,126 +249,269 @@ const hasValidClassroomAssignment =
     }
   };
 
-  // NATIVE CAMERA & MIC ACTIVATION
-    const startLiveCall = async (session: any) => {
-    setCameraError(null);
+  // Start or join the real shared Stream classroom
+const startLiveCall = async (session: any) => {
+  setCameraError(null);
 
+  // 1. Verify the signed-in account
+  if (!isSignedIn || !registeredAccount || !sessionToken) {
+    setCameraError('Please sign in before entering the live classroom.');
+    return;
+  }
+
+  // 2. Verify payment, activation and expiry
+  if (!isPaidAndActivated || registeredAccount.paid !== true) {
+    setCameraError(
+      'Your account must be activated, paid and not expired.'
+    );
+    return;
+  }
+
+  // 3. Verify the exact Director-assigned classroom
+  if (
+    !assignedSessionId ||
+    String(session?.id) !== String(assignedSessionId)
+  ) {
+    setCameraError(
+      'Access denied. You can only enter your Director-assigned classroom.'
+    );
+    return;
+  }
+
+  // 4. Verify the account role
+  if (!isEducator && !isStudent) {
+    setCameraError('This account cannot enter a live classroom.');
+    return;
+  }
+
+  // 5. Students cannot create or start classrooms
+  if (isStudent && !session.isLive) {
+    setCameraError('Your assigned educator has not started the live class yet.');
+    return;
+  }
+
+  setIsLoading(true);
+
+  try {
+    // 6. Educator publishes the assigned classroom as live
     if (isEducator) {
-      if (
-        !sessionToken ||
-        !registeredAccount?.registeredSessionId ||
-        session.id !== registeredAccount.registeredSessionId
-      ) {
-        setCameraError(
-          currentLang === 'ar'
-            ? 'لا توجد حصة مباشرة معينة لحسابك من الإدارة.'
-            : 'No classroom is assigned to your educator account.'
-        );
-        return;
-      }
+      await setEducatorLiveSession(sessionToken, true);
+      setReloadKey((key) => key + 1);
+    }
+
+    // 7. Request credentials for this exact classroom
+    const credentials = await getLiveStreamStatus(
+      sessionToken,
+      String(session.id)
+    );
+
+    if (
+      !credentials.apiKey ||
+      !credentials.callId ||
+      !credentials.token ||
+      !credentials.userId
+    ) {
+      throw new Error('The live classroom credentials are incomplete.');
+    }
+
+    // 8. Load the installed Stream Video SDK
+    const { StreamVideoClient: VideoClient } =
+      await import('@stream-io/video-client');
+
+    // 9. Connect this account to Stream
+    const client = new VideoClient({
+      apiKey: credentials.apiKey,
+      token: credentials.token,
+      user: {
+        id: credentials.userId,
+        name: credentials.userName || registeredAccount.fullName,
+      },
+    });
+
+    // 10. Use the classroom ID issued by your Cloudflare API.
+    // Do not use the Director dashboard's fixed call ID.
+    const call = client.call(
+      'livestream',
+      credentials.callId
+    );
+
+    // 11. Educators create their assigned classroom.
+    // Students join that existing classroom.
+    await call.join({
+      create: isEducator,
+    });
+
+    // 12. Only the educator publishes camera and microphone.
+    if (isEducator) {
+      await call.camera.enable();
 
       try {
-        await setEducatorLiveSession(sessionToken, true);
-        setReloadKey((key) => key + 1);
-      } catch (error) {
-        setCameraError(
-          error instanceof Error
-            ? error.message
-            : 'Unable to publish your live session.'
-        );
-        return;
+        await call.microphone.enable();
+        setIsMicOn(true);
+      } catch (micError) {
+        console.warn('Microphone could not be enabled:', micError);
+        setIsMicOn(false);
       }
+
+      setIsVideoOn(true);
+    } else {
+      // Students enter as viewers.
+      await call.camera.disable();
+      await call.microphone.disable();
+
+      setIsVideoOn(false);
+      setIsMicOn(false);
     }
+
+    // 13. Subscribe to actual participants in this classroom.
+    participantsSubscription.current?.unsubscribe();
+
+    participantsSubscription.current =
+      call.state.participants$.subscribe((participants) => {
+        setCallParticipants([...participants]);
+      });
+
+    // 14. Save the active Stream connection.
+    setStreamClient(client);
+    setStreamCall(call);
 
     setActiveCallSession(session);
     setInLiveConference(true);
+
+    setTimeLeft(45 * 60);
     setTimerRunning(true);
 
-    try {
-      let stream: MediaStream;
+  } catch (error) {
+    console.error('Unable to start or join Stream classroom:', error);
+
+    // If educator startup fails, clear the live status.
+    if (isEducator) {
+      try {
+        await setEducatorLiveSession(sessionToken, false);
+        setReloadKey((key) => key + 1);
+      } catch (stopError) {
+        console.error(
+          'Unable to clear educator live status:',
+          stopError
+        );
+      }
+    }
+
+    setCameraError(
+      error instanceof Error
+        ? error.message
+        : 'Unable to connect to the live classroom.'
+    );
+
+  } finally {
+    setIsLoading(false);
+  }
+};
+
+  // Leave the shared Stream classroom and clean up the connection
+const endLiveCall = async () => {
+  try {
+    // 1. Stop receiving participant updates
+    participantsSubscription.current?.unsubscribe();
+    participantsSubscription.current = null;
+
+    // 2. Disable the educator's camera and microphone
+    if (streamCall && isEducator) {
+      try {
+        await streamCall.camera.disable();
+      } catch (error) {
+        console.warn('Unable to disable camera:', error);
+      }
 
       try {
-        stream = await navigator.mediaDevices.getUserMedia({
-          video: {
-            facingMode: 'user',
-            width: { ideal: 1280 },
-            height: { ideal: 720 },
-          },
-          audio: true,
-        });
-      } catch {
-        stream = await navigator.mediaDevices.getUserMedia({
-          video: true,
-          audio: false,
-        });
+        await streamCall.microphone.disable();
+      } catch (error) {
+        console.warn('Unable to disable microphone:', error);
       }
-
-      setLocalStream(stream);
-      setIsVideoOn(true);
-      setIsMicOn(true);
-    } catch (err: any) {
-      console.error('Camera access failed:', err);
-
-      if (isEducator && sessionToken) {
-        try {
-          await setEducatorLiveSession(sessionToken, false);
-          setReloadKey((key) => key + 1);
-        } catch (stopError) {
-          console.error('Could not clear educator live status:', stopError);
-        }
-      }
-
-      setCameraError(err.message || 'Camera permission denied');
     }
-  };
 
-  // Safely end live call and shut down hardware tracks
-    const endLiveCall = () => {
+    // 3. Leave the actual Stream call
+    if (streamCall) {
+      try {
+        await streamCall.leave();
+      } catch (error) {
+        console.warn('Unable to leave Stream call:', error);
+      }
+    }
+
+    // 4. Disconnect this user's Stream client
+    if (streamClient) {
+      try {
+        await streamClient.disconnectUser();
+      } catch (error) {
+        console.warn('Unable to disconnect Stream client:', error);
+      }
+    }
+
+    // 5. Only the educator can stop the classroom's live status
     if (isEducator && sessionToken && activeCallSession?.id) {
-      void setEducatorLiveSession(sessionToken, false)
-        .then(() => {
-          setReloadKey((key) => key + 1);
-        })
-        .catch((error) => {
-          console.error('Failed to stop educator live session:', error);
-        });
+      try {
+        await setEducatorLiveSession(sessionToken, false);
+        setReloadKey((key) => key + 1);
+      } catch (error) {
+        console.error('Failed to stop educator live session:', error);
+      }
     }
 
-    if (localStream) {
-      localStream.getTracks().forEach((track) => track.stop());
-      setLocalStream(null);
-    }
+  } finally {
+    // 6. Reset the classroom interface
+    setCallParticipants([]);
+
+    setStreamCall(null);
+    setStreamClient(null);
 
     setInLiveConference(false);
     setTimerRunning(false);
     setTimeLeft(45 * 60);
+
+    setIsVideoOn(false);
+    setIsMicOn(false);
+
     setActiveCallSession(null);
     setCameraError(null);
-  };
+  }
+};
 
   // Video track toggle
-  const toggleVideoTrack = () => {
-    if (localStream) {
-      const videoTracks = localStream.getVideoTracks();
-      if (videoTracks.length > 0) {
-        const nextState = !isVideoOn;
-        videoTracks.forEach((t) => { t.enabled = nextState; });
-        setIsVideoOn(nextState);
-      }
+  const toggleVideoTrack = async () => {
+  if (!streamCall || !isEducator) return;
+
+  try {
+    if (isVideoOn) {
+      await streamCall.camera.disable();
+      setIsVideoOn(false);
+    } else {
+      await streamCall.camera.enable();
+      setIsVideoOn(true);
     }
-  };
+  } catch (error) {
+    console.error('Unable to toggle classroom camera:', error);
+    setCameraError('Unable to change camera settings.');
+  }
+};
 
   // Mic track toggle
-  const toggleAudioTrack = () => {
-    if (localStream) {
-      const audioTracks = localStream.getAudioTracks();
-      if (audioTracks.length > 0) {
-        const nextState = !isMicOn;
-        audioTracks.forEach((t) => { t.enabled = nextState; });
-        setIsMicOn(nextState);
-      }
+  const toggleAudioTrack = async () => {
+  if (!streamCall || !isEducator) return;
+
+  try {
+    if (isMicOn) {
+      await streamCall.microphone.disable();
+      setIsMicOn(false);
+    } else {
+      await streamCall.microphone.enable();
+      setIsMicOn(true);
     }
-  };
+  } catch (error) {
+    console.error('Unable to toggle classroom microphone:', error);
+    setCameraError('Unable to change microphone settings.');
+  }
+};
 
   // Students may join only the exact classroom assigned by the Director.
 const isStudentSessionMatch = (session: any): boolean => {
@@ -354,14 +526,25 @@ const isStudentSessionMatch = (session: any): boolean => {
 
   // Student join validation
   const handleStudentJoinRoom = (session: any) => {
-    if (!isSignedIn) {
-      alert(
-        currentLang === 'ar'
-          ? 'يجب تسجيل الدخول أولاً بحساب طالب للانضمام إلى الحصة المباشرة.'
-          : 'Access Denied: Please sign in with your student account to join.'
-      );
-      return;
-    }
+  if (!isSignedIn || registeredAccount?.role !== 'student') {
+    alert('Please sign in with your student account.');
+    return;
+  }
+
+  if (!isPaidAndActivated) {
+    alert('Your account must be activated, paid, and not expired.');
+    return;
+  }
+
+  if (!assignedSessionId || String(session?.id) !== String(assignedSessionId)) {
+    alert(
+      'Access denied. You may only join the classroom assigned to you by the Director.'
+    );
+    return;
+  }
+
+  void startLiveCall(session);
+};
 
     if (!isPaidAndActivated) {
       alert(
@@ -400,51 +583,51 @@ const isStudentSessionMatch = (session: any): boolean => {
     window.open(url, '_blank', 'noopener,noreferrer');
   };
 
-  // Real attendees list only (Zero hardcoded names)
-  const realAttendees: Array<{ id: string; name: string; isLive: boolean }> = [];
-  if (!isEducator && isSignedIn) {
-    realAttendees.push({
-      id: registeredAccount?.id || 'current_user',
-      name: registeredAccount?.fullName || 'You (Student)',
-      isLive: true,
-    });
-  }
+    // Actual connected participants are supplied by the Stream call.
+  // Do not create attendee records from the signed-in account alone.
 
   return (
     <div className="space-y-6 animate-in fade-in duration-300 text-start" ref={containerRef}>
       
-      {/* IN-CALL VIDEO CLASSROOM VIEW */}
+            {/* IN-CALL VIDEO CLASSROOM VIEW */}
       {inLiveConference && activeCallSession ? (
         <div className="bg-slate-900 rounded-3xl overflow-hidden shadow-2xl flex flex-col h-[85vh] text-white">
-          {/* Top Bar: Timer, Info, Leave Button */}
+
+          {/* CLASSROOM HEADER */}
           <div className="px-6 py-3.5 bg-slate-800/95 backdrop-blur-md flex flex-wrap items-center justify-between border-b border-slate-700 gap-3">
             <div className="flex items-center gap-3">
               <button
                 type="button"
                 onClick={() => {
-                  endLiveCall();
+                  void endLiveCall();
                   onBack();
                 }}
                 className="flex items-center gap-1.5 bg-slate-700 hover:bg-slate-600 text-slate-200 hover:text-white font-bold px-3 py-1.5 rounded-xl transition cursor-pointer text-xs"
                 title="Back to Main Screen"
               >
-                {isRTL ? <ArrowRight className="w-4 h-4" /> : <ArrowLeft className="w-4 h-4" />}
+                {isRTL
+                  ? <ArrowRight className="w-4 h-4" />
+                  : <ArrowLeft className="w-4 h-4" />}
                 <span>{currentLang === 'ar' ? 'الرئيسية' : 'Main'}</span>
               </button>
 
               <span className="flex h-3 w-3 relative">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-3 w-3 bg-rose-500"></span>
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75" />
+                <span className="relative inline-flex rounded-full h-3 w-3 bg-rose-500" />
               </span>
+
               <div>
-                <h3 className="font-bold text-sm">{activeCallSession.subject} — {selectedGrade.name[currentLang]}</h3>
+                <h3 className="font-bold text-sm">
+                  {activeCallSession.subject} — {selectedGrade.name[currentLang]}
+                </h3>
                 <p className="text-xs text-slate-400">
-                  {currentLang === 'ar' ? 'الأستاذ: ' : 'Educator: '}{activeCallSession.educatorName}
+                  {currentLang === 'ar' ? 'الأستاذ: ' : 'Educator: '}
+                  {activeCallSession.educatorName}
                 </p>
               </div>
             </div>
 
-            {/* 45-Minute Timer */}
+            {/* SESSION TIMER */}
             <div className="flex items-center gap-2 bg-slate-950 px-4 py-2 rounded-xl border border-slate-700 font-mono text-sm text-amber-400 font-black">
               <Clock className="w-4 h-4 text-amber-400" />
               <span>{formatTimer(timeLeft)}</span>
@@ -457,12 +640,14 @@ const isStudentSessionMatch = (session: any): boolean => {
                 className="p-2.5 rounded-xl bg-slate-700 hover:bg-slate-600 transition text-slate-200 cursor-pointer"
                 title="Full Screen"
               >
-                {isFullscreen ? <Minimize className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
+                {isFullscreen
+                  ? <Minimize className="w-4 h-4" />
+                  : <Maximize2 className="w-4 h-4" />}
               </button>
 
               <button
                 type="button"
-                onClick={endLiveCall}
+                onClick={() => void endLiveCall()}
                 className="bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs px-4 py-2 rounded-xl transition cursor-pointer flex items-center gap-1.5 shadow-md"
               >
                 <PhoneOff className="w-4 h-4" />
@@ -471,123 +656,195 @@ const isStudentSessionMatch = (session: any): boolean => {
             </div>
           </div>
 
-          {/* MAIN VIDEO STAGE: Full-width on top with immediate stream playback */}
-          <div className="flex-1 flex flex-col overflow-y-auto">
-            <div className="w-full bg-slate-950 flex items-center justify-center relative p-3 min-h-[50vh] sm:min-h-[58vh]">
-              {/* Native HTML5 Video Element connected directly via Ref Callback */}
-              <video
-                ref={(videoEl) => {
-                  if (videoEl && localStream) {
-                    if (videoEl.srcObject !== localStream) {
-                      videoEl.srcObject = localStream;
-                      videoEl.muted = true;
-                      videoEl.play().catch(() => {});
-                    }
-                  }
-                }}
-                autoPlay
-                playsInline
-                muted
-                className={`w-full h-full max-h-[58vh] object-contain rounded-2xl bg-black ${
-                  localStream && isVideoOn ? 'block' : 'hidden'
-                }`}
-              />
+          {/* REAL STREAM VIDEO PARTICIPANTS */}
+          <div className="flex-1 overflow-y-auto bg-slate-950 p-4">
 
-              {/* Status Badge when camera is live */}
-              {localStream && isVideoOn && (
-                <div className="absolute top-5 right-5 bg-black/60 backdrop-blur-md px-3 py-1.5 rounded-xl text-xs font-bold text-emerald-400 flex items-center gap-2 border border-emerald-500/30">
-                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
-                  <span>{currentLang === 'ar' ? 'البث المباشر نشط (HD)' : 'Live Video Stream Active (HD)'}</span>
-                </div>
-              )}
+            <div className="flex items-center justify-between gap-3 mb-4">
+              <div>
+                <h3 className="text-sm font-black text-white">
+                  {currentLang === 'ar'
+                    ? 'البث المباشر للصف'
+                    : 'Live Classroom'}
+                </h3>
+                <p className="text-xs text-slate-400 mt-1">
+                  {currentLang === 'ar'
+                    ? 'الفيديو المباشر للمشاركين المتصلين فعلياً'
+                    : 'Live video from participants actually connected to this call'}
+                </p>
+              </div>
 
-              {/* Center message if camera permission was denied or loading */}
-              {(!localStream || !isVideoOn) && (
-                <div className="flex flex-col items-center justify-center p-6 text-center space-y-3">
-                  <div className="w-16 h-16 rounded-full bg-slate-800 border-2 border-slate-700 flex items-center justify-center text-slate-400">
-                    <Video className="w-8 h-8 text-indigo-400" />
-                  </div>
-                  <h4 className="text-sm sm:text-base font-black text-white">
-                    {cameraError 
-                      ? (currentLang === 'ar' ? 'تعذر تشغيل الكاميرا' : 'Camera Access Error')
-                      : (currentLang === 'ar' ? 'الكاميرا المباشرة متوقفة' : 'Live Camera is Off')}
-                  </h4>
-                  <p className="text-xs text-slate-400 max-w-sm">
-                    {cameraError
-                      ? (currentLang === 'ar' ? 'يرجى السماح بصلاحيات الكاميرا في متصفحك والضغط على إعادة التشغيل' : 'Please allow camera permissions in your browser and click retry')
-                      : (currentLang === 'ar' ? 'اضغط على الزر أدناه لتشغيل الكاميرا والميكروفون' : 'Click the button below to turn on video and audio')}
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() => void startLiveCall(activeCallSession)}
-                    className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-6 py-2.5 rounded-xl text-xs cursor-pointer shadow-md transition"
-                  >
-                    {currentLang === 'ar' ? 'تشغيل الكاميرا الآن' : 'Enable Camera Now'}
-                  </button>
-                </div>
-              )}
+              <span className="text-xs font-bold bg-emerald-500/20 text-emerald-400 px-3 py-1.5 rounded-full border border-emerald-500/30">
+                {callParticipants.length}
+                {' '}
+                {currentLang === 'ar' ? 'مشاركون' : 'Connected'}
+              </span>
+            </div>
 
-              {/* User Name Badge on Video */}
-              <div className="absolute bottom-5 left-5 bg-black/70 backdrop-blur-md px-3 py-1.5 rounded-xl text-xs font-bold text-white flex items-center gap-2 border border-white/10">
-                <span className={`w-2 h-2 rounded-full ${localStream && isVideoOn ? 'bg-emerald-400 animate-pulse' : 'bg-slate-400'}`} />
+            {callParticipants.length === 0 ? (
+              <div className="min-h-[40vh] flex flex-col items-center justify-center text-center">
+                <Users className="w-12 h-12 text-slate-500 mb-3" />
+                <h4 className="text-sm font-bold text-white">
+                  {currentLang === 'ar'
+                    ? 'في انتظار المشاركين'
+                    : 'Waiting for participants'}
+                </h4>
+                <p className="text-xs text-slate-400 mt-2">
+                  {currentLang === 'ar'
+                    ? 'سيظهر الفيديو هنا عندما ينضم المشاركون إلى الصف.'
+                    : 'Participant video will appear here when people join the classroom.'}
+                </p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+
+                {callParticipants.map((participant) => {
+                  const participantName =
+                    participant.name ||
+                    participant.userId ||
+                    'Participant';
+
+                  const participantHasVideo =
+                    Boolean(participant.videoStream);
+
+                  const isOwnParticipant =
+                    participant.userId === registeredAccount?.id;
+
+                  return (
+                    <article
+                      key={participant.sessionId || participant.userId}
+                      className="relative min-h-[260px] bg-black rounded-2xl overflow-hidden border border-slate-700"
+                    >
+                      {participantHasVideo ? (
+                        <video
+                          ref={(videoElement) => {
+                            if (
+                              videoElement &&
+                              participant.videoStream &&
+                              videoElement.srcObject !== participant.videoStream
+                            ) {
+                              videoElement.srcObject =
+                                participant.videoStream;
+
+                              videoElement.autoplay = true;
+                              videoElement.playsInline = true;
+
+                              // Mute this user's own local preview.
+                              // Keep remote participants audible.
+                              videoElement.muted = isOwnParticipant;
+
+                              void videoElement.play().catch((error) => {
+                                console.warn(
+                                  'Unable to play participant video:',
+                                  error
+                                );
+                              });
+                            }
+                          }}
+                          autoPlay
+                          playsInline
+                          muted={isOwnParticipant}
+                          className="w-full h-full min-h-[260px] object-contain bg-black"
+                        />
+                      ) : (
+                        <div className="min-h-[260px] flex flex-col items-center justify-center text-center p-4">
+                          <div className="w-16 h-16 rounded-full bg-slate-800 flex items-center justify-center mb-3">
+                            <VideoOff className="w-8 h-8 text-slate-400" />
+                          </div>
+
+                          <p className="text-sm font-bold text-white">
+                            {participantName}
+                          </p>
+
+                          <p className="text-xs text-slate-400 mt-1">
+                            {currentLang === 'ar'
+                              ? 'الكاميرا متوقفة'
+                              : 'Camera is off'}
+                          </p>
+                        </div>
+                      )}
+
+                      <div className="absolute bottom-3 left-3 right-3 flex items-center justify-between gap-2">
+                        <span className="bg-black/75 backdrop-blur-md text-white text-xs font-bold px-3 py-2 rounded-lg truncate">
+                          {participantName}
+                          {isOwnParticipant
+                            ? (currentLang === 'ar' ? ' (أنت)' : ' (You)')
+                            : ''}
+                        </span>
+
+                        <span className="shrink-0 bg-emerald-950/90 text-emerald-400 text-[10px] font-bold px-2 py-1 rounded-md">
+                          ● LIVE
+                        </span>
+                      </div>
+                    </article>
+                  );
+                })}
+
+              </div>
+            )}
+          </div>
+
+          {/* CLASSROOM CONTROLS AND PARTICIPANT COUNT */}
+          <div className="w-full bg-slate-800 p-4 border-t border-slate-700">
+
+            <div className="flex flex-wrap items-center justify-between gap-3">
+
+              <div className="flex items-center gap-2 text-xs font-black uppercase text-slate-300">
+                <Users className="w-4 h-4 text-indigo-400" />
                 <span>
-                  {isEducator ? `${educatorName} (Educator)` : `${registeredAccount?.fullName || 'Student'} (Live)`}
+                  {currentLang === 'ar'
+                    ? 'المشاركون المتصلون فعلياً:'
+                    : 'Actual connected participants:'}
+                </span>
+
+                <span className="text-emerald-400">
+                  {callParticipants.length}
                 </span>
               </div>
-            </div>
 
-            {/* Student Attendance Section BELOW the Video Call (Zero hardcoded names) */}
-            <div className="w-full bg-slate-800 p-4 border-t border-slate-700">
-              <div className="flex flex-wrap items-center justify-between pb-3 border-b border-slate-700 gap-2">
-                <div className="flex items-center gap-2 text-xs font-black uppercase text-slate-300">
-                  <Users className="w-4 h-4 text-indigo-400" />
-                  <span>{currentLang === 'ar' ? 'حضور طلاب الصف المشاركين في الحصة:' : 'Student Attendance in This Live Class:'}</span>
-                </div>
-                <div className="flex items-center gap-3">
-                  <span className="text-[11px] font-bold bg-emerald-500/20 text-emerald-400 px-2.5 py-0.5 rounded-full border border-emerald-500/30">
-                    {currentLang === 'ar' ? `${realAttendees.length} متصلون الآن` : `${realAttendees.length} Live Online`}
-                  </span>
+              {/* Only the educator controls the broadcast devices */}
+              {isEducator && (
+                <div className="flex items-center gap-2">
 
-                  {/* Camera Toggle Button */}
                   <button
                     type="button"
-                    onClick={toggleVideoTrack}
-                    className={`p-2 rounded-xl transition cursor-pointer ${isVideoOn ? 'bg-slate-700 text-slate-200' : 'bg-rose-600 text-white'}`}
+                    onClick={() => void toggleVideoTrack()}
+                    className={`p-2.5 rounded-xl transition cursor-pointer ${
+                      isVideoOn
+                        ? 'bg-slate-700 text-slate-200'
+                        : 'bg-rose-600 text-white'
+                    }`}
                     title={isVideoOn ? 'Turn Video Off' : 'Turn Video On'}
                   >
-                    {isVideoOn ? <Video className="w-4 h-4" /> : <VideoOff className="w-4 h-4" />}
+                    {isVideoOn
+                      ? <Video className="w-4 h-4" />
+                      : <VideoOff className="w-4 h-4" />}
                   </button>
 
-                  {/* Mic Toggle Button */}
                   <button
                     type="button"
-                    onClick={toggleAudioTrack}
-                    className={`p-2 rounded-xl transition cursor-pointer ${isMicOn ? 'bg-slate-700 text-slate-200' : 'bg-rose-600 text-white'}`}
-                    title={isMicOn ? 'Mute Mic' : 'Unmute Mic'}
+                    onClick={() => void toggleAudioTrack()}
+                    className={`p-2.5 rounded-xl transition cursor-pointer ${
+                      isMicOn
+                        ? 'bg-slate-700 text-slate-200'
+                        : 'bg-rose-600 text-white'
+                    }`}
+                    title={isMicOn ? 'Mute Microphone' : 'Unmute Microphone'}
                   >
-                    {isMicOn ? <Mic className="w-4 h-4" /> : <MicOff className="w-4 h-4" />}
+                    {isMicOn
+                      ? <Mic className="w-4 h-4" />
+                      : <MicOff className="w-4 h-4" />}
                   </button>
-                </div>
-              </div>
 
-              {/* Dynamic Real Attendees Grid */}
-              {realAttendees.length === 0 ? (
-                <div className="p-4 text-center text-xs text-slate-400 font-semibold">
-                  {currentLang === 'ar' 
-                    ? 'لا يوجد طلاب متصلون حالياً في هذه الحصة المباشرة. في انتظار انضمام الطلاب...'
-                    : 'No students currently connected to this live room. Waiting for students to join...'}
-                </div>
-              ) : (
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2.5 mt-3 text-xs">
-                  {realAttendees.map((st) => (
-                    <div key={st.id} className="flex items-center justify-between p-2.5 rounded-xl bg-slate-700/60 border border-slate-600/40">
-                      <span className="font-semibold text-slate-200 truncate">{st.name}</span>
-                      <span className="text-[10px] text-emerald-400 font-bold bg-emerald-950/60 px-2 py-0.5 rounded-md">● Live</span>
-                    </div>
-                  ))}
                 </div>
               )}
             </div>
+
+            {cameraError && (
+              <p className="mt-3 text-xs text-rose-300" role="alert">
+                {cameraError}
+              </p>
+            )}
+
           </div>
         </div>
       ) : (
