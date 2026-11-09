@@ -88,25 +88,50 @@ async function signToken(payload, secret) {
   return `${data}.${base64UrlEncode(new Uint8Array(signature))}`;
 }
 
-async function signStreamCallToken(env, userId, role) {
+async function signStreamCallToken(env, userId, sessionId, role) {
   const apiKey = env.STREAM_VIDEO_API_KEY;
   const secret = env.STREAM_VIDEO_API_SECRET;
-  if (!apiKey || !secret) return null;
+
+  if (!apiKey || !secret || !sessionId) return null;
+
   const now = Math.floor(Date.now() / 1000);
-  const header = base64UrlEncode(encoder.encode(JSON.stringify({ alg: "HS256", typ: "JWT" })));
-  const payload = base64UrlEncode(encoder.encode(JSON.stringify({
-    user_id: userId,
-    call_cids: [`livestream:${STREAM_VIDEO_CALL_ID}`],
-    ...(role ? { role } : {}),
-    iat: now,
-    exp: now + 60 * 60,
-  })));
+  const callId = sessionId;
+
+  const header = base64UrlEncode(
+    encoder.encode(JSON.stringify({ alg: "HS256", typ: "JWT" }))
+  );
+
+  const payload = base64UrlEncode(
+    encoder.encode(
+      JSON.stringify({
+        user_id: userId,
+        call_cids: [`livestream:${callId}`],
+        ...(role ? { role } : {}),
+        iat: now,
+        exp: now + 60 * 60,
+      })
+    )
+  );
+
   const data = `${header}.${payload}`;
-  const key = await crypto.subtle.importKey("raw", encoder.encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
-  const signature = await crypto.subtle.sign("HMAC", key, encoder.encode(data));
+
+  const key = await crypto.subtle.importKey(
+    "raw",
+    encoder.encode(secret),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"]
+  );
+
+  const signature = await crypto.subtle.sign(
+    "HMAC",
+    key,
+    encoder.encode(data)
+  );
+
   return {
     apiKey,
-    callId: STREAM_VIDEO_CALL_ID,
+    callId,
     token: `${data}.${base64UrlEncode(new Uint8Array(signature))}`,
     userId,
   };
@@ -489,12 +514,111 @@ async function listSessions(url, env, request) {
     return json({ error: "Live sessions are limited to your registered grade." }, 403);
   }
 
-  // Return ALL live sessions for this grade.
+  async function listSessions(url, env, request) {
+  const gradeId = url.searchParams.get("gradeId") || "";
+  const liveOnly = url.searchParams.get("live") === "true";
+  const sessionId = url.searchParams.get("sessionId") || "";
+
+  if (!/^[a-z0-9_-]{1,40}$/.test(gradeId)) {
+    return json({ error: "A valid gradeId is required." }, 400);
+  }
+
+  if (liveOnly) {
+    const claims = await authenticate(request, env, null);
+
+    if (!claims || !["student", "educator"].includes(claims.role)) {
+      return json({ error: "Please sign in first." }, 401);
+    }
+
+    const account = await env.DB.prepare(
+      `SELECT id, role, activated, paid, expires_at,
+              registered_session_id, grade_id
+       FROM accounts
+       WHERE id = ?`
+    ).bind(claims.sub).first();
+
+    if (!account) {
+      return json({ error: "Account not found." }, 404);
+    }
+
+    const isActivated =
+      account.activated === true ||
+      account.activated === 1 ||
+      String(account.activated).toLowerCase() === "true" ||
+      String(account.activated) === "1";
+
+    const isPaid =
+      account.paid === true ||
+      account.paid === 1 ||
+      String(account.paid).toLowerCase() === "true" ||
+      String(account.paid) === "1";
+
+    const expiryTime = account.expires_at
+      ? Date.parse(`${String(account.expires_at).replace(" ", "T")}Z`)
+      : null;
+
+    if (
+      !isActivated ||
+      !isPaid ||
+      (expiryTime !== null &&
+        (!Number.isFinite(expiryTime) || expiryTime <= Date.now()))
+    ) {
+      return json({
+        error: "Your account must be activated, paid, and not expired."
+      }, 403);
+    }
+
+    if (claims.role !== account.role) {
+      return json({ error: "Account role verification failed." }, 403);
+    }
+
+    if (account.grade_id !== gradeId) {
+      return json({
+        error: "Live sessions are limited to your registered grade."
+      }, 403);
+    }
+
+    // A specific session request must pass the exact assignment check.
+    if (sessionId) {
+      const access = await registeredLiveSession(
+        request,
+        env,
+        sessionId
+      );
+
+      if (access.error) {
+        return access.error;
+      }
+
+      if (access.session.grade_id !== gradeId) {
+        return json({ error: "Invalid session grade." }, 403);
+      }
+
+      return json({
+        sessions: [publicSession(access.session)]
+      });
+    }
+
+    // Return all live sessions in the account's registered grade.
+    // Listing does not grant permission to join every listed session.
+    const result = await env.DB.prepare(
+      `SELECT * FROM sessions
+       WHERE grade_id = ? AND is_live = 1
+       ORDER BY subject, teacher_name, title
+       LIMIT 100`
+    ).bind(gradeId).all();
+
+    return json({
+      sessions: (result.results || []).map(publicSession)
+    });
+  }
+
+  // Existing offline learning-resource behaviour.
   const result = await env.DB.prepare(
     `SELECT * FROM sessions
-     WHERE grade_id = ? AND is_live = 1
-     ORDER BY subject, title
-     LIMIT 100`
+     WHERE grade_id = ? AND is_live = 0
+     ORDER BY RANDOM()
+     LIMIT 20`
   ).bind(gradeId).all();
 
   return json({
@@ -502,71 +626,168 @@ async function listSessions(url, env, request) {
   });
 }
 
-  const query = "SELECT * FROM sessions WHERE grade_id = ? AND is_live = 0 ORDER BY RANDOM() LIMIT 20";
-  const result = await env.DB.prepare(query).bind(gradeId).all();
-  return json({
-    sessions: (result.results || []).map(publicSession),
-  });
-}
-
 async function registeredLiveSession(request, env, sessionId) {
   const claims = await authenticate(request, env, null);
+
   if (!claims || !["student", "educator"].includes(claims.role)) {
-    return { error: json({ error: "Sign in with an activated student or educator account." }, 401) };
+    return {
+      error: json({
+        error: "Please sign in with your student or educator account."
+      }, 401)
+    };
   }
+
+  if (!sessionId || !/^[a-zA-Z0-9_-]{1,100}$/.test(sessionId)) {
+    return {
+      error: json({ error: "A valid session ID is required." }, 400)
+    };
+  }
+
   const account = await env.DB.prepare(
-    "SELECT id, role, activated, expires_at, registered_session_id, grade_id FROM accounts WHERE id = ?",
+    `SELECT id, role, full_name, activated, paid, expires_at,
+            registered_session_id, grade_id
+     FROM accounts
+     WHERE id = ?`
   ).bind(claims.sub).first();
-  const expiryTime = account?.expires_at ? Date.parse(`${account.expires_at.replace(' ', 'T')}Z`) : null;
-  if (!account || !account.activated || (expiryTime !== null && (!Number.isFinite(expiryTime) || expiryTime <= Date.now()))) {
-    return { error: json({ error: "Your account must be activated by the Director and not expired to join live sessions." }, 403) };
+
+  if (!account) {
+    return {
+      error: json({ error: "Account not found." }, 404)
+    };
   }
+
+  const isActivated =
+    account.activated === true ||
+    account.activated === 1 ||
+    String(account.activated).toLowerCase() === "true" ||
+    String(account.activated) === "1";
+
+  const isPaid =
+    account.paid === true ||
+    account.paid === 1 ||
+    String(account.paid).toLowerCase() === "true" ||
+    String(account.paid) === "1";
+
+  const expiryTime = account.expires_at
+    ? Date.parse(`${String(account.expires_at).replace(" ", "T")}Z`)
+    : null;
+
+  if (
+    !isActivated ||
+    !isPaid ||
+    (expiryTime !== null &&
+      (!Number.isFinite(expiryTime) || expiryTime <= Date.now()))
+  ) {
+    return {
+      error: json({
+        error: "Your account must be activated, paid, and not expired."
+      }, 403)
+    };
+  }
+
+  // The signed-in account must match the role stored in the database.
+  if (claims.role !== account.role) {
+    return {
+      error: json({ error: "Account role verification failed." }, 403)
+    };
+  }
+
   const session = await env.DB.prepare(
-    "SELECT * FROM sessions WHERE id = ? AND is_live = 1",
+    "SELECT * FROM sessions WHERE id = ? AND is_live = 1"
   ).bind(sessionId).first();
-  if (!session) return { error: json({ error: "Your registered session is not currently live." }, 403) };
-  const assignedToSession = account.registered_session_id
-    ? account.registered_session_id === sessionId
-    : account.grade_id === session.grade_id;
-  if (!sessionId || !assignedToSession) {
-    return { error: json({ error: "Live access is limited to your registered grade." }, 403) };
+
+  if (!session) {
+    return {
+      error: json({
+        error: "This live session is currently offline."
+      }, 404)
+    };
   }
+
+  // Exact Director-assigned session ID is mandatory.
+  // No grade-only access and no educator-name matching.
+  if (
+    !account.registered_session_id ||
+    String(account.registered_session_id) !== String(session.id)
+  ) {
+    return {
+      error: json({
+        error: "You are not registered for this exact educator session."
+      }, 403)
+    };
+  }
+
+  if (account.grade_id !== session.grade_id) {
+    return {
+      error: json({
+        error: "This session does not belong to your registered grade."
+      }, 403)
+    };
+  }
+
   return { account, session };
 }
 
 async function getLiveStream(request, env) {
   const url = new URL(request.url);
   const sessionId = url.searchParams.get("sessionId") || "";
-  const gradeId = url.searchParams.get("gradeId") || "";
-  const claims = await authenticate(request, env, null);
-  if (!claims || !["student", "educator"].includes(claims.role)) {
-    return json({ error: "Sign in with an activated student or educator account." }, 401);
+
+  if (!/^[a-zA-Z0-9_-]{1,100}$/.test(sessionId)) {
+    return json({ error: "A valid session ID is required." }, 400);
   }
-  const account = await env.DB.prepare("SELECT * FROM accounts WHERE id = ?").bind(claims.sub).first();
-  const expiryTime = account?.expires_at ? Date.parse(`${account.expires_at.replace(" ", "T")}Z`) : null;
-  if (!account || !account.activated || (expiryTime !== null && (!Number.isFinite(expiryTime) || expiryTime <= Date.now()))) {
-    return json({ error: "Your account must be activated by the Director and not expired to join live sessions." }, 403);
-  }
-  const assignedToGrade = gradeId && account.grade_id === gradeId;
-  const legacySessionAssignment = !gradeId && sessionId && (
-    account.registered_session_id === sessionId ||
-    (!account.registered_session_id &&
-      (await env.DB.prepare("SELECT grade_id FROM sessions WHERE id = ?").bind(sessionId).first())?.grade_id === account.grade_id)
+
+  const access = await registeredLiveSession(
+    request,
+    env,
+    sessionId
   );
-  if (!assignedToGrade && !legacySessionAssignment) {
-    return json({ error: "Live access is limited to your registered grade." }, 403);
+
+  if (access.error) {
+    return access.error;
   }
-  const stream = await signStreamCallToken(env, account.id);
-  if (!stream) return json({ error: "Live video is not configured. Ask the Director to configure Stream Video credentials." }, 503);
-  return json({ status: "waiting", ...stream, userName: account.username });
+
+  const stream = await signStreamCallToken(
+    env,
+    access.account.id,
+    access.session.id
+  );
+
+  if (!stream) {
+    return json({
+      error: "Live video is not configured. Please ask the Director to configure Stream Video."
+    }, 503);
+  }
+
+  return json({
+    status: "waiting",
+    ...stream,
+    userName: access.account.full_name
+  });
 }
 
 async function ensureLiveStream(request, env) {
   const director = await authenticate(request, env, "director");
-  if (!director) return json({ error: "Director authentication required." }, 401);
-  const stream = await signStreamCallToken(env, director.sub, "admin");
-  if (!stream) return json({ error: "Live video is not configured. Ask the administrator to configure Stream Video credentials." }, 503);
-  return json({ ...stream, userName: "Agenda Director" });
+  if (!director) {
+    return json({ error: "Director authentication required." }, 401);
+  }
+
+  const stream = await signStreamCallToken(
+    env,
+    director.sub,
+    STREAM_VIDEO_CALL_ID,
+    "admin"
+  );
+
+  if (!stream) {
+    return json({
+      error: "Live video is not configured. Ask the administrator to configure Stream Video credentials."
+    }, 503);
+  }
+
+  return json({
+    ...stream,
+    userName: "Agenda Director"
+  });
 }
 
 async function createSessions(request, env) {
