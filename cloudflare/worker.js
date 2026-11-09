@@ -531,14 +531,13 @@ async function listSessions(url, env, request) {
     }
 
     const account = await env.DB.prepare(
-      `SELECT id, role, activated, paid, expires_at,
-              registered_session_id, grade_id
+      `SELECT id, role, activated, paid, expires_at, grade_id
        FROM accounts
        WHERE id = ?`
     ).bind(claims.sub).first();
 
-    if (!account) {
-      return json({ error: "Account not found." }, 404);
+    if (!account || claims.role !== account.role) {
+      return json({ error: "Account verification failed." }, 403);
     }
 
     const isActivated =
@@ -568,23 +567,14 @@ async function listSessions(url, env, request) {
       }, 403);
     }
 
-    if (claims.role !== account.role) {
-      return json({ error: "Account role verification failed." }, 403);
-    }
-
     if (account.grade_id !== gradeId) {
       return json({
         error: "Live sessions are limited to your registered grade."
       }, 403);
     }
 
-    // A specific session request must pass the exact assignment check.
     if (sessionId) {
-      const access = await registeredLiveSession(
-        request,
-        env,
-        sessionId
-      );
+      const access = await registeredLiveSession(request, env, sessionId);
 
       if (access.error) {
         return access.error;
@@ -594,24 +584,66 @@ async function listSessions(url, env, request) {
         return json({ error: "Invalid session grade." }, 403);
       }
 
+      const assignedStudents = await env.DB.prepare(
+        `SELECT full_name
+         FROM accounts
+         WHERE role = 'student'
+           AND registered_session_id = ?
+         ORDER BY full_name`
+      ).bind(sessionId).all();
+
       return json({
-        sessions: [publicSession(access.session)]
+        sessions: [{
+          ...publicSession(access.session),
+          assignedStudents: (assignedStudents.results || []).map(
+            (student) => student.full_name
+          )
+        }]
       });
     }
 
-    // Return all live sessions in the account's registered grade.
-    // Listing does not grant permission to join every listed session.
     const result = await env.DB.prepare(
-      `SELECT * FROM sessions
+      `SELECT *
+       FROM sessions
        WHERE grade_id = ? AND is_live = 1
        ORDER BY subject, teacher_name, title
        LIMIT 100`
     ).bind(gradeId).all();
 
-    return json({
-      sessions: (result.results || []).map(publicSession)
-    });
+    const sessions = [];
+
+    for (const session of result.results || []) {
+      const assignedStudents = await env.DB.prepare(
+        `SELECT full_name
+         FROM accounts
+         WHERE role = 'student'
+           AND registered_session_id = ?
+         ORDER BY full_name`
+      ).bind(session.id).all();
+
+      sessions.push({
+        ...publicSession(session),
+        assignedStudents: (assignedStudents.results || []).map(
+          (student) => student.full_name
+        )
+      });
+    }
+
+    return json({ sessions });
   }
+
+  const result = await env.DB.prepare(
+    `SELECT *
+     FROM sessions
+     WHERE grade_id = ? AND is_live = 0
+     ORDER BY RANDOM()
+     LIMIT 20`
+  ).bind(gradeId).all();
+
+  return json({
+    sessions: (result.results || []).map(publicSession)
+  });
+}
 
   // Existing offline learning-resource behaviour.
   const result = await env.DB.prepare(
