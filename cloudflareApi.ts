@@ -175,10 +175,16 @@ export function deleteDirectorSession(token: string, sessionId: string): Promise
   });
 }
 
-export function getLiveStreamStatus(token: string, gradeId: string): Promise<LiveStreamStatus> {
-  return request(`/api/live-stream?gradeId=${encodeURIComponent(gradeId)}`, {
-    headers: authHeaders(token),
-  });
+export function getLiveStreamStatus(
+  token: string,
+  sessionId: string,
+): Promise<LiveStreamStatus> {
+  return request(
+    `/api/live-stream?sessionId=${encodeURIComponent(sessionId)}`,
+    {
+      headers: authHeaders(token),
+    }
+  );
 }
 
 export function setupLiveStream(token: string): Promise<LiveStreamSetup> {
