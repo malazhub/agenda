@@ -468,55 +468,6 @@ async function deleteSession(request, env, sessionId) {
 async function listSessions(url, env, request) {
   const gradeId = url.searchParams.get("gradeId") || "";
   const liveOnly = url.searchParams.get("live") === "true";
-  if (!/^[a-z0-9_-]{1,40}$/.test(gradeId)) return json({ error: "A valid gradeId is required." }, 400);
-
-  if (liveOnly) {
-    if (liveOnly) {
-  const sessionId = url.searchParams.get("sessionId") || "";
-
-  // If a specific session is requested, preserve the existing access check.
-  if (sessionId) {
-    const access = await registeredLiveSession(request, env, sessionId);
-    if (access.error) return access.error;
-
-    if (access.session.grade_id !== gradeId) {
-      return json({ error: "Live access is limited to your registered grade." }, 403);
-    }
-
-    return json({ sessions: [publicSession(access.session)] });
-  }
-
-  // Authenticate the student or educator.
-  const claims = await authenticate(request, env, null);
-
-  if (!claims || !["student", "educator"].includes(claims.role)) {
-    return json({ error: "Sign in with an activated student or educator account." }, 401);
-  }
-
-  const account = await env.DB.prepare(
-    "SELECT activated, expires_at, grade_id FROM accounts WHERE id = ?"
-  ).bind(claims.sub).first();
-
-  const expiryTime = account?.expires_at
-    ? Date.parse(`${account.expires_at.replace(" ", "T")}Z`)
-    : null;
-
-  if (
-    !account ||
-    !account.activated ||
-    (expiryTime !== null &&
-      (!Number.isFinite(expiryTime) || expiryTime <= Date.now()))
-  ) {
-    return json({ error: "Your account must be activated and not expired." }, 403);
-  }
-
-  if (account.grade_id !== gradeId) {
-    return json({ error: "Live sessions are limited to your registered grade." }, 403);
-  }
-
- async function listSessions(url, env, request) {
-  const gradeId = url.searchParams.get("gradeId") || "";
-  const liveOnly = url.searchParams.get("live") === "true";
   const sessionId = url.searchParams.get("sessionId") || "";
 
   if (!/^[a-z0-9_-]{1,40}$/.test(gradeId)) {
@@ -531,7 +482,8 @@ async function listSessions(url, env, request) {
     }
 
     const account = await env.DB.prepare(
-      `SELECT id, role, activated, paid, expires_at, grade_id
+      `SELECT id, role, activated, paid, expires_at,
+              grade_id, registered_session_id
        FROM accounts
        WHERE id = ?`
     ).bind(claims.sub).first();
@@ -574,7 +526,11 @@ async function listSessions(url, env, request) {
     }
 
     if (sessionId) {
-      const access = await registeredLiveSession(request, env, sessionId);
+      const access = await registeredLiveSession(
+        request,
+        env,
+        sessionId
+      );
 
       if (access.error) {
         return access.error;
@@ -589,16 +545,26 @@ async function listSessions(url, env, request) {
       });
     }
 
-    const result = await env.DB.prepare(
+    // Only show the exact classroom assigned to this account.
+    if (!account.registered_session_id) {
+      return json({ sessions: [] });
+    }
+
+    const assignedSession = await env.DB.prepare(
       `SELECT *
        FROM sessions
-       WHERE grade_id = ? AND is_live = 1
-       ORDER BY subject, teacher_name, title
-       LIMIT 100`
-    ).bind(gradeId).all();
+       WHERE id = ?
+         AND grade_id = ?
+         AND is_live = 1`
+    ).bind(
+      account.registered_session_id,
+      gradeId
+    ).first();
 
     return json({
-      sessions: (result.results || []).map(publicSession)
+      sessions: assignedSession
+        ? [publicSession(assignedSession)]
+        : []
     });
   }
 
