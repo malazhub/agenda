@@ -101,6 +101,7 @@ export const GradeSessionsView: React.FC<GradeSessionsViewProps> = ({
   const [cameraError, setCameraError] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
+  
   // Dynamic live sessions list for this grade
   const [liveSessionsList, setLiveSessionsList] = useState<Array<{
     id: string;
@@ -110,7 +111,7 @@ export const GradeSessionsView: React.FC<GradeSessionsViewProps> = ({
     isLive: boolean;
   }>>([]);
 
-    useEffect(() => {
+  useEffect(() => {
     let active = true;
 
     const loadLiveSessions = async () => {
@@ -147,10 +148,18 @@ export const GradeSessionsView: React.FC<GradeSessionsViewProps> = ({
       }
     };
 
-    loadLiveSessions();
+    // Load live sessions immediately
+    void loadLiveSessions();
 
+    // Automatically refresh the live list every 10 seconds
+    const refreshInterval = window.setInterval(() => {
+      void loadLiveSessions();
+    }, 10000);
+
+    // Clean up the interval when dependencies change or component unmounts
     return () => {
       active = false;
+      window.clearInterval(refreshInterval);
     };
   }, [
     selectedGrade.id,
@@ -159,6 +168,7 @@ export const GradeSessionsView: React.FC<GradeSessionsViewProps> = ({
     sessionToken,
     reloadKey,
   ]);
+
 
   // Load stored learning resources
   useEffect(() => {
