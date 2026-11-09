@@ -1,8 +1,13 @@
 import React, { useEffect, useState, useRef } from 'react';
+
 import { Language, GradeLevelDef } from '../types';
 import { translations } from '../translations';
-import type { Call, StreamVideoClient } from '@stream-io/video-client';
-import { getLiveStreamStatus } from '../services/cloudflareApi';
+
+import type {
+  Call,
+  StreamVideoClient,
+} from '@stream-io/video-client';
+
 import {
   getGradeSessions,
   setEducatorLiveSession,
@@ -13,11 +18,6 @@ import type {
   CloudflareAccount,
   StoredSessionRecord,
 } from '../services/cloudflareApi';
-
-import type {
-  Call,
-  StreamVideoClient,
-} from '@stream-io/video-client';
 import { 
   ArrowLeft, 
   ArrowRight, 
