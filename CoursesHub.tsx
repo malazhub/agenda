@@ -52,8 +52,9 @@ export const CoursesHub: React.FC<CoursesHubProps> = ({
   const t = translations[currentLang];
   const isRTL = currentLang === 'ar';
 
-  const [activeGradeForSessions, setActiveGradeForSessions] = useState<GradeLevelDef | null>(null);
+    const [activeGradeForSessions, setActiveGradeForSessions] = useState<GradeLevelDef | null>(null);
   const [activeGradeTab, setActiveGradeTab] = useState<'stored' | 'live'>('stored');
+  const [autoOpenLiveClassroom, setAutoOpenLiveClassroom] = useState(false);
   const [directorScreen, setDirectorScreen] = useState<'home' | 'login' | 'dashboard'>('home');
   const [directorForm, setDirectorForm] = useState({ username: '', password: '' });
   const [showDirectorPassword, setShowDirectorPassword] = useState(false);
@@ -194,9 +195,8 @@ export const CoursesHub: React.FC<CoursesHubProps> = ({
     }
   };
 
-  // Restrict opening "Live Broadcast Room" to registered, active, and paid accounts only
+    // Open the exact Director-assigned live classroom immediately.
   const openSharedLiveRoom = () => {
-    // 1. Must be registered and signed in
     if (!registeredAccount || !sessionToken) {
       onShowMessage(
         currentLang === 'ar'
@@ -208,33 +208,65 @@ export const CoursesHub: React.FC<CoursesHubProps> = ({
       return;
     }
 
-    // 2. Must be paid and activated by Director
-    const expiryTime = registeredAccount?.expiresAt
-      ? Date.parse(`${registeredAccount.expiresAt.replace(' ', 'T').replace(/Z$/, '')}Z`)
+    const expiryTime = registeredAccount.expiresAt
+      ? Date.parse(
+          `${registeredAccount.expiresAt.replace(' ', 'T').replace(/Z$/, '')}Z`
+        )
       : null;
-    const isExpired = expiryTime !== null && (!Number.isFinite(expiryTime) || expiryTime <= Date.now());
 
-    if (!registeredAccount.activated || isExpired) {
+    const isExpired =
+      expiryTime !== null &&
+      (!Number.isFinite(expiryTime) || expiryTime <= Date.now());
+
+    if (
+      registeredAccount.activated !== true ||
+      registeredAccount.paid !== true ||
+      isExpired
+    ) {
       onShowMessage(
         currentLang === 'ar'
-          ? 'غرفة البث المباشر متاحة فقط للحسابات المفعّلة والمدفوعة. يرجى انتظار تفعيل الحساب وتأكيد الدفع من الإدارة.'
+          ? 'غرفة البث المباشر متاحة فقط للحسابات المفعّلة والمدفوعة وغير المنتهية الصلاحية.'
           : currentLang === 'fr'
-          ? 'Accès réservé aux comptes activés et payés. En attente de validation du paiement.'
-          : 'Access restricted to active and paid accounts. Please wait for payment confirmation and Director activation.'
+          ? 'Accès réservé aux comptes activés, payés et non expirés.'
+          : 'Live classroom access requires an activated, paid, and non-expired account.'
       );
       return;
     }
 
-    // 3. User is registered, paid, and active -> open live room!
-    const targetGrade = LEBANESE_GRADE_LEVELS.find((g) => {
-      if (!registeredAccount?.gradeId) return false;
-      const cleanAccGrade = registeredAccount.gradeId.toLowerCase().replace(/[^a-z0-9]/g, '');
-      const cleanGId = g.id.toLowerCase().replace(/[^a-z0-9]/g, '');
-      const cleanGName = g.name.en.toLowerCase().replace(/[^a-z0-9]/g, '');
-      return cleanGId === cleanAccGrade || cleanGName.includes(cleanAccGrade);
-    }) || LEBANESE_GRADE_LEVELS[0];
+    if (
+      registeredAccount.role !== 'student' &&
+      registeredAccount.role !== 'educator'
+    ) {
+      onShowMessage(
+        'Only registered students and educators can enter a live classroom.'
+      );
+      return;
+    }
 
+    const accountGrade = registeredAccount.gradeId
+      ?.toLowerCase()
+      .replace(/[^a-z0-9]/g, '');
+
+    const targetGrade = LEBANESE_GRADE_LEVELS.find((grade) => {
+      const gradeId = grade.id.toLowerCase().replace(/[^a-z0-9]/g, '');
+      const gradeName = grade.name.en.toLowerCase().replace(/[^a-z0-9]/g, '');
+
+      return (
+        Boolean(accountGrade) &&
+        (gradeId === accountGrade || gradeName.includes(accountGrade))
+      );
+    });
+
+    if (!targetGrade) {
+      onShowMessage(
+        'Your registered grade could not be found. Please contact the Director.'
+      );
+      return;
+    }
+
+    // Open the assigned grade and automatically enter its live classroom.
     setActiveGradeTab('live');
+    setAutoOpenLiveClassroom(true);
     setActiveGradeForSessions(targetGrade);
   };
 
@@ -335,17 +367,19 @@ export const CoursesHub: React.FC<CoursesHubProps> = ({
     </div>
   );
 
-  if (activeGradeForSessions) {
+    if (activeGradeForSessions) {
     return (
       <GradeSessionsView
         currentLang={currentLang}
         selectedGrade={activeGradeForSessions}
         initialTab={activeGradeTab}
+        autoOpenLiveClassroom={autoOpenLiveClassroom}
         registeredAccount={registeredAccount}
         sessionToken={sessionToken}
         onBack={() => {
           setActiveGradeForSessions(null);
           setActiveGradeTab('stored');
+          setAutoOpenLiveClassroom(false);
         }}
         onEnterLiveClassroom={onEnterLiveClassroom}
       />
