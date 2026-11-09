@@ -442,10 +442,20 @@ test('Director can save a live session and the grade catalog returns its playbac
   const liveCredentials = await liveStatus.json();
   assert.equal(liveStatus.status, 200);
   assert.equal(liveCredentials.status, 'waiting');
-  assert.equal(liveCredentials.callId, 'agenda-shared-classroom');
+    assert.equal(liveCredentials.callId, 'live-eb8-math');
   assert.equal(liveCredentials.apiKey, 'test-stream-video-key');
-  const videoTokenPayload = JSON.parse(Buffer.from(liveCredentials.token.split('.')[1], 'base64url').toString());
-  assert.deepEqual(videoTokenPayload.call_cids, ['livestream:agenda-shared-classroom']);
+
+  const videoTokenPayload = JSON.parse(
+    Buffer.from(
+      liveCredentials.token.split('.')[1],
+      'base64url'
+    ).toString()
+  );
+
+  assert.deepEqual(
+    videoTokenPayload.call_cids,
+    ['livestream:live-eb8-math']
+  );
   assert.equal('STREAM_VIDEO_API_SECRET' in liveCredentials, false);
   const [header, payload, signature] = liveCredentials.token.split('.');
   assert.equal(
