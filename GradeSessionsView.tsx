@@ -524,43 +524,24 @@ const isStudentSessionMatch = (session: any): boolean => {
 
   const studentPrimarySession = liveSessionsList.find(   (session) => session.id === assignedSessionId );
 
-  // Student join validation
+    // Student join validation
   const handleStudentJoinRoom = (session: any) => {
-  if (!isSignedIn || registeredAccount?.role !== 'student') {
-    alert('Please sign in with your student account.');
-    return;
-  }
-
-  if (!isPaidAndActivated) {
-    alert('Your account must be activated, paid, and not expired.');
-    return;
-  }
-
-  if (!assignedSessionId || String(session?.id) !== String(assignedSessionId)) {
-    alert(
-      'Access denied. You may only join the classroom assigned to you by the Director.'
-    );
-    return;
-  }
-
-  void startLiveCall(session);
-};
-
-    if (!isPaidAndActivated) {
-      alert(
-        currentLang === 'ar'
-          ? 'لا يمكنك الدخول! يجب أن يكون حسابك مفعلاً ومدفوعاً من قِبل الإدارة.'
-          : 'Access Denied: Your account is pending activation by the Director.'
-      );
+    if (!isSignedIn || registeredAccount?.role !== 'student') {
+      alert('Please sign in with your student account.');
       return;
     }
 
-    if (!isStudentSessionMatch(session)) {
-      const targetName = assignedEduName || 'أستاذك المعتمد';
+    if (!isPaidAndActivated) {
+      alert('Your account must be activated, paid, and not expired.');
+      return;
+    }
+
+    if (
+      !assignedSessionId ||
+      String(session?.id) !== String(assignedSessionId)
+    ) {
       alert(
-        currentLang === 'ar'
-          ? `لا يمكنك الانضمام! أنت مسجل مع الأستاذ (${targetName}). لا يحق لك دخول صف أستاذ آخر.`
-          : `Access Denied: You are registered with ${targetName}. You cannot join another educator's room.`
+        'Access denied. You may only join the classroom assigned to you by the Director.'
       );
       return;
     }
