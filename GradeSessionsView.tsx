@@ -68,19 +68,22 @@ export const GradeSessionsView: React.FC<GradeSessionsViewProps> = ({
   const isPaidAndActivated = isAccountActive && !isAccountExpired;
 
   // Role detection
-  const isEducator = registeredAccount?.role === 'educator' || localStorage.getItem('registered_account_role') === 'educator';
+  
   const educatorName = registeredAccount?.fullName || localStorage.getItem('registered_educator_name') || 'Prof. Educator';
   const educatorSubject = registeredAccount?.schoolOrSubject || 'Academic Subject';
 
-  // Dynamic assigned educator retrieval
-  const assignedEduName = 
-    localStorage.getItem('registered_educator_name') || 
-    sessionStorage.getItem('registered_educator_name') || 
-    '';
-  const assignedSessionId = 
-    registeredAccount?.registeredSessionId || 
-    localStorage.getItem('registered_educator_id') || 
-    '';
+  // Use the Director-assigned session ID as the only source of classroom access.
+const assignedSessionId =
+  registeredAccount?.registeredSessionId || '';
+
+const isStudent =
+  registeredAccount?.role === 'student';
+
+const isEducator =
+  registeredAccount?.role === 'educator';
+
+const hasValidClassroomAssignment =
+  Boolean(assignedSessionId);
 
   const cleanText = (str: string) => 
     (str || '')
@@ -338,21 +341,14 @@ export const GradeSessionsView: React.FC<GradeSessionsViewProps> = ({
     }
   };
 
-  // Check if session belongs to this student
-  const isStudentSessionMatch = (session: any) => {
-    if (!session) return false;
-    if (assignedSessionId && session.id === assignedSessionId) {
-      return true;
-    }
-    if (assignedEduName) {
-      const cleanAssigned = cleanText(assignedEduName);
-      const cleanEdu = cleanText(session.educatorName);
-      if (cleanAssigned && cleanEdu && (cleanEdu.includes(cleanAssigned) || cleanAssigned.includes(cleanEdu))) {
-        return true;
-      }
-    }
-    return !assignedEduName && !assignedSessionId;
-  };
+  // Students may join only the exact classroom assigned by the Director.
+const isStudentSessionMatch = (session: any): boolean => {
+  if (!isStudent || !session || !assignedSessionId) {
+    return false;
+  }
+
+  return String(session.id) === String(assignedSessionId);
+};
 
   const studentPrimarySession = liveSessionsList.find(   (session) => session.id === assignedSessionId );
 
@@ -747,10 +743,11 @@ export const GradeSessionsView: React.FC<GradeSessionsViewProps> = ({
               <div className="grid gap-4 md:grid-cols-2">
                 {liveSessionsList.map((session) => {
                   const isMyAssignedRoom = isStudentSessionMatch(session);
-                  const isEducatorOwnRoom = isEducator && (
-                    cleanText(session.educatorName).includes(cleanText(educatorName)) ||
-                    cleanText(educatorName).includes(cleanText(session.educatorName))
-                  );
+
+                  const isEducatorOwnRoom =
+                    isEducator &&
+                    Boolean(assignedSessionId) &&
+                    String(session.id) === String(assignedSessionId);
 
                   return (
                     <article
