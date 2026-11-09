@@ -514,7 +514,7 @@ async function listSessions(url, env, request) {
     return json({ error: "Live sessions are limited to your registered grade." }, 403);
   }
 
-  async function listSessions(url, env, request) {
+ async function listSessions(url, env, request) {
   const gradeId = url.searchParams.get("gradeId") || "";
   const liveOnly = url.searchParams.get("live") === "true";
   const sessionId = url.searchParams.get("sessionId") || "";
@@ -584,21 +584,8 @@ async function listSessions(url, env, request) {
         return json({ error: "Invalid session grade." }, 403);
       }
 
-      const assignedStudents = await env.DB.prepare(
-        `SELECT full_name
-         FROM accounts
-         WHERE role = 'student'
-           AND registered_session_id = ?
-         ORDER BY full_name`
-      ).bind(sessionId).all();
-
       return json({
-        sessions: [{
-          ...publicSession(access.session),
-          assignedStudents: (assignedStudents.results || []).map(
-            (student) => student.full_name
-          )
-        }]
+        sessions: [publicSession(access.session)]
       });
     }
 
@@ -610,44 +597,14 @@ async function listSessions(url, env, request) {
        LIMIT 100`
     ).bind(gradeId).all();
 
-    const sessions = [];
-
-    for (const session of result.results || []) {
-      const assignedStudents = await env.DB.prepare(
-        `SELECT full_name
-         FROM accounts
-         WHERE role = 'student'
-           AND registered_session_id = ?
-         ORDER BY full_name`
-      ).bind(session.id).all();
-
-      sessions.push({
-        ...publicSession(session),
-        assignedStudents: (assignedStudents.results || []).map(
-          (student) => student.full_name
-        )
-      });
-    }
-
-    return json({ sessions });
+    return json({
+      sessions: (result.results || []).map(publicSession)
+    });
   }
 
   const result = await env.DB.prepare(
     `SELECT *
      FROM sessions
-     WHERE grade_id = ? AND is_live = 0
-     ORDER BY RANDOM()
-     LIMIT 20`
-  ).bind(gradeId).all();
-
-  return json({
-    sessions: (result.results || []).map(publicSession)
-  });
-}
-
-  // Existing offline learning-resource behaviour.
-  const result = await env.DB.prepare(
-    `SELECT * FROM sessions
      WHERE grade_id = ? AND is_live = 0
      ORDER BY RANDOM()
      LIMIT 20`
@@ -759,7 +716,96 @@ async function registeredLiveSession(request, env, sessionId) {
 
   return { account, session };
 }
+async function setEducatorLiveSession(request, env) {
+  const claims = await authenticate(request, env, null);
 
+  if (!claims || claims.role !== "educator") {
+    return json({ error: "Educator authentication required." }, 401);
+  }
+
+  const body = await requestJson(request);
+
+  if (typeof body?.isLive !== "boolean") {
+    return json({ error: "The isLive field must be a boolean." }, 400);
+  }
+
+  const account = await env.DB.prepare(
+    `SELECT id, role, activated, paid, expires_at,
+            registered_session_id, grade_id
+     FROM accounts
+     WHERE id = ?`
+  ).bind(claims.sub).first();
+
+  if (!account || account.role !== "educator") {
+    return json({ error: "Educator account verification failed." }, 403);
+  }
+
+  if (!account.registered_session_id) {
+    return json({
+      error: "No classroom is assigned to this educator."
+    }, 403);
+  }
+
+  const session = await env.DB.prepare(
+    `SELECT id, grade_id
+     FROM sessions
+     WHERE id = ? AND grade_id = ?`
+  ).bind(
+    account.registered_session_id,
+    account.grade_id
+  ).first();
+
+  if (!session) {
+    return json({
+      error: "The educator's assigned classroom was not found."
+    }, 404);
+  }
+
+  if (body.isLive) {
+    const isActivated =
+      account.activated === true ||
+      account.activated === 1 ||
+      String(account.activated).toLowerCase() === "true" ||
+      String(account.activated) === "1";
+
+    const isPaid =
+      account.paid === true ||
+      account.paid === 1 ||
+      String(account.paid).toLowerCase() === "true" ||
+      String(account.paid) === "1";
+
+    const expiryTime = account.expires_at
+      ? Date.parse(`${String(account.expires_at).replace(" ", "T")}Z`)
+      : null;
+
+    if (
+      !isActivated ||
+      !isPaid ||
+      (expiryTime !== null &&
+        (!Number.isFinite(expiryTime) || expiryTime <= Date.now()))
+    ) {
+      return json({
+        error: "Your educator account must be activated, paid, and not expired."
+      }, 403);
+    }
+  }
+
+  await env.DB.prepare(
+    `UPDATE sessions
+     SET is_live = ?, live_starts_at = ?
+     WHERE id = ?`
+  ).bind(
+    Number(body.isLive),
+    body.isLive ? new Date().toISOString() : null,
+    session.id
+  ).run();
+
+  return json({
+    updated: true,
+    sessionId: session.id,
+    isLive: body.isLive
+  });
+}
 async function getLiveStream(request, env) {
   const url = new URL(request.url);
   const sessionId = url.searchParams.get("sessionId") || "";
@@ -940,6 +986,7 @@ async function handle(request, env) {
   if (request.method === "GET" && path === "/api/director/accounts") return directorAccounts(request, env);
   if (request.method === "GET" && path === "/api/director/sessions") return directorSessions(request, env);
   if (request.method === "POST" && path === "/api/director/sessions") return createSessions(request, env);
+  if (request.method === "PATCH" && path === "/api/educator/live-session") return setEducatorLiveSession(request, env);
   if (request.method === "POST" && path === "/api/director/live-stream") return ensureLiveStream(request, env);
   if (request.method === "GET" && path === "/api/live-stream") return getLiveStream(request, env);
   if (request.method === "GET" && path === "/api/sessions") return listSessions(url, env, request);
