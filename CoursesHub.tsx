@@ -265,8 +265,12 @@ export const CoursesHub: React.FC<CoursesHubProps> = ({
     }
 
     // Open the assigned grade and automatically enter its live classroom.
-    setActiveGradeTab('live');
-    setAutoOpenLiveClassroom(true);
+        setActiveGradeTab('live');
+
+    // Open the live educator directory first.
+    // The student chooses their assigned educator from the list.
+    setAutoOpenLiveClassroom(false);
+
     setActiveGradeForSessions(targetGrade);
   };
 
