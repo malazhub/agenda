@@ -214,15 +214,54 @@ async function handleRegister(request, env) {
     return json({ error: "One or more profile fields are too long." }, 400);
   }
 
+    if (role === "student" && !registeredSessionId) {
+    return json({
+      error: "Please select your registered educator before registering."
+    }, 400);
+  }
+
   const selectedSession = registeredSessionId
-    ? await env.DB.prepare("SELECT id, grade_id FROM sessions WHERE id = ?").bind(registeredSessionId).first()
+    ? await env.DB.prepare(
+        `SELECT
+           s.id,
+           s.grade_id
+         FROM sessions s
+         INNER JOIN accounts educator
+           ON educator.registered_session_id = s.id
+           AND educator.role = 'educator'
+         WHERE s.id = ?`
+      ).bind(registeredSessionId).first()
     : null;
-  if (registeredSessionId && !selectedSession) return json({ error: "Choose a valid session before registering." }, 400);
-  const gradeId = requestedGradeId || selectedSession?.grade_id || "";
+
+  if (role === "student" && !selectedSession) {
+    return json({
+      error: "The selected educator does not have an assigned classroom."
+    }, 400);
+  }
+
+  if (registeredSessionId && !selectedSession) {
+    return json({
+      error: "Choose a valid educator classroom before registering."
+    }, 400);
+  }
+
+  // A student's grade must match the selected educator's actual classroom.
+  const gradeId =
+    role === "student"
+      ? selectedSession.grade_id
+      : requestedGradeId;
+
   const selectedGrade = gradeId
-    ? await env.DB.prepare("SELECT grade_id FROM sessions WHERE grade_id = ? LIMIT 1").bind(gradeId).first()
+    ? await env.DB.prepare(
+        "SELECT grade_id FROM sessions WHERE grade_id = ? LIMIT 1"
+      ).bind(gradeId).first()
     : null;
-  if (!selectedGrade) return json({ error: "Choose a valid grade before registering." }, 400);
+
+  if (!selectedGrade) {
+    return json({
+      error: "Choose a valid grade before registering."
+    }, 400);
+  }
 
   const existing = await env.DB.prepare("SELECT * FROM accounts WHERE username = ? COLLATE NOCASE")
     .bind(username)
@@ -333,6 +372,113 @@ async function registrationGrades(env) {
     "SELECT DISTINCT grade_id FROM sessions WHERE grade_id != '' ORDER BY grade_id",
   ).all();
   return json({ grades: (result.results || []).map((row) => row.grade_id) });
+}
+async function registrationEducators(env) {
+  const result = await env.DB.prepare(
+    `SELECT
+       a.id,
+       a.full_name,
+       a.school_or_subject,
+       a.grade_id,
+       a.registered_session_id,
+       s.id AS assigned_session_id,
+       s.grade_id AS assigned_grade_id,
+       s.subject AS assigned_subject
+     FROM accounts a
+     LEFT JOIN sessions s
+       ON s.id = a.registered_session_id
+     WHERE a.role = 'educator'
+     ORDER BY a.full_name COLLATE NOCASE`
+  ).all();
+
+  return json({
+    educators: (result.results || []).map((educator) => ({
+      id: educator.id,
+      name: educator.full_name,
+      subject:
+        educator.assigned_subject ||
+        educator.school_or_subject ||
+        "Academic Subject",
+      gradeId: educator.assigned_grade_id || educator.grade_id,
+      registeredSessionId: educator.assigned_session_id || null,
+      hasAssignedClassroom: Boolean(educator.assigned_session_id),
+    })),
+  });
+}
+
+async function liveEducators(request, env) {
+  const claims = await authenticate(request, env, null);
+
+  if (!claims || !["student", "educator"].includes(claims.role)) {
+    return json({
+      error: "Please sign in with your student or educator account."
+    }, 401);
+  }
+
+  const account = await env.DB.prepare(
+    `SELECT id, role, activated, paid, expires_at
+     FROM accounts
+     WHERE id = ?`
+  ).bind(claims.sub).first();
+
+  if (!account || account.role !== claims.role) {
+    return json({ error: "Account verification failed." }, 403);
+  }
+
+  const isActivated =
+    account.activated === true ||
+    account.activated === 1 ||
+    String(account.activated).toLowerCase() === "true" ||
+    String(account.activated) === "1";
+
+  const isPaid =
+    account.paid === true ||
+    account.paid === 1 ||
+    String(account.paid).toLowerCase() === "true" ||
+    String(account.paid) === "1";
+
+  const expiryTime = account.expires_at
+    ? Date.parse(`${String(account.expires_at).replace(" ", "T")}Z`)
+    : null;
+
+  if (
+    !isActivated ||
+    !isPaid ||
+    (expiryTime !== null &&
+      (!Number.isFinite(expiryTime) || expiryTime <= Date.now()))
+  ) {
+    return json({
+      error: "Your account must be activated, paid, and not expired."
+    }, 403);
+  }
+
+  const result = await env.DB.prepare(
+    `SELECT
+       s.id AS session_id,
+       s.grade_id,
+       s.subject,
+       s.live_starts_at,
+       a.id AS educator_id,
+       a.full_name AS educator_name
+     FROM sessions s
+     INNER JOIN accounts a
+       ON a.registered_session_id = s.id
+       AND a.role = 'educator'
+     WHERE s.is_live = 1
+     ORDER BY s.live_starts_at DESC, a.full_name COLLATE NOCASE`
+  ).all();
+
+  return json({
+    educators: (result.results || []).map((row) => ({
+      sessionId: row.session_id,
+      educatorId: row.educator_id,
+      educatorName: row.educator_name,
+      gradeId: row.grade_id,
+      subject: row.subject,
+      liveStartsAt: row.live_starts_at,
+      isLive: true,
+    })),
+  });
 }
 
 async function handleLogin(request, env) {
@@ -947,8 +1093,10 @@ async function handle(request, env) {
   if (request.method === "POST" && path === "/api/auth/register") return handleRegister(request, env);
   if (request.method === "POST" && path === "/api/auth/login") return handleLogin(request, env);
   if (request.method === "GET" && path === "/api/auth/me") return getCurrentAccount(request, env);
-  if (request.method === "GET" && path === "/api/registration/sessions") return registrationSessions(env);
+    if (request.method === "GET" && path === "/api/registration/sessions") return registrationSessions(env);
   if (request.method === "GET" && path === "/api/registration/grades") return registrationGrades(env);
+  if (request.method === "GET" && path === "/api/registration/educators") return registrationEducators(env);
+  if (request.method === "GET" && path === "/api/live-educators") return liveEducators(request, env);
   if (request.method === "GET" && path === "/api/director/accounts") return directorAccounts(request, env);
   if (request.method === "GET" && path === "/api/director/sessions") return directorSessions(request, env);
   if (request.method === "POST" && path === "/api/director/sessions") return createSessions(request, env);
