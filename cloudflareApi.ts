@@ -28,6 +28,26 @@ export interface RegistrationInput {
   phone: string;
   schoolOrSubject: string;
   gradeId: string;
+  registeredSessionId?: string;
+}
+
+export interface RegistrationEducator {
+  id: string;
+  name: string;
+  subject: string;
+  gradeId: string;
+  registeredSessionId: string | null;
+  hasAssignedClassroom: boolean;
+}
+
+export interface LiveEducatorSession {
+  sessionId: string;
+  educatorId: string;
+  educatorName: string;
+  gradeId: string;
+  subject: string;
+  liveStartsAt: string | null;
+  isLive: boolean;
 }
 
 export interface RegistrationSession {
@@ -118,6 +138,19 @@ export function getRegistrationSessions(): Promise<{ sessions: RegistrationSessi
 
 export function getRegistrationGrades(): Promise<{ grades: string[] }> {
   return request('/api/registration/grades');
+}
+export function getRegistrationEducators(): Promise<{
+  educators: RegistrationEducator[];
+}> {
+  return request('/api/registration/educators');
+}
+
+export function getLiveEducators(token: string): Promise<{
+  educators: LiveEducatorSession[];
+}> {
+  return request('/api/live-educators', {
+    headers: authHeaders(token),
+  });
 }
 
 export function loginAccount(username: string, password: string): Promise<AuthResponse> {
