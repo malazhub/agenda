@@ -10,6 +10,7 @@ import type {
 
 import {
   getGradeSessions,
+  getLiveEducators,
   setEducatorLiveSession,
   getLiveStreamStatus,
 } from '../services/cloudflareApi';
@@ -1109,8 +1110,13 @@ const isStudentSessionMatch = (session: any): boolean => {
                           )}
                         </div>
 
-                        <h3 className="text-base font-black text-slate-900">{session.educatorName}</h3>
-                        <p className="text-xs text-slate-500">{selectedGrade.name[currentLang]}</p>
+                                                <h3 className="text-base font-black text-slate-900">
+                          {session.educatorName}
+                        </h3>
+
+                        <p className="text-xs text-slate-500">
+                          {session.grade}
+                        </p>
 
                         {isMyAssignedRoom && !isEducator && (
                           <span className="inline-flex items-center gap-1 mt-2 text-[10px] font-black text-emerald-800 bg-emerald-100 px-2.5 py-1 rounded-md">
