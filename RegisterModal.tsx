@@ -2,8 +2,17 @@ import React, { useEffect, useState } from 'react';
 import { Language } from '../types';
 import { translations } from '../translations';
 import { UserPlus, X, CheckCircle2, CreditCard, ArrowLeft, ArrowRight, Eye, EyeOff } from 'lucide-react';
-import {   getRegistrationGrades,   getRegistrationEducators,   loginAccount,   registerAccount, } from '../services/cloudflareApi';  import type {   CloudflareAccount,   RegistrationEducator, } from '../services/cloudflareApi';
-import type { CloudflareAccount } from '../services/cloudflareApi';
+import {
+  getRegistrationGrades,
+  getRegistrationEducators,
+  loginAccount,
+  registerAccount,
+} from '../services/cloudflareApi';
+
+import type {
+  CloudflareAccount,
+  RegistrationEducator,
+} from '../services/cloudflareApi';
 
 interface RegisterModalProps {
   isOpen: boolean;
@@ -53,9 +62,10 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
   const [educatorsList, setEducatorsList] = useState<RegistrationEducator[]>([]);
   const [isLoadingEducators, setIsLoadingEducators] = useState(false);
 
-  const selectedEducator = educatorsList.find(
-    (educator) => educator.id === selectedEducatorId
-  ) || null;>>([]);
+    const selectedEducator =
+    educatorsList.find(
+      (educator) => educator.id === selectedEducatorId
+    ) || null;
 
   const loadOnlyRealRegisteredEducators = () => {
     let list: any[] = [];
