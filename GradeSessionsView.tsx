@@ -137,7 +137,7 @@ const [cameraError, setCameraError] = useState<string | null>(null);
 const containerRef = useRef<HTMLDivElement>(null);
 
   
-  // Dynamic live sessions list for this grade
+    // Directory of ALL currently broadcasting educators.
   const [liveSessionsList, setLiveSessionsList] = useState<Array<{
     id: string;
     grade: string;
@@ -151,31 +151,26 @@ const containerRef = useRef<HTMLDivElement>(null);
 
     const loadLiveSessions = async () => {
       try {
-        const { sessions } = await getGradeSessions(
-          selectedGrade.id,
-          true,
-          sessionToken
-        );
+        const { educators } = await getLiveEducators(sessionToken);
 
         if (!active) return;
 
-        const liveSessions = (sessions || [])
-          .filter((session) => session.isLive)
-          .map((session) => ({
-            id: session.id,
-            grade: selectedGrade.name[currentLang],
-            educatorName:
-              session.teacherName ||
-              session.title ||
-              session.sourceName ||
-              'Educator',
-            subject: session.subject || 'Subject',
+        const liveSessions = (educators || [])
+          .filter((educator) => educator.isLive)
+          .map((educator) => ({
+            id: educator.sessionId,
+            grade: educator.gradeId.toUpperCase(),
+            educatorName: educator.educatorName,
+            subject: educator.subject || 'Subject',
             isLive: true,
           }));
 
         setLiveSessionsList(liveSessions);
       } catch (error) {
-        console.error('Failed to load live educator sessions:', error);
+        console.error(
+          'Failed to load all live educators:',
+          error
+        );
 
         if (active) {
           setLiveSessionsList([]);
@@ -183,26 +178,19 @@ const containerRef = useRef<HTMLDivElement>(null);
       }
     };
 
-    // Load live sessions immediately
+    // Load all live educators immediately.
     void loadLiveSessions();
 
-    // Automatically refresh the live list every 10 seconds
+    // Refresh the complete live educator directory every 10 seconds.
     const refreshInterval = window.setInterval(() => {
       void loadLiveSessions();
     }, 10000);
 
-    // Clean up the interval when dependencies change or component unmounts
     return () => {
       active = false;
       window.clearInterval(refreshInterval);
     };
-  }, [
-    selectedGrade.id,
-    selectedGrade.name,
-    currentLang,
-    sessionToken,
-    reloadKey,
-  ]);
+  }, [sessionToken, reloadKey]);
 
 
   // Load stored learning resources
@@ -1076,79 +1064,107 @@ const isStudentSessionMatch = (session: any): boolean => {
                 </button>
               )}
 
-              {/* Grid of All Live Rooms */}
-              <div className="grid gap-4 md:grid-cols-2">
-                {liveSessionsList.map((session) => {
-                  const isMyAssignedRoom = isStudentSessionMatch(session);
+                            {/* Directory of ALL Live Educators */}
+              {liveSessionsList.length === 0 ? (
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-8 text-center">
+                  <Radio className="w-8 h-8 text-slate-400 mx-auto mb-3" />
 
-                  const isEducatorOwnRoom =
-                    isEducator &&
-                    Boolean(assignedSessionId) &&
-                    String(session.id) === String(assignedSessionId);
+                  <h3 className="text-sm font-black text-slate-800">
+                    {currentLang === 'ar'
+                      ? 'لا يوجد أساتذة يبثون مباشرة حالياً'
+                      : 'No educators are broadcasting right now'}
+                  </h3>
 
-                  return (
-                    <article
-                      key={session.id}
-                      className={`rounded-3xl border p-5 shadow-sm space-y-4 transition flex flex-col justify-between ${
-                        isMyAssignedRoom || isEducatorOwnRoom
-                          ? 'bg-emerald-50/70 border-emerald-400 ring-2 ring-emerald-300'
-                          : 'bg-white border-slate-200'
-                      }`}
-                    >
-                      <div>
-                        <div className="flex items-center justify-between mb-2">
-                          <span className="text-[10px] font-black uppercase tracking-wide bg-indigo-100 text-indigo-700 px-2.5 py-0.5 rounded-md">
-                            {session.subject}
-                          </span>
-                          {session.isLive ? (
+                  <p className="text-xs text-slate-500 mt-2">
+                    {currentLang === 'ar'
+                      ? 'سيتم تحديث قائمة الأساتذة تلقائياً.'
+                      : 'The live educator directory refreshes automatically.'}
+                  </p>
+                </div>
+              ) : (
+                <div className="grid gap-4 md:grid-cols-2">
+                  {liveSessionsList.map((session) => {
+                    const isMyAssignedRoom =
+                      isStudentSessionMatch(session);
+
+                    const isEducatorOwnRoom =
+                      isEducator &&
+                      Boolean(assignedSessionId) &&
+                      String(session.id) === String(assignedSessionId);
+
+                    return (
+                      <article
+                        key={session.id}
+                        className={`rounded-3xl border p-5 shadow-sm space-y-4 transition flex flex-col justify-between ${
+                          isMyAssignedRoom || isEducatorOwnRoom
+                            ? 'bg-emerald-50/70 border-emerald-400 ring-2 ring-emerald-300'
+                            : 'bg-white border-slate-200'
+                        }`}
+                      >
+                        <div>
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="text-[10px] font-black uppercase tracking-wide bg-indigo-100 text-indigo-700 px-2.5 py-0.5 rounded-md">
+                              {session.subject}
+                            </span>
+
                             <span className="flex items-center gap-1 text-[10px] font-black text-rose-600 bg-rose-50 px-2 py-0.5 rounded-md border border-rose-200">
                               <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-ping" />
                               LIVE
                             </span>
-                          ) : (
-                            <span className="text-[10px] font-bold text-slate-400">Scheduled</span>
+                          </div>
+
+                          <h3 className="text-base font-black text-slate-900">
+                            {session.educatorName}
+                          </h3>
+
+                          <p className="text-xs text-slate-500">
+                            {session.grade}
+                          </p>
+
+                          {isMyAssignedRoom && !isEducator && (
+                            <span className="inline-flex items-center gap-1 mt-2 text-[10px] font-black text-emerald-800 bg-emerald-100 px-2.5 py-1 rounded-md">
+                              <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                              <span>
+                                {currentLang === 'ar'
+                                  ? 'صفك الدراسي المعتمد'
+                                  : 'Your Enrolled Class'}
+                              </span>
+                            </span>
                           )}
                         </div>
 
-                                                <h3 className="text-base font-black text-slate-900">
-                          {session.educatorName}
-                        </h3>
-
-                        <p className="text-xs text-slate-500">
-                          {session.grade}
-                        </p>
-
-                        {isMyAssignedRoom && !isEducator && (
-                          <span className="inline-flex items-center gap-1 mt-2 text-[10px] font-black text-emerald-800 bg-emerald-100 px-2.5 py-1 rounded-md">
-                            <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-                            <span>{currentLang === 'ar' ? 'صفك الدراسي المعتمد' : 'Your Enrolled Class'}</span>
-                          </span>
-                        )}
-                      </div>
-
-                      <div>
-                        {isEducator ? (
-                          isEducatorOwnRoom ? (
+                        <div>
+                          {isEducator ? (
+                            isEducatorOwnRoom ? (
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  handleEducatorOpenRoom(session)
+                                }
+                                className="w-full rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white py-3 text-xs font-black transition cursor-pointer flex items-center justify-center gap-2 shadow-md active:scale-95"
+                              >
+                                <Video className="w-4 h-4" />
+                                <span>
+                                  {currentLang === 'ar'
+                                    ? 'افتح الحصة المباشرة'
+                                    : 'Open Live Video Session'}
+                                </span>
+                              </button>
+                            ) : (
+                              <div className="w-full py-2.5 text-center text-xs font-bold text-slate-400 bg-slate-100 rounded-xl">
+                                {currentLang === 'ar'
+                                  ? 'صف أستاذ آخر'
+                                  : "Another Educator's Room"}
+                              </div>
+                            )
+                          ) : isMyAssignedRoom ? (
                             <button
                               type="button"
-                              onClick={() => handleEducatorOpenRoom(session)}
-                              className="w-full rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white py-3 text-xs font-black transition cursor-pointer flex items-center justify-center gap-2 shadow-md active:scale-95"
-                            >
-                              <Video className="w-4 h-4" />
-                              <span>{currentLang === 'ar' ? 'افتح الحصة المباشرة (Open Live Session)' : 'Open Live Video Session'}</span>
-                            </button>
-                          ) : (
-                            <div className="w-full py-2.5 text-center text-xs font-bold text-slate-400 bg-slate-100 rounded-xl">
-                              {currentLang === 'ar' ? 'صف أستاذ آخر' : "Another Educator's Room"}
-                            </div>
-                          )
-                        ) : (
-                          isMyAssignedRoom ? (
-                            <button
-                              type="button"
-                              onClick={() => handleStudentJoinRoom(session)}
+                              onClick={() =>
+                                handleStudentJoinRoom(session)
+                              }
                               className="w-full rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white py-3 text-xs font-black transition cursor-pointer flex items-center justify-center gap-2 shadow-md active:scale-95"
-                                                        >
+                            >
                               <Video className="w-4 h-4" />
                               <span>
                                 {currentLang === 'ar'
@@ -1162,13 +1178,13 @@ const isStudentSessionMatch = (session: any): boolean => {
                                 ? 'غير مسجل في هذه الحصة'
                                 : 'Not assigned to this session'}
                             </div>
-                          )
-                        )}
-                      </div>
-                                        </article>
-                  );
-                })}
-              </div>
+                          )}
+                        </div>
+                      </article>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           ) : (
             /* TAB 2: STORED RESOURCES */
