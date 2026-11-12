@@ -750,7 +750,7 @@ const isStudentSessionMatch = (session: any): boolean => {
           </div>
 
           {/* REAL STREAM VIDEO PARTICIPANTS */}
-          <div className="flex-1 overflow-y-auto bg-slate-950 p-4">
+          <div className="flex-1 min-h-0 overflow-hidden bg-slate-950 p-4 flex flex-col">
 
             <div className="flex items-center justify-between gap-3 mb-4">
               <div>
@@ -788,7 +788,7 @@ const isStudentSessionMatch = (session: any): boolean => {
                 </p>
               </div>
             ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 grid-rows-1 gap-4 flex-1 min-h-0 w-full">
 
                 {callParticipants.map((participant) => {
                   const participantName =
@@ -805,7 +805,7 @@ const isStudentSessionMatch = (session: any): boolean => {
                   return (
                     <article
                       key={participant.sessionId || participant.userId}
-                      className="relative min-h-[260px] bg-black rounded-2xl overflow-hidden border border-slate-700"
+                      className="relative h-full min-h-0 w-full bg-black rounded-2xl overflow-hidden border border-slate-700"
                     >
                       {participantHasVideo ? (
                         <video
@@ -836,7 +836,7 @@ const isStudentSessionMatch = (session: any): boolean => {
                           autoPlay
                           playsInline
                           muted={isOwnParticipant}
-                          className="w-full h-full min-h-[260px] object-contain bg-black"
+                          className="absolute inset-0 w-full h-full object-contain bg-black"
                         />
                       ) : (
                         <div className="min-h-[260px] flex flex-col items-center justify-center text-center p-4">
