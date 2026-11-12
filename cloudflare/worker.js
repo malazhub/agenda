@@ -818,13 +818,16 @@ async function registeredLiveSession(request, env, sessionId) {
     };
   }
 
-  if (account.grade_id !== session.grade_id) {
-    return {
-      error: json({
-        error: "This session does not belong to your registered grade."
-      }, 403)
-    };
-  }
+  if (
+  account.role === "student" &&
+  account.grade_id !== session.grade_id
+) {
+  return {
+    error: json({
+      error: "This session does not belong to your registered grade."
+    }, 403)
+  };
+}
 
   return { account, session };
 }
@@ -859,13 +862,10 @@ async function setEducatorLiveSession(request, env) {
   }
 
   const session = await env.DB.prepare(
-    `SELECT id, grade_id
-     FROM sessions
-     WHERE id = ? AND grade_id = ?`
-  ).bind(
-    account.registered_session_id,
-    account.grade_id
-  ).first();
+  `SELECT id, grade_id
+   FROM sessions
+   WHERE id = ?`
+).bind(account.registered_session_id).first();
 
   if (!session) {
     return json({
