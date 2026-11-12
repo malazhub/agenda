@@ -1,4 +1,5 @@
-name: Deploy Agenda to GitHub Pages
+
+name: Deploy Agenda and Cloudflare API
 
 on:
   push:
@@ -15,6 +16,19 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  deploy-worker:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Deploy Cloudflare Worker
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: 15cd99734560c6868dd06d79236a0334
+          command: deploy --config cloudflare/wrangler.toml
+
   build:
     runs-on: ubuntu-latest
     steps:
@@ -45,12 +59,12 @@ jobs:
         with:
           path: ./dist
 
-  deploy:
+  deploy-pages:
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
-    needs: build
+    needs: [build, deploy-worker]
     steps:
       - name: Deploy to GitHub Pages
         id: deployment
