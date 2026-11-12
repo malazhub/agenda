@@ -64,6 +64,7 @@ export const GradeSessionsView: React.FC<GradeSessionsViewProps> = ({
   const [activeTab, setActiveTab] = useState<'stored' | 'live'>(initialTab);
   const [storedSessions, setStoredSessions] = useState<StoredSessionRecord[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const startCallInProgressRef = useRef(false);
   const [error, setError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
 
@@ -242,6 +243,8 @@ const containerRef = useRef<HTMLDivElement>(null);
 
     // Start the educator's actual video broadcast or join it as an assigned student.
   const startLiveCall = async (session: any) => {
+    if (startCallInProgressRef.current || inLiveConference) return;
+startCallInProgressRef.current = true;
     setCameraError(null);
 
     if (!isSignedIn || !registeredAccount || !sessionToken) {
@@ -371,10 +374,19 @@ await call.join({
       // Receive real participants and their video streams.
       participantsSubscription.current?.unsubscribe();
 
-      participantsSubscription.current =
-        call.state.participants$.subscribe((participants) => {
-          setCallParticipants([...participants]);
-        });
+      participantsSubscription.current = call.state.participants$.subscribe((participants) => {
+  // Keep only one camera tile per user.
+  const uniqueParticipants = Array.from(
+    new Map(
+      participants.map((participant) => [
+        participant.userId || participant.sessionId,
+        participant,
+      ])
+    ).values()
+  );
+
+  setCallParticipants(uniqueParticipants);
+});
 
       setStreamClient(client);
       setStreamCall(call);
@@ -424,8 +436,9 @@ await call.join({
       );
 
     } finally {
-      setIsLoading(false);
-    }
+  startCallInProgressRef.current = false;
+  setIsLoading(false);
+}
   };
     // Stop the broadcast and leave the assigned Stream classroom.
   const endLiveCall = async () => {
@@ -1069,6 +1082,7 @@ const isStudentSessionMatch = (session: any): boolean => {
                     };
                     
                     handleEducatorOpenRoom(mySession);
+                    disabled={isLoading}
                   }}
                   className="w-full text-start bg-slate-900 hover:bg-indigo-950 text-white rounded-3xl p-5 border-2 border-slate-800 hover:border-indigo-400 flex flex-wrap items-center justify-between gap-3 shadow-md transition-all cursor-pointer active:scale-[0.99]"
                 >
