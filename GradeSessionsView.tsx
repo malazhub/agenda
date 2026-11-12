@@ -320,11 +320,23 @@ const containerRef = useRef<HTMLDivElement>(null);
       });
 
       // Each educator and their assigned students use the same session ID.
-      call = client.call('livestream', credentials.callId);
+call = client.call('livestream', credentials.callId);
 
-      await call.join({
-        create: isEducator,
-      });
+await call.join({
+  create: isEducator,
+  ...(isEducator
+    ? {
+        data: {
+          members: [
+            {
+              user_id: credentials.userId,
+              role: 'host',
+            },
+          ],
+        },
+      }
+    : {}),
+});
 
       if (isEducator) {
         // Activate the educator's real camera.
@@ -972,7 +984,27 @@ const isStudentSessionMatch = (session: any): boolean => {
 
           {/* TAB 1: LIVE SESSIONS */}
           {activeTab === 'live' ? (
-            <div className="space-y-4">
+  <div className="space-y-4">
+
+    {cameraError && (
+      <div
+        role="alert"
+        className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm font-semibold text-red-700"
+      >
+        {cameraError}
+      </div>
+    )}
+
+    {isLoading && (
+      <div
+        role="status"
+        className="rounded-2xl border border-indigo-200 bg-indigo-50 p-4 text-sm font-semibold text-indigo-800"
+      >
+        {currentLang === 'ar'
+          ? 'جارٍ فتح الصف المباشر...'
+          : 'Opening live classroom...'}
+      </div>
+    )}
               
               {/* STUDENT JOIN CARD */}
               {!isEducator && studentPrimarySession && (
