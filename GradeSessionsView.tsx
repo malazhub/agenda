@@ -561,7 +561,7 @@ const isStudentSessionMatch = (session: any): boolean => {
   return String(session.id) === String(assignedSessionId);
 };
 
-  const studentPrimarySession = liveSessionsList.find(   (session) => session.id === assignedSessionId );
+  const visibleLiveSessions = isEducator   ? []   : liveSessionsList.filter(       (session) => String(session.id) === String(assignedSessionId)     );  const studentPrimarySession = visibleLiveSessions[0] || null;
 
     // Student join validation
   const handleStudentJoinRoom = (session: any) => {
@@ -1109,9 +1109,9 @@ const isStudentSessionMatch = (session: any): boolean => {
                   </span>
                 </button>
               )}
-
+                            {!isEducator && (
                             {/* Directory of ALL Live Educators */}
-              {liveSessionsList.length === 0 ? (
+              {visibleLiveSessions.length === 0 ? (
                 <div className="rounded-2xl border border-slate-200 bg-slate-50 p-8 text-center">
                   <Radio className="w-8 h-8 text-slate-400 mx-auto mb-3" />
 
@@ -1231,6 +1231,7 @@ const isStudentSessionMatch = (session: any): boolean => {
                   })}
                 </div>
               )}
+            )}
             </div>
           ) : (
             /* TAB 2: STORED RESOURCES */
