@@ -291,13 +291,7 @@ const startLiveCall = async (session: any) => {
   
 
   try {
-    // Make the assigned classroom available to its registered users.
-    if (isEducator) {
-      await setEducatorLiveSession(sessionToken, true);
-      setReloadKey((key) => key + 1);
-    }
-
-    const credentials = await getLiveStreamStatus(
+      const credentials = await getLiveStreamStatus(
       sessionToken,
       String(session.id)
     );
@@ -331,8 +325,15 @@ const startLiveCall = async (session: any) => {
     await call.join({
       create: isEducator,
     });
-
+    
     joinedCall = true;
+    
+    // Publish the educator as live only after Stream has created
+    // and successfully joined the classroom call.
+    if (isEducator) {
+      await setEducatorLiveSession(sessionToken, true);
+      setReloadKey((key) => key + 1);
+    }
 
            if (isEducator) {
   // Educator camera stays off. Educator microphone stays available.
