@@ -855,12 +855,10 @@ const studentPrimarySession =
                     participant.userId ||
                     'Participant';
 
-                  const participantIsEducator =
-                  Boolean(participant.roles?.includes('host'));
-                
-                const participantHasVideo =
-                  !participantIsEducator &&
-                  Boolean(participant.videoStream);
+                  
+              const participantHasVideo =
+                Boolean(participant.videoStream);
+
 
                   const isOwnParticipant =
                     participant.userId === registeredAccount?.id;
