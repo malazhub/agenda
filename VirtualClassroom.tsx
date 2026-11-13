@@ -105,9 +105,9 @@ export const VirtualClassroom: React.FC<VirtualClassroomProps> = ({
     return [];
   });
 
-  // AV controls & real video streams
+    // AV controls: educator camera stays off; students control their own devices
   const [isMicOn, setIsMicOn] = useState(true);
-  const [isVideoOn, setIsVideoOn] = useState(true);
+  const [isVideoOn, setIsVideoOn] = useState(!isEducator);
   const [hasCameraAccess, setHasCameraAccess] = useState(false);
   const localVideoRef = useRef<HTMLVideoElement>(null);
   const localMediaStreamRef = useRef<MediaStream | null>(null);
@@ -188,17 +188,28 @@ export const VirtualClassroom: React.FC<VirtualClassroomProps> = ({
     return () => clearInterval(interval);
   }, [isTimerRunning, timeLeft]);
 
-  // Request actual camera stream for video call
+    // Request only the devices permitted for this participant
   useEffect(() => {
     let stream: MediaStream | null = null;
-    if (isJoinedRoom && navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-      navigator.mediaDevices.getUserMedia({ video: true, audio: true })
-        .then((s) => {
-          stream = s;
-          localMediaStreamRef.current = s;
-          setHasCameraAccess(true);
+    let cancelled = false;
+
+    if (isJoinedRoom && navigator.mediaDevices?.getUserMedia) {
+      navigator.mediaDevices.getUserMedia({
+        video: !isEducator && isVideoOn,
+        audio: isEducator || isMicOn
+      })
+        .then((mediaStream) => {
+          if (cancelled) {
+            mediaStream.getTracks().forEach(track => track.stop());
+            return;
+          }
+
+          stream = mediaStream;
+          localMediaStreamRef.current = mediaStream;
+          setHasCameraAccess(!isEducator && isVideoOn);
+
           if (localVideoRef.current) {
-            localVideoRef.current.srcObject = s;
+            localVideoRef.current.srcObject = mediaStream;
           }
         })
         .catch(() => {
@@ -207,11 +218,15 @@ export const VirtualClassroom: React.FC<VirtualClassroomProps> = ({
     }
 
     return () => {
+      cancelled = true;
+
       if (stream) {
         stream.getTracks().forEach(track => track.stop());
       }
+
+      localMediaStreamRef.current = null;
     };
-  }, [isJoinedRoom]);
+  }, [isJoinedRoom, isEducator]);
 
   // Video track toggle
   useEffect(() => {
@@ -253,29 +268,35 @@ export const VirtualClassroom: React.FC<VirtualClassroomProps> = ({
     setIsTimerRunning(true);
   };
 
-  // Student joins only if signed for this educator
+    // Students may join only their assigned educator's live room
   const handleStudentJoin = (session: typeof dynamicSessions[0]) => {
-    const isSignedForThisEducator = myAssignedEducator && 
-      session.educatorName.trim().toLowerCase() === myAssignedEducator.trim().toLowerCase();
+    const isSignedForThisEducator =
+      Boolean(myAssignedEducator) &&
+      session.educatorName.trim().toLowerCase() ===
+        myAssignedEducator.trim().toLowerCase();
 
-    if (isSignedForThisEducator || !myAssignedEducator) {
-      if (!session.isLive) {
-        const notLiveMsg = currentLang === 'ar'
-          ? `حصة الأستاذ (${session.educatorName}) لم تبدأ بعد. يرجى انتظار الأستاذ ليفتح البث المباشر.`
-          : `Teacher ${session.educatorName}'s room is not live yet. Please wait for the educator to open the session.`;
-        setRoomErrorMessage(notLiveMsg);
-        return;
-      }
-      setRoomErrorMessage(null);
-      setIsJoinedRoom(true);
-      setIsTimerRunning(true);
-    } else {
+    if (!isSignedForThisEducator) {
       const errorMsg = currentLang === 'ar'
-        ? `لا يمكنك الانضمام! أنت غير مسجل مع الأستاذ (${session.educatorName}). أنت مسجل رسمياً مع الأستاذ (${myAssignedEducator}).`
-        : `Access Denied: You did not sign for ${session.educatorName}. You are registered with ${myAssignedEducator}. You cannot join this room.`;
+        ? `لا يمكنك الانضمام! أنت غير مسجل مع الأستاذ (${session.educatorName}).`
+        : `Access Denied: You are not registered with ${session.educatorName}.`;
+
       setRoomErrorMessage(errorMsg);
       alert(errorMsg);
+      return;
     }
+
+    if (!session.isLive) {
+      const notLiveMsg = currentLang === 'ar'
+        ? `حصة الأستاذ (${session.educatorName}) لم تبدأ بعد. يرجى انتظار الأستاذ.`
+        : `Teacher ${session.educatorName}'s room is not live yet. Please wait for the educator.`;
+
+      setRoomErrorMessage(notLiveMsg);
+      return;
+    }
+
+    setRoomErrorMessage(null);
+    setIsJoinedRoom(true);
+    setIsTimerRunning(true);
   };
 
   const formatTime = (seconds: number) => {
@@ -743,25 +764,39 @@ export const VirtualClassroom: React.FC<VirtualClassroomProps> = ({
                   <span>{currentLang === 'ar' ? 'تصوير تمرين بالكاميرا' : 'Submit via Cam'}</span>
                 </button>
 
-                <button
-                  onClick={() => setIsMicOn(!isMicOn)}
-                  className={`p-2.5 rounded-xl transition cursor-pointer ${
-                    isMicOn ? 'bg-slate-800 text-slate-200 hover:bg-slate-700' : 'bg-rose-600 text-white'
-                  }`}
-                  title={isMicOn ? 'Mute' : 'Unmute'}
-                >
-                  {isMicOn ? <Mic className="w-4 h-4" /> : <MicOff className="w-4 h-4" />}
-                </button>
+                                {!isEducator && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => setIsMicOn(prev => !prev)}
+                      className={`p-2.5 rounded-xl transition cursor-pointer ${
+                        isMicOn
+                          ? 'bg-slate-800 text-slate-200 hover:bg-slate-700'
+                          : 'bg-rose-600 text-white'
+                      }`}
+                      title={isMicOn ? 'Mute' : 'Unmute'}
+                    >
+                      {isMicOn
+                        ? <Mic className="w-4 h-4" />
+                        : <MicOff className="w-4 h-4" />}
+                    </button>
 
-                <button
-                  onClick={() => setIsVideoOn(!isVideoOn)}
-                  className={`p-2.5 rounded-xl transition cursor-pointer ${
-                    isVideoOn ? 'bg-slate-800 text-slate-200 hover:bg-slate-700' : 'bg-rose-600 text-white'
-                  }`}
-                  title={isVideoOn ? 'Turn Video Off' : 'Turn Video On'}
-                >
-                  {isVideoOn ? <Video className="w-4 h-4" /> : <VideoOff className="w-4 h-4" />}
-                </button>
+                    <button
+                      type="button"
+                      onClick={() => setIsVideoOn(prev => !prev)}
+                      className={`p-2.5 rounded-xl transition cursor-pointer ${
+                        isVideoOn
+                          ? 'bg-slate-800 text-slate-200 hover:bg-slate-700'
+                          : 'bg-rose-600 text-white'
+                      }`}
+                      title={isVideoOn ? 'Turn Video Off' : 'Turn Video On'}
+                    >
+                      {isVideoOn
+                        ? <Video className="w-4 h-4" />
+                        : <VideoOff className="w-4 h-4" />}
+                    </button>
+                  </>
+                )}
 
                 <button
                   onClick={() => setShowSplitExam(!showSplitExam)}
