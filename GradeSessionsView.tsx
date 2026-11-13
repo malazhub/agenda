@@ -1109,9 +1109,10 @@ const isStudentSessionMatch = (session: any): boolean => {
                   </span>
                 </button>
               )}
-                            {!isEducator && (
-                            {/* Directory of ALL Live Educators */}
-              {visibleLiveSessions.length === 0 ? (
+                {!isEducator && (
+                <>
+                  {/* Directory of ALL Live Educators */}
+                  {visibleLiveSessions.length === 0 ? (
                 <div className="rounded-2xl border border-slate-200 bg-slate-50 p-8 text-center">
                   <Radio className="w-8 h-8 text-slate-400 mx-auto mb-3" />
 
@@ -1129,7 +1130,7 @@ const isStudentSessionMatch = (session: any): boolean => {
                 </div>
               ) : (
                 <div className="grid gap-4 md:grid-cols-2">
-                  {liveSessionsList.map((session) => {
+                  {visibleLiveSessions.map((session) => {
                     const isMyAssignedRoom =
                       isStudentSessionMatch(session);
 
@@ -1227,11 +1228,12 @@ const isStudentSessionMatch = (session: any): boolean => {
                           )}
                         </div>
                       </article>
-                    );
+                                        );
                   })}
                 </div>
               )}
-            )}
+  </>
+)}
             </div>
           ) : (
             /* TAB 2: STORED RESOURCES */
