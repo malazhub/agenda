@@ -288,7 +288,7 @@ const startLiveCall = async (session: any) => {
   let client: StreamVideoClient | null = null;
   let call: Call | null = null;
   let joinedCall = false;
-  let startedBroadcastHere = false;
+  
 
   try {
     // Make the assigned classroom available to its registered users.
@@ -326,7 +326,7 @@ const startLiveCall = async (session: any) => {
     });
 
     // Both assigned educators use the same registered classroom call.
-    call = client.call('livestream', credentials.callId);
+    call = client.call('default', credentials.callId);
 
     await call.join({
       create: isEducator,
@@ -334,49 +334,31 @@ const startLiveCall = async (session: any) => {
 
     joinedCall = true;
 
-            if (isEducator) {
-      // Educator broadcasts audio only. Do not publish educator video.
-      await call.camera.disable();
-      setIsVideoOn(false);
+           if (isEducator) {
+  // Educator camera stays off. Educator microphone stays available.
+  await call.camera.disable();
+  setIsVideoOn(false);
 
-      try {
-        await call.microphone.enable();
-        setIsMicOn(true);
-      } catch (micError) {
-        console.warn('Microphone could not be enabled:', micError);
-        setIsMicOn(false);
-      }
+  try {
+    await call.microphone.enable();
+    setIsMicOn(true);
+  } catch (micError) {
+    console.warn('Microphone could not be enabled:', micError);
+    setIsMicOn(false);
+  }
+} else {
+  // Students can publish their own camera and microphone.
+  await call.camera.enable();
+  setIsVideoOn(true);
 
-      // Start the broadcast only if it has not already started.
-      if (call.state.backstage) {
-        try {
-          await call.goLive({
-            start_hls: true,
-          });
-
-          startedBroadcastHere = true;
-        } catch (goLiveError) {
-          // Another assigned educator may have started it simultaneously.
-          await call.get();
-
-          if (call.state.backstage) {
-            throw goLiveError;
-          }
-        }
-      }
-    } else {
-      // Students may publish their own camera and microphone.
-      await call.camera.enable();
-      setIsVideoOn(true);
-
-      try {
-        await call.microphone.enable();
-        setIsMicOn(true);
-      } catch (micError) {
-        console.warn('Student microphone could not be enabled:', micError);
-        setIsMicOn(false);
-      }
-    }
+  try {
+    await call.microphone.enable();
+    setIsMicOn(true);
+  } catch (micError) {
+    console.warn('Student microphone could not be enabled:', micError);
+    setIsMicOn(false);
+  }
+}
 
     participantsSubscription.current?.unsubscribe();
 
@@ -430,11 +412,7 @@ const startLiveCall = async (session: any) => {
       }
 
       if (!otherHostPresent) {
-        if (startedBroadcastHere) {
-          await call.stopLive({
-            continue_hls: false,
-          }).catch(() => undefined);
-        }
+        
 
         try {
           await setEducatorLiveSession(sessionToken, false);
@@ -500,20 +478,7 @@ const endLiveCall = async () => {
         );
       }
 
-      // Only the last educator leaving may stop the shared broadcast.
-      if (shouldStopSharedBroadcast) {
-        try {
-          await streamCall.stopLive({
-            continue_hls: false,
-          });
-        } catch (error) {
-          console.warn(
-            'Unable to stop live broadcast:',
-            error
-          );
-        }
-      }
-
+   
       try {
         await streamCall.camera.disable();
       } catch (error) {
