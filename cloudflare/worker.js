@@ -1083,6 +1083,7 @@ async function setEducatorLiveSession(request, env) {
     isLive: body.isLive
   });
 }
+
 async function getLiveStream(request, env) {
   const url = new URL(request.url);
   const sessionId = url.searchParams.get("sessionId") || "";
@@ -1101,18 +1102,63 @@ async function getLiveStream(request, env) {
     return access.error;
   }
 
-    const stream = await signStreamCallToken(
-  env,
-  access.account.id,
-  access.session.id,
-  access.account.role === "educator" ? "host" : undefined,
-  "default"
-);
+  const stream = await signStreamCallToken(
+    env,
+    access.account.id,
+    access.session.id,
+    access.account.role === "educator" ? "host" : undefined,
+    "default"
+  );
 
   if (!stream) {
     return json({
       error: "Live video is not configured. Please ask the Director to configure Stream Video."
     }, 503);
+  }
+
+  // Create or retrieve the exact classroom call BEFORE
+  // allowing the educator to proceed to the classroom.
+  if (access.account.role === "educator") {
+    const createCallUrl =
+      `https://video.stream-io-api.com/api/v2/video/call/default/${encodeURIComponent(stream.callId)}?api_key=${encodeURIComponent(stream.apiKey)}`;
+
+    let createCallResponse;
+
+    try {
+      createCallResponse = await fetch(createCallUrl, {
+        method: "POST",
+        headers: {
+          "Authorization": stream.token,
+          "stream-auth-type": "jwt",
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          data: {
+            created_by_id: access.account.id
+          }
+        })
+      });
+    } catch (error) {
+      console.error("Stream classroom creation request failed:", error);
+
+      return json({
+        error: "Could not contact Stream to create the classroom. Please try again."
+      }, 502);
+    }
+
+    if (!createCallResponse.ok) {
+      const details = await createCallResponse.text();
+
+      console.error(
+        "Stream classroom creation failed:",
+        createCallResponse.status,
+        details
+      );
+
+      return json({
+        error: `Stream could not create the classroom (HTTP ${createCallResponse.status}).`
+      }, 502);
+    }
   }
 
   return json({
@@ -1121,6 +1167,7 @@ async function getLiveStream(request, env) {
     userName: access.account.full_name
   });
 }
+
 
 async function ensureLiveStream(request, env) {
   const director = await authenticate(request, env, "director");
