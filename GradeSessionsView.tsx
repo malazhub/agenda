@@ -242,170 +242,199 @@ const containerRef = useRef<HTMLDivElement>(null);
   };
 
     // Start the educator's actual video broadcast or join it as an assigned student.
-  const startLiveCall = async (session: any) => {
-    if (startCallInProgressRef.current || inLiveConference) return;
-startCallInProgressRef.current = true;
-    setCameraError(null);
+  
+const startLiveCall = async (session: any) => {
+  if (startCallInProgressRef.current || inLiveConference) return;
 
-    if (!isSignedIn || !registeredAccount || !sessionToken) {
-      setCameraError('Please sign in before entering the live classroom.');
-      return;
+  setCameraError(null);
+
+  if (!isSignedIn || !registeredAccount || !sessionToken) {
+    setCameraError('Please sign in before entering the live classroom.');
+    return;
+  }
+
+  if (!isPaidAndActivated || registeredAccount.paid !== true) {
+    setCameraError(
+      'Your account must be activated, paid and not expired.'
+    );
+    return;
+  }
+
+  if (
+    !assignedSessionId ||
+    String(session?.id) !== String(assignedSessionId)
+  ) {
+    setCameraError(
+      'Access denied. You can only enter your Director-assigned classroom.'
+    );
+    return;
+  }
+
+  if (!isEducator && !isStudent) {
+    setCameraError('This account cannot enter a live classroom.');
+    return;
+  }
+
+  if (isStudent && !session.isLive) {
+    setCameraError(
+      'Your assigned educator has not started the live class yet.'
+    );
+    return;
+  }
+
+  startCallInProgressRef.current = true;
+  setIsLoading(true);
+
+  let client: StreamVideoClient | null = null;
+  let call: Call | null = null;
+  let joinedCall = false;
+  let startedBroadcastHere = false;
+
+  try {
+    // Make the assigned classroom available to its registered users.
+    if (isEducator) {
+      await setEducatorLiveSession(sessionToken, true);
+      setReloadKey((key) => key + 1);
     }
 
-    if (!isPaidAndActivated || registeredAccount.paid !== true) {
-      setCameraError(
-        'Your account must be activated, paid and not expired.'
-      );
-      return;
-    }
+    const credentials = await getLiveStreamStatus(
+      sessionToken,
+      String(session.id)
+    );
 
     if (
-      !assignedSessionId ||
-      String(session?.id) !== String(assignedSessionId)
+      !credentials.apiKey ||
+      !credentials.callId ||
+      !credentials.token ||
+      !credentials.userId
     ) {
-      setCameraError(
-        'Access denied. You can only enter your Director-assigned classroom.'
+      throw new Error(
+        'The live classroom credentials are incomplete.'
       );
-      return;
     }
 
-    if (!isEducator && !isStudent) {
-      setCameraError('This account cannot enter a live classroom.');
-      return;
-    }
+    const { StreamVideoClient: VideoClient } =
+      await import('@stream-io/video-client');
 
-    if (isStudent && !session.isLive) {
-      setCameraError(
-        'Your assigned educator has not started the live class yet.'
-      );
-      return;
-    }
+    client = new VideoClient({
+      apiKey: credentials.apiKey,
+      token: credentials.token,
+      user: {
+        id: credentials.userId,
+        name: credentials.userName || registeredAccount.fullName,
+      },
+    });
 
-    setIsLoading(true);
+    // Both assigned educators use the same registered classroom call.
+    call = client.call('livestream', credentials.callId);
 
-    let client: StreamVideoClient | null = null;
-    let call: Call | null = null;
+    await call.join({
+      create: isEducator,
+    });
 
-    try {
-      // The educator first activates the assigned classroom on the server.
-      if (isEducator) {
-        await setEducatorLiveSession(sessionToken, true);
-        setReloadKey((key) => key + 1);
-      }
+    joinedCall = true;
 
-      // Get credentials for this exact assigned classroom.
-      const credentials = await getLiveStreamStatus(
-        sessionToken,
-        String(session.id)
-      );
+    if (isEducator) {
+      await call.camera.enable();
+      setIsVideoOn(true);
 
-      if (
-        !credentials.apiKey ||
-        !credentials.callId ||
-        !credentials.token ||
-        !credentials.userId
-      ) {
-        throw new Error(
-          'The live classroom credentials are incomplete.'
+      try {
+        await call.microphone.enable();
+        setIsMicOn(true);
+      } catch (micError) {
+        console.warn(
+          'Microphone could not be enabled:',
+          micError
         );
-      }
-
-      const { StreamVideoClient: VideoClient } =
-        await import('@stream-io/video-client');
-
-      client = new VideoClient({
-        apiKey: credentials.apiKey,
-        token: credentials.token,
-        user: {
-          id: credentials.userId,
-          name: credentials.userName || registeredAccount.fullName,
-        },
-      });
-
-           // Each educator and their assigned students use the same session ID.
-      call = client.call('livestream', credentials.callId);
-
-      // Join or create the assigned classroom.
-      await call.join({
-        create: isEducator,
-      });
-      if (isEducator) {
-        // Activate the educator's real camera.
-        await call.camera.enable();
-        setIsVideoOn(true);
-
-        // Activate the microphone where permission is available.
-        try {
-          await call.microphone.enable();
-          setIsMicOn(true);
-        } catch (micError) {
-          console.warn(
-            'Microphone could not be enabled:',
-            micError
-          );
-          setIsMicOn(false);
-        }
-
-        // IMPORTANT: Actually start the Stream live broadcast.
-        await call.goLive({
-          start_hls: true,
-        });
-      } else {
-        // Students join as viewers and do not publish their own devices.
-        await call.camera.disable();
-        await call.microphone.disable();
-
-        setIsVideoOn(false);
         setIsMicOn(false);
       }
 
-      // Receive real participants and their video streams.
-      participantsSubscription.current?.unsubscribe();
+      // Only start the broadcast when the call is still backstage.
+      // An educator joining an already-live classroom must not start it again.
+      if (call.state.backstage) {
+        try {
+          await call.goLive({
+            start_hls: true,
+          });
 
-      participantsSubscription.current = call.state.participants$.subscribe((participants) => {
-  // Keep only one camera tile per user.
-  const uniqueParticipants = Array.from(
-    new Map(
-      participants.map((participant) => [
-        participant.userId || participant.sessionId,
-        participant,
-      ])
-    ).values()
-  );
+          startedBroadcastHere = true;
+        } catch (goLiveError) {
+          // Another assigned educator may have started the broadcast
+          // at the same time. Refresh the call before treating this as failure.
+          await call.get();
 
-  setCallParticipants(uniqueParticipants);
-});
+          if (call.state.backstage) {
+            throw goLiveError;
+          }
+        }
+      }
+    } else {
+      // Students join as viewers.
+      await call.camera.disable();
+      await call.microphone.disable();
 
-      setStreamClient(client);
-      setStreamCall(call);
+      setIsVideoOn(false);
+      setIsMicOn(false);
+    }
 
-      setActiveCallSession(session);
-      setInLiveConference(true);
+    participantsSubscription.current?.unsubscribe();
 
-      setTimeLeft(45 * 60);
-      setTimerRunning(true);
+    participantsSubscription.current =
+      call.state.participants$.subscribe((participants) => {
+        const uniqueParticipants = Array.from(
+          new Map(
+            participants.map((participant) => [
+              participant.userId || participant.sessionId,
+              participant,
+            ])
+          ).values()
+        );
 
-    } catch (error) {
-      console.error(
-        'Unable to start or join Stream classroom:',
-        error
-      );
+        setCallParticipants(uniqueParticipants);
+      });
 
-      if (call) {
-        if (isEducator) {
+    setStreamClient(client);
+    setStreamCall(call);
+    setActiveCallSession(session);
+    setInLiveConference(true);
+
+    setTimeLeft(45 * 60);
+    setTimerRunning(true);
+
+  } catch (error) {
+    console.error(
+      'Unable to start or join Stream classroom:',
+      error
+    );
+
+    // Never stop a shared broadcast just because one educator
+    // failed to join or publish.
+    if (call && joinedCall && isEducator) {
+      let otherHostPresent = true;
+
+      try {
+        await call.get();
+
+        otherHostPresent = call.state.participants.some(
+          (participant) =>
+            participant.userId !== registeredAccount.id &&
+            participant.roles.includes('host')
+        );
+      } catch (stateError) {
+        // If host presence cannot be checked, preserve the shared classroom.
+        console.warn(
+          'Unable to verify other classroom hosts:',
+          stateError
+        );
+      }
+
+      if (!otherHostPresent) {
+        if (startedBroadcastHere) {
           await call.stopLive({
             continue_hls: false,
           }).catch(() => undefined);
         }
 
-        await call.leave().catch(() => undefined);
-      }
-
-      if (client) {
-        await client.disconnectUser().catch(() => undefined);
-      }
-
-      if (isEducator) {
         try {
           await setEducatorLiveSession(sessionToken, false);
           setReloadKey((key) => key + 1);
@@ -416,93 +445,139 @@ startCallInProgressRef.current = true;
           );
         }
       }
+    }
 
-      setCameraError(
-        error instanceof Error
-          ? error.message
-          : 'Unable to connect to the live classroom.'
-      );
+    if (call) {
+      await call.leave().catch(() => undefined);
+    }
 
-    } finally {
-  startCallInProgressRef.current = false;
-  setIsLoading(false);
-}
-  };
+    if (client) {
+      await client.disconnectUser().catch(() => undefined);
+    }
+
+    setCameraError(
+      error instanceof Error
+        ? error.message
+        : 'Unable to connect to the live classroom.'
+    );
+
+  } finally {
+    startCallInProgressRef.current = false;
+    setIsLoading(false);
+  }
+};
+
     // Stop the broadcast and leave the assigned Stream classroom.
-  const endLiveCall = async () => {
-    try {
-      participantsSubscription.current?.unsubscribe();
-      participantsSubscription.current = null;
+  
+const endLiveCall = async () => {
+  let shouldStopSharedBroadcast = false;
 
-      // The educator must stop the actual broadcast before leaving.
-      if (streamCall && isEducator) {
+  try {
+    participantsSubscription.current?.unsubscribe();
+    participantsSubscription.current = null;
+
+    if (streamCall && isEducator) {
+      // Refresh Stream state before deciding whether to stop the classroom.
+      // Another assigned educator may still be hosting this same call.
+      try {
+        await streamCall.get();
+
+        const otherHostPresent =
+          streamCall.state.participants.some(
+            (participant) =>
+              participant.userId !== registeredAccount?.id &&
+              participant.roles.includes('host')
+          );
+
+        shouldStopSharedBroadcast = !otherHostPresent;
+      } catch (error) {
+        // Do not risk stopping a shared classroom if host presence
+        // cannot be verified.
+        console.warn(
+          'Unable to verify other classroom hosts:',
+          error
+        );
+      }
+
+      // Only the last educator leaving may stop the shared broadcast.
+      if (shouldStopSharedBroadcast) {
         try {
           await streamCall.stopLive({
             continue_hls: false,
           });
         } catch (error) {
-          console.warn('Unable to stop live broadcast:', error);
-        }
-
-        try {
-          await streamCall.camera.disable();
-        } catch (error) {
-          console.warn('Unable to disable camera:', error);
-        }
-
-        try {
-          await streamCall.microphone.disable();
-        } catch (error) {
-          console.warn('Unable to disable microphone:', error);
-        }
-      }
-
-      if (streamCall) {
-        try {
-          await streamCall.leave();
-        } catch (error) {
-          console.warn('Unable to leave Stream call:', error);
-        }
-      }
-
-      if (streamClient) {
-        try {
-          await streamClient.disconnectUser();
-        } catch (error) {
-          console.warn('Unable to disconnect Stream client:', error);
-        }
-      }
-
-      // Only the educator can mark the classroom offline.
-      if (isEducator && sessionToken && activeCallSession?.id) {
-        try {
-          await setEducatorLiveSession(sessionToken, false);
-          setReloadKey((key) => key + 1);
-        } catch (error) {
-          console.error(
-            'Failed to stop educator live session:',
+          console.warn(
+            'Unable to stop live broadcast:',
             error
           );
         }
       }
 
-    } finally {
-      setCallParticipants([]);
+      try {
+        await streamCall.camera.disable();
+      } catch (error) {
+        console.warn('Unable to disable camera:', error);
+      }
 
-      setStreamCall(null);
-      setStreamClient(null);
-
-      setInLiveConference(false);
-      setTimerRunning(false);
-      setTimeLeft(45 * 60);
-
-      setIsVideoOn(false);
-      setIsMicOn(false);
-
-      setActiveCallSession(null);
-      setCameraError(null);
+      try {
+        await streamCall.microphone.disable();
+      } catch (error) {
+        console.warn('Unable to disable microphone:', error);
+      }
     }
-  };
+
+    if (streamCall) {
+      try {
+        await streamCall.leave();
+      } catch (error) {
+        console.warn('Unable to leave Stream call:', error);
+      }
+    }
+
+    if (streamClient) {
+      try {
+        await streamClient.disconnectUser();
+      } catch (error) {
+        console.warn('Unable to disconnect Stream client:', error);
+      }
+    }
+
+    // Keep the classroom live while another assigned educator remains.
+    if (
+      isEducator &&
+      shouldStopSharedBroadcast &&
+      sessionToken &&
+      activeCallSession?.id
+    ) {
+      try {
+        await setEducatorLiveSession(sessionToken, false);
+        setReloadKey((key) => key + 1);
+      } catch (error) {
+        console.error(
+          'Failed to stop educator live session:',
+          error
+        );
+      }
+    }
+
+  } finally {
+    setCallParticipants([]);
+
+    setStreamCall(null);
+    setStreamClient(null);
+
+    setInLiveConference(false);
+    setTimerRunning(false);
+    setTimeLeft(45 * 60);
+
+    setIsVideoOn(false);
+    setIsMicOn(false);
+
+    setActiveCallSession(null);
+    setCameraError(null);
+  }
+};
+
 
   // Video track toggle
   const toggleVideoTrack = async () => {
