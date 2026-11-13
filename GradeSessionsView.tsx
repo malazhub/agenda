@@ -334,7 +334,37 @@ const startLiveCall = async (session: any) => {
 
     joinedCall = true;
 
-    if (isEducator) {
+        if (isEducator) {
+      // Educator broadcasts audio only. Do not publish educator video.
+      await call.camera.disable();
+      setIsVideoOn(false);
+
+      try {
+        await call.microphone.enable();
+        setIsMicOn(true);
+      } catch (micError) {
+        console.warn('Microphone could not be enabled:', micError);
+        setIsMicOn(false);
+      }
+
+      // Start the live classroom if it is still backstage.
+      if (call.state.backstage) {
+        try {
+          await call.goLive({
+            start_hls: true,
+          });
+
+          startedBroadcastHere = true;
+        } catch (goLiveError) {
+          await call.get();
+
+          if (call.state.backstage) {
+            throw goLiveError;
+          }
+        }
+      }
+    } else {
+      // Students may publish their own camera and microphone.
       await call.camera.enable();
       setIsVideoOn(true);
 
@@ -342,12 +372,10 @@ const startLiveCall = async (session: any) => {
         await call.microphone.enable();
         setIsMicOn(true);
       } catch (micError) {
-        console.warn(
-          'Microphone could not be enabled:',
-          micError
-        );
+        console.warn('Student microphone could not be enabled:', micError);
         setIsMicOn(false);
       }
+    }
 
       // Only start the broadcast when the call is still backstage.
       // An educator joining an already-live classroom must not start it again.
@@ -581,7 +609,7 @@ const endLiveCall = async () => {
 
   // Video track toggle
   const toggleVideoTrack = async () => {
-  if (!streamCall || !isEducator) return;
+  if (!streamCall || !isStudent) return;
 
   try {
     if (isVideoOn) {
@@ -599,7 +627,7 @@ const endLiveCall = async () => {
 
   // Mic track toggle
   const toggleAudioTrack = async () => {
-  if (!streamCall || !isEducator) return;
+  if (!streamCall || (!isEducator && !isStudent)) return;
 
   try {
     if (isMicOn) {
@@ -781,12 +809,15 @@ const studentPrimarySession =
 
               <div>
                 <h3 className="font-bold text-sm">
-                  {activeCallSession.subject} — {selectedGrade.name[currentLang]}
-                </h3>
-                <p className="text-xs text-slate-400">
-                  {currentLang === 'ar' ? 'الأستاذ: ' : 'Educator: '}
-                  {activeCallSession.educatorName}
-                </p>
+              {selectedGrade.name[currentLang]}
+            </h3>
+            <p className="text-xs text-slate-300">
+              {currentLang === 'ar' ? 'الأستاذ: ' : 'Educator: '}
+              {activeCallSession.educatorName}
+            </p>
+            <p className="text-xs text-slate-400">
+              {activeCallSession.subject}
+            </p>
               </div>
             </div>
 
@@ -866,8 +897,12 @@ const studentPrimarySession =
                     participant.userId ||
                     'Participant';
 
-                  const participantHasVideo =
-                    Boolean(participant.videoStream);
+                  const participantIsEducator =
+                  Boolean(participant.roles?.includes('host'));
+                
+                const participantHasVideo =
+                  !participantIsEducator &&
+                  Boolean(participant.videoStream);
 
                   const isOwnParticipant =
                     participant.userId === registeredAccount?.id;
@@ -964,8 +999,8 @@ const studentPrimarySession =
                 </span>
               </div>
 
-              {/* Only the educator controls the broadcast devices */}
-              {isEducator && (
+              {/* Students control their camera; both roles control their microphone. */}
+{(isEducator || isStudent) && (
                 <div className="flex items-center gap-2">
 
                   <button
