@@ -91,7 +91,7 @@ async function signToken(payload, secret) {
 
 
 
-async function signStreamCallToken(env, userId, sessionId, role) {
+async function signStreamCallToken(   env,   userId,   sessionId,   role,   callType = "livestream" ) {
   const apiKey = env.STREAM_VIDEO_API_KEY;
   const secret = env.STREAM_VIDEO_API_SECRET;
 
@@ -115,7 +115,7 @@ async function signStreamCallToken(env, userId, sessionId, role) {
     encoder.encode(
       JSON.stringify({
         user_id: userId,
-        call_cids: [`livestream:${callId}`],
+        call_cids: [`${callType}:${callId}`],
         ...(role ? { role } : {}),
         iat: now,
         exp: now + 60 * 60,
@@ -1094,11 +1094,12 @@ async function getLiveStream(request, env) {
   }
 
     const stream = await signStreamCallToken(
-    env,
-    access.account.id,
-    access.session.id,
-    access.account.role === "educator" ? "host" : undefined
-  );
+  env,
+  access.account.id,
+  access.session.id,
+  access.account.role === "educator" ? "host" : undefined,
+  "default"
+);
 
   if (!stream) {
     return json({
