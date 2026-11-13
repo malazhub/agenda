@@ -337,31 +337,33 @@ await call.join({
       setReloadKey((key) => key + 1);
     }
 
-           if (isEducator) {
-  // Educator camera stays off. Educator microphone stays available.
-  await call.camera.disable();
-  setIsVideoOn(false);
-
+           
+if (isEducator || isStudent) {
+  // Educators and students start with camera ON.
   try {
-    await call.microphone.enable();
-    setIsMicOn(true);
-  } catch (micError) {
-    console.warn('Microphone could not be enabled:', micError);
-    setIsMicOn(false);
+    await call.camera.enable();
+    setIsVideoOn(true);
+  } catch (cameraError) {
+    console.error('Unable to enable classroom camera:', cameraError);
+    setIsVideoOn(false);
+    setCameraError(
+      'Camera could not be enabled. Check your browser camera permission.'
+    );
   }
-} else {
-  // Students can publish their own camera and microphone.
-  await call.camera.enable();
-  setIsVideoOn(true);
 
+  // Educators and students start with microphone ON.
   try {
     await call.microphone.enable();
     setIsMicOn(true);
   } catch (micError) {
-    console.warn('Student microphone could not be enabled:', micError);
+    console.error('Unable to enable classroom microphone:', micError);
     setIsMicOn(false);
+    setCameraError(
+      'Microphone could not be enabled. Check your browser microphone permission.'
+    );
   }
 }
+
 
     participantsSubscription.current?.unsubscribe();
 
@@ -549,8 +551,9 @@ const endLiveCall = async () => {
 
 
   // Video track toggle
-  const toggleVideoTrack = async () => {
-  if (!streamCall || !isStudent) return;
+  
+const toggleVideoTrack = async () => {
+  if (!streamCall || (!isStudent && !isEducator)) return;
 
   try {
     if (isVideoOn) {
@@ -565,6 +568,7 @@ const endLiveCall = async () => {
     setCameraError('Unable to change camera settings.');
   }
 };
+
 
   // Mic track toggle
   const toggleAudioTrack = async () => {
