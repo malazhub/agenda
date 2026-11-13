@@ -89,82 +89,25 @@ async function signToken(payload, secret) {
 }
 
 
+
 async function signStreamCallToken(env, userId, sessionId, role) {
   const apiKey = env.STREAM_VIDEO_API_KEY;
   const secret = env.STREAM_VIDEO_API_SECRET;
 
-  if (!apiKey || !secret || !sessionId) return null;
-
-  // Configure the livestream host role using server-side authentication.
-  if (role === "host") {
-    const serverHeader = base64UrlEncode(
-      encoder.encode(JSON.stringify({ alg: "HS256", typ: "JWT" }))
-    );
-
-    const serverPayload = base64UrlEncode(
-      encoder.encode(JSON.stringify({ server: true }))
-    );
-
-    const serverData = `${serverHeader}.${serverPayload}`;
-
-    const serverKey = await crypto.subtle.importKey(
-      "raw",
-      encoder.encode(secret),
-      { name: "HMAC", hash: "SHA-256" },
-      false,
-      ["sign"]
-    );
-
-    const serverSignature = await crypto.subtle.sign(
-      "HMAC",
-      serverKey,
-      encoder.encode(serverData)
-    );
-
-    const serverToken =
-      `${serverData}.${base64UrlEncode(new Uint8Array(serverSignature))}`;
-
-    const permissionResponse = await fetch(
-      `https://video.stream-io-api.com/api/v2/video/calltypes/livestream?api_key=${encodeURIComponent(apiKey)}`,
-      {
-        method: "PUT",
-        headers: {
-          Authorization: serverToken,
-          "stream-auth-type": "jwt",
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          grants: {
-            host: [
-              "join-call",
-              "read-call",
-              "create-call",
-              "join-backstage",
-              "send-video",
-              "send-audio",
-              "start-broadcast-call",
-              "stop-broadcast-call",
-              "end-call",
-            ],
-          },
-        }),
-      }
-    );
-
-    if (!permissionResponse.ok) {
-      const errorText = await permissionResponse.text();
-      throw new Error(
-        `Could not configure Stream host permissions: ${errorText}`
-      );
-    }
+  if (!apiKey || !secret || !sessionId) {
+    return null;
   }
 
-  // Create the educator/student call token.
   const now = Math.floor(Date.now() / 1000);
   const callId = sessionId;
 
   const header = base64UrlEncode(
-    encoder.encode(JSON.stringify({ alg: "HS256", typ: "JWT" }))
+    encoder.encode(
+      JSON.stringify({
+        alg: "HS256",
+        typ: "JWT",
+      })
+    )
   );
 
   const payload = base64UrlEncode(
@@ -184,7 +127,10 @@ async function signStreamCallToken(env, userId, sessionId, role) {
   const key = await crypto.subtle.importKey(
     "raw",
     encoder.encode(secret),
-    { name: "HMAC", hash: "SHA-256" },
+    {
+      name: "HMAC",
+      hash: "SHA-256",
+    },
     false,
     ["sign"]
   );
@@ -198,10 +144,13 @@ async function signStreamCallToken(env, userId, sessionId, role) {
   return {
     apiKey,
     callId,
-    token: `${data}.${base64UrlEncode(new Uint8Array(signature))}`,
+    token: `${data}.${base64UrlEncode(
+      new Uint8Array(signature)
+    )}`,
     userId,
   };
 }
+
 
 
 async function verifyToken(token, secret) {
