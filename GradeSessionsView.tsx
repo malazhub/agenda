@@ -322,9 +322,11 @@ const startLiveCall = async (session: any) => {
     // Both assigned educators use the same registered classroom call.
     call = client.call('default', credentials.callId);
 
-    await call.join({
-      create: isEducator,
-    });
+// The Worker creates the classroom before returning educator credentials.
+// Neither educator nor student creates a second call in the browser.
+await call.join({
+  create: false,
+});
     
     joinedCall = true;
     
