@@ -55,6 +55,7 @@ export interface RegistrationSession {
   gradeId: string;
   subject: string;
   title: string;
+  teacherName: string;
 }
 
 export interface StoredSessionRecord {
