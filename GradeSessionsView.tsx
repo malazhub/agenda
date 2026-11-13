@@ -322,27 +322,13 @@ startCallInProgressRef.current = true;
         },
       });
 
-      // Each educator and their assigned students use the same session ID.
-call = client.call('livestream', credentials.callId);
+           // Each educator and their assigned students use the same session ID.
+      call = client.call('livestream', credentials.callId);
 
-// Join or create the assigned classroom.
-await call.join({
-  create: isEducator,
-});
-
-// Explicitly assign the educator's host role, including
-// when this classroom already existed before the educator joined.
-if (isEducator) {
-  await call.updateCallMembers({
-    update_members: [
-      {
-        user_id: credentials.userId,
-        role: 'host',
-      },
-    ],
-  });
-}
-
+      // Join or create the assigned classroom.
+      await call.join({
+        create: isEducator,
+      });
       if (isEducator) {
         // Activate the educator's real camera.
         await call.camera.enable();
