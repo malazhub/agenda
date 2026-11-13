@@ -453,9 +453,9 @@ test('Director can save a live session and the grade catalog returns its playbac
   );
 
   assert.deepEqual(
-    videoTokenPayload.call_cids,
-    ['livestream:live-eb8-math']
-  );
+  videoTokenPayload.call_cids,
+  ['default:live-eb8-math']
+);
   assert.equal('STREAM_VIDEO_API_SECRET' in liveCredentials, false);
   const [header, payload, signature] = liveCredentials.token.split('.');
   assert.equal(
