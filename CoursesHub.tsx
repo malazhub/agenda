@@ -131,19 +131,64 @@ export const CoursesHub: React.FC<CoursesHubProps> = ({
     }
   };
 
-  const updateAccount = async (account: DirectorRow, update: { activated?: boolean; paid?: boolean; renew?: boolean; password?: string; registeredSessionId?: string }) => {
-    if (!directorToken) return;
-    setDirectorDataError('');
-    setDirectorMessage('');
-    try {
-      const { account: savedAccount } = await updateDirectorAccount(directorToken, account.id, update);
-      const setRows = account.role === 'student' ? setStudentRows : setEducatorRows;
-      setRows((rows) => rows.map((row) => row.id === savedAccount.id ? savedAccount : row));
-      setDirectorMessage(update.password ? t.resetPassword : update.renew ? t.renewMonth : '');
-    } catch (error) {
-      setDirectorDataError(error instanceof Error ? error.message : 'Unable to save the account status.');
+  
+const updateAccount = async (
+  account: DirectorRow,
+  update: {
+    activated?: boolean;
+    paid?: boolean;
+    renew?: boolean;
+    password?: string;
+    registeredSessionId?: string;
+  }
+) => {
+  if (!directorToken) return;
+
+  setDirectorDataError('');
+  setDirectorMessage('');
+
+  try {
+    const { account: savedAccount } =
+      await updateDirectorAccount(
+        directorToken,
+        account.id,
+        update
+      );
+
+    const setRows =
+      account.role === 'student'
+        ? setStudentRows
+        : setEducatorRows;
+
+    setRows((rows) =>
+      rows.map((row) =>
+        row.id === savedAccount.id ? savedAccount : row
+      )
+    );
+
+    // Reload the room list because assigning an educator
+    // may have created a new educator-specific classroom.
+    if (typeof update.registeredSessionId === 'string') {
+      const { sessions } = await getRegistrationSessions();
+      setRegistrationSessions(sessions);
     }
-  };
+
+    setDirectorMessage(
+      update.password
+        ? t.resetPassword
+        : update.renew
+          ? t.renewMonth
+          : ''
+    );
+  } catch (error) {
+    setDirectorDataError(
+      error instanceof Error
+        ? error.message
+        : 'Unable to save the account status.'
+    );
+  }
+};
+
 
   // Permanent Delete: Calls Cloudflare Worker to delete the row from D1 database
   const deleteAccount = async (account: DirectorRow) => {
@@ -308,21 +353,52 @@ export const CoursesHub: React.FC<CoursesHubProps> = ({
               <td className="px-3 py-3 text-slate-700">{row.email}</td>
               <td className="px-3 py-3 text-slate-700">{row.phone || '—'}</td>
               <td className="px-3 py-3 text-slate-700">{row.schoolOrSubject || '—'}</td>
-              <td className="px-3 py-3 text-slate-700">
-                <select
-                  aria-label={`${row.fullName} ${t.registeredSessionLabel}`}
-                  value={row.registeredSessionId || ''}
-                  onChange={(event) => void updateAccount(row, { registeredSessionId: event.target.value })}
-                  className="max-w-56 rounded border border-slate-300 bg-white p-1.5 text-[10px]"
-                >
-                  <option value="">{t.registrationChooseSession}</option>
-                  {registrationSessions.map((session) => (
-                    <option key={session.id} value={session.id}>
-                      {session.gradeId.toUpperCase()} · {session.subject} — {session.title}
-                    </option>
-                  ))}
-                </select>
-              </td>
+              
+<td className="px-3 py-3 text-slate-700">
+  <div className="flex flex-col items-start gap-2">
+    <select
+      aria-label={`${row.fullName} ${t.registeredSessionLabel}`}
+      value={row.registeredSessionId || ''}
+      onChange={(event) =>
+        void updateAccount(row, {
+          registeredSessionId: event.target.value
+        })
+      }
+      className="max-w-64 rounded border border-slate-300 bg-white p-1.5 text-[10px]"
+    >
+      <option value="">
+        {t.registrationChooseSession}
+      </option>
+
+      {registrationSessions.map((session) => (
+        <option key={session.id} value={session.id}>
+          {session.gradeId.toUpperCase()}
+          {' · '}
+          {session.subject}
+          {' · '}
+          {session.teacherName || 'Unassigned lesson'}
+          {' · '}
+          {session.title}
+        </option>
+      ))}
+    </select>
+
+    {row.role === 'educator' && row.registeredSessionId && (
+      <button
+        type="button"
+        onClick={() =>
+          void updateAccount(row, {
+            registeredSessionId: row.registeredSessionId!
+          })
+        }
+        className="text-[10px] font-bold text-indigo-700 underline"
+      >
+        {currentLang === 'ar' ? 'فصل الصف' : 'Separate classroom'}
+      </button>
+    )}
+  </div>
+</td>
+
               <td className="px-3 py-3 text-slate-700">{formatDate(row.createdAt)}</td>
               <td className="px-3 py-3 text-slate-700">
                 <div>{formatDate(row.expiresAt)}</div>
