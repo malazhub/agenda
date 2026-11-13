@@ -334,7 +334,7 @@ const startLiveCall = async (session: any) => {
 
     joinedCall = true;
 
-        if (isEducator) {
+            if (isEducator) {
       // Educator broadcasts audio only. Do not publish educator video.
       await call.camera.disable();
       setIsVideoOn(false);
@@ -347,7 +347,7 @@ const startLiveCall = async (session: any) => {
         setIsMicOn(false);
       }
 
-      // Start the live classroom if it is still backstage.
+      // Start the broadcast only if it has not already started.
       if (call.state.backstage) {
         try {
           await call.goLive({
@@ -356,6 +356,7 @@ const startLiveCall = async (session: any) => {
 
           startedBroadcastHere = true;
         } catch (goLiveError) {
+          // Another assigned educator may have started it simultaneously.
           await call.get();
 
           if (call.state.backstage) {
@@ -375,34 +376,6 @@ const startLiveCall = async (session: any) => {
         console.warn('Student microphone could not be enabled:', micError);
         setIsMicOn(false);
       }
-    }
-
-      // Only start the broadcast when the call is still backstage.
-      // An educator joining an already-live classroom must not start it again.
-      if (call.state.backstage) {
-        try {
-          await call.goLive({
-            start_hls: true,
-          });
-
-          startedBroadcastHere = true;
-        } catch (goLiveError) {
-          // Another assigned educator may have started the broadcast
-          // at the same time. Refresh the call before treating this as failure.
-          await call.get();
-
-          if (call.state.backstage) {
-            throw goLiveError;
-          }
-        }
-      }
-    } else {
-      // Students join as viewers.
-      await call.camera.disable();
-      await call.microphone.disable();
-
-      setIsVideoOn(false);
-      setIsMicOn(false);
     }
 
     participantsSubscription.current?.unsubscribe();
