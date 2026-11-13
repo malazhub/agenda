@@ -153,7 +153,49 @@ async function signStreamCallToken(   env,   userId,   sessionId,   role,   call
 }
 
 
+async function signStreamServerToken(env) {
+  const secret = env.STREAM_VIDEO_API_SECRET;
 
+  if (!secret) {
+    throw new Error("STREAM_VIDEO_API_SECRET is not configured.");
+  }
+
+  const header = base64UrlEncode(
+    encoder.encode(JSON.stringify({
+      alg: "HS256",
+      typ: "JWT",
+    }))
+  );
+
+  const payload = base64UrlEncode(
+    encoder.encode(JSON.stringify({
+      server: true,
+    }))
+  );
+
+  const data = `${header}.${payload}`;
+
+  const key = await crypto.subtle.importKey(
+    "raw",
+    encoder.encode(secret),
+    {
+      name: "HMAC",
+      hash: "SHA-256",
+    },
+    false,
+    ["sign"]
+  );
+
+  const signature = await crypto.subtle.sign(
+    "HMAC",
+    key,
+    encoder.encode(data)
+  );
+
+  return `${data}.${base64UrlEncode(
+    new Uint8Array(signature)
+  )}`;
+}
 
 async function verifyToken(token, secret) {
   if (!secret || secret.length < 32) throw new Error("SESSION_SIGNING_KEY must be configured with at least 32 characters");
