@@ -550,14 +550,47 @@ async function updateAccount(request, env, accountId) {
     updates.push("paid = ?");
     values.push(Number(body.paid));
   }
+  
   if (typeof body?.registeredSessionId === "string") {
-    const session = await env.DB.prepare("SELECT id, grade_id FROM sessions WHERE id = ?")
+    const session = await env.DB.prepare(
+      "SELECT id, grade_id FROM sessions WHERE id = ?"
+    )
       .bind(body.registeredSessionId)
       .first();
-    if (!session) return json({ error: "Choose a valid registered session." }, 400);
+
+    if (!session) {
+      return json({ error: "Choose a valid registered session." }, 400);
+    }
+
+    const targetAccount = await env.DB.prepare(
+      "SELECT id, role FROM accounts WHERE id = ?"
+    )
+      .bind(accountId)
+      .first();
+
+    if (targetAccount?.role === "educator") {
+      const assignedToAnotherEducator = await env.DB.prepare(
+        `SELECT id
+         FROM accounts
+         WHERE role = 'educator'
+           AND registered_session_id = ?
+           AND id != ?
+         LIMIT 1`
+      )
+        .bind(session.id, accountId)
+        .first();
+
+      if (assignedToAnotherEducator) {
+        return json({
+          error: "This classroom belongs to another educator. Create or assign a separate classroom."
+        }, 409);
+      }
+    }
+
     updates.push("registered_session_id = ?", "grade_id = ?");
     values.push(session.id, session.grade_id);
   }
+
   if (typeof body?.password === "string") {
     if (!body.password || body.password.length > MAX_PASSWORD_LENGTH) {
       return json({ error: "A password must contain 1–1,024 characters." }, 400);
