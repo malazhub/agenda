@@ -624,7 +624,14 @@ const isStudentSessionMatch = (session: any): boolean => {
   return String(session.id) === String(assignedSessionId);
 };
 
-  const visibleLiveSessions = isEducator   ? []   : liveSessionsList.filter(       (session) => String(session.id) === String(assignedSessionId)     );  const studentPrimarySession = visibleLiveSessions[0] || null;
+  // Show every educator who is currently broadcasting.
+const visibleLiveSessions = isEducator ? [] : liveSessionsList;
+
+// Keep the student's own assigned classroom identified separately.
+const studentPrimarySession =
+  visibleLiveSessions.find(
+    (session) => String(session.id) === String(assignedSessionId)
+  ) || null;
 
     // Student join validation
   const handleStudentJoinRoom = (session: any) => {
