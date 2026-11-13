@@ -551,7 +551,7 @@ async function updateAccount(request, env, accountId) {
     values.push(Number(body.paid));
   }
   
-  if (typeof body?.registeredSessionId === "string") {
+    if (typeof body?.registeredSessionId === "string") {
     const session = await env.DB.prepare(
       "SELECT id, grade_id FROM sessions WHERE id = ?"
     )
@@ -562,31 +562,8 @@ async function updateAccount(request, env, accountId) {
       return json({ error: "Choose a valid registered session." }, 400);
     }
 
-    const targetAccount = await env.DB.prepare(
-      "SELECT id, role FROM accounts WHERE id = ?"
-    )
-      .bind(accountId)
-      .first();
-
-    if (targetAccount?.role === "educator") {
-      const assignedToAnotherEducator = await env.DB.prepare(
-        `SELECT id
-         FROM accounts
-         WHERE role = 'educator'
-           AND registered_session_id = ?
-           AND id != ?
-         LIMIT 1`
-      )
-        .bind(session.id, accountId)
-        .first();
-
-      if (assignedToAnotherEducator) {
-        return json({
-          error: "This classroom belongs to another educator. Create or assign a separate classroom."
-        }, 409);
-      }
-    }
-
+    // Multiple educators are allowed to use the same registered session.
+    // Each educator retains their own account and Stream user identity.
     updates.push("registered_session_id = ?", "grade_id = ?");
     values.push(session.id, session.grade_id);
   }
