@@ -870,7 +870,7 @@ const studentPrimarySession =
 
                   
               const participantHasVideo =
-                Boolean(participant.videoStream);
+              hasVideo(participant);
 
 
                   const isOwnParticipant =
@@ -903,7 +903,7 @@ const studentPrimarySession =
 
   {/* Show the camera-off message only when Stream
       confirms that the participant is not publishing video. */}
-  {!hasVideo(participant) && (
+  {!participantHasVideo && (
     <div className="absolute inset-0 min-h-[260px] flex flex-col items-center justify-center text-center p-4 bg-slate-950">
       <div className="w-16 h-16 rounded-full bg-slate-800 flex items-center justify-center mb-3">
         <VideoOff className="w-8 h-8 text-slate-400" />
