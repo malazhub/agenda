@@ -338,31 +338,44 @@ await call.join({
     }
 
            
+
 if (isEducator || isStudent) {
-  // Educators and students start with camera ON.
+  // Start the camera and verify that Stream enables it.
   try {
     await call.camera.enable();
+
+    if (!call.camera.state.status) {
+      throw new Error('Stream camera did not enter an enabled state.');
+    }
+
     setIsVideoOn(true);
+    setCameraError(null);
   } catch (cameraError) {
-    console.error('Unable to enable classroom camera:', cameraError);
+    console.error(
+      'Classroom camera startup failed:',
+      cameraError
+    );
+
     setIsVideoOn(false);
     setCameraError(
-      'Camera could not be enabled. Check your browser camera permission.'
+      'Camera could not start. Check browser camera permission and make sure no other application is using it.'
     );
   }
 
-  // Educators and students start with microphone ON.
+  // Start the microphone independently.
   try {
     await call.microphone.enable();
     setIsMicOn(true);
   } catch (micError) {
-    console.error('Unable to enable classroom microphone:', micError);
-    setIsMicOn(false);
-    setCameraError(
-      'Microphone could not be enabled. Check your browser microphone permission.'
+    console.error(
+      'Classroom microphone startup failed:',
+      micError
     );
+
+    setIsMicOn(false);
   }
 }
+
 
 
     participantsSubscription.current?.unsubscribe();
