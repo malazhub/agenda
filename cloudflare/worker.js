@@ -950,9 +950,17 @@ async function registeredLiveSession(request, env, sessionId) {
     };
   }
 
-  const session = await env.DB.prepare(
-    "SELECT * FROM sessions WHERE id = ? AND is_live = 1"
-  ).bind(sessionId).first();
+  // Educators must be able to obtain credentials to CREATE
+// an offline classroom. Students can obtain credentials only
+// after the educator has marked the classroom live.
+const sessionQuery =
+  claims.role === "educator"
+    ? "SELECT * FROM sessions WHERE id = ?"
+    : "SELECT * FROM sessions WHERE id = ? AND is_live = 1";
+
+const session = await env.DB.prepare(sessionQuery)
+  .bind(sessionId)
+  .first();
 
   if (!session) {
     return {
