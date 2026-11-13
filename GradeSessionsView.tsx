@@ -3,11 +3,11 @@ import React, { useEffect, useState, useRef } from 'react';
 import { Language, GradeLevelDef } from '../types';
 import { translations } from '../translations';
 
-import type {
-  Call,
-  StreamVideoClient,
+import {
+  hasVideo,
+  type Call,
+  type StreamVideoClient,
 } from '@stream-io/video-client';
-
 import {
   getGradeSessions,
   getLiveEducators,
@@ -339,17 +339,22 @@ await call.join({
 
            
 
+
 if (isEducator || isStudent) {
-  // Start the camera and verify that Stream enables it.
+  // Enable the camera for both educator and student.
+  // Do not inspect call.camera.state.status here:
+  // camera.enable() is the operation that requests
+  // and enables the camera.
   try {
     await call.camera.enable();
 
-    if (!call.camera.state.status) {
-      throw new Error('Stream camera did not enter an enabled state.');
-    }
-
     setIsVideoOn(true);
     setCameraError(null);
+
+    console.log(
+      'Classroom camera enable completed:',
+      call.camera.state
+    );
   } catch (cameraError) {
     console.error(
       'Classroom camera startup failed:',
@@ -362,10 +367,17 @@ if (isEducator || isStudent) {
     );
   }
 
-  // Start the microphone independently.
+  // Enable the microphone independently.
+  // A camera failure must not prevent microphone startup.
   try {
     await call.microphone.enable();
+
     setIsMicOn(true);
+
+    console.log(
+      'Classroom microphone enable completed:',
+      call.microphone.state
+    );
   } catch (micError) {
     console.error(
       'Classroom microphone startup failed:',
@@ -375,6 +387,7 @@ if (isEducator || isStudent) {
     setIsMicOn(false);
   }
 }
+
 
 
 
@@ -868,54 +881,47 @@ const studentPrimarySession =
                       key={participant.sessionId || participant.userId}
                       className="relative h-full min-h-0 w-full bg-black rounded-2xl overflow-hidden border border-slate-700"
                     >
-                      {participantHasVideo ? (
-                        <video
-                          ref={(videoElement) => {
-                            if (
-                              videoElement &&
-                              participant.videoStream &&
-                              videoElement.srcObject !== participant.videoStream
-                            ) {
-                              videoElement.srcObject =
-                                participant.videoStream;
+                      
+<>
+  {/* Always mount the video element so Stream can bind
+      and request this participant's video track. */}
+  <video
+    ref={(videoElement) => {
+      if (!videoElement || !streamCall) return;
 
-                              videoElement.autoplay = true;
-                              videoElement.playsInline = true;
+      return streamCall.bindVideoElement(
+        videoElement,
+        participant.sessionId,
+        'videoTrack'
+      );
+    }}
+    autoPlay
+    playsInline
+    muted={isOwnParticipant}
+    className="absolute inset-0 w-full h-full object-contain bg-black"
+  />
 
-                              // Mute this user's own local preview.
-                              // Keep remote participants audible.
-                              videoElement.muted = isOwnParticipant;
+  {/* Show the camera-off message only when Stream
+      confirms that the participant is not publishing video. */}
+  {!hasVideo(participant) && (
+    <div className="absolute inset-0 min-h-[260px] flex flex-col items-center justify-center text-center p-4 bg-slate-950">
+      <div className="w-16 h-16 rounded-full bg-slate-800 flex items-center justify-center mb-3">
+        <VideoOff className="w-8 h-8 text-slate-400" />
+      </div>
 
-                              void videoElement.play().catch((error) => {
-                                console.warn(
-                                  'Unable to play participant video:',
-                                  error
-                                );
-                              });
-                            }
-                          }}
-                          autoPlay
-                          playsInline
-                          muted={isOwnParticipant}
-                          className="absolute inset-0 w-full h-full object-contain bg-black"
-                        />
-                      ) : (
-                        <div className="min-h-[260px] flex flex-col items-center justify-center text-center p-4">
-                          <div className="w-16 h-16 rounded-full bg-slate-800 flex items-center justify-center mb-3">
-                            <VideoOff className="w-8 h-8 text-slate-400" />
-                          </div>
+      <p className="text-sm font-bold text-white">
+        {participantName}
+      </p>
 
-                          <p className="text-sm font-bold text-white">
-                            {participantName}
-                          </p>
+      <p className="text-xs text-slate-400 mt-1">
+        {currentLang === 'ar'
+          ? 'الكاميرا متوقفة'
+          : 'Camera is off'}
+      </p>
+    </div>
+  )}
+</>
 
-                          <p className="text-xs text-slate-400 mt-1">
-                            {currentLang === 'ar'
-                              ? 'الكاميرا متوقفة'
-                              : 'Camera is off'}
-                          </p>
-                        </div>
-                      )}
 
                       <div className="absolute bottom-3 left-3 right-3 flex items-center justify-between gap-2">
                         <span className="bg-black/75 backdrop-blur-md text-white text-xs font-bold px-3 py-2 rounded-lg truncate">
