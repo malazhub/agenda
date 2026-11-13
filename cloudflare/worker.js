@@ -936,10 +936,11 @@ async function getLiveStream(request, env) {
     return access.error;
   }
 
-  const stream = await signStreamCallToken(
+    const stream = await signStreamCallToken(
     env,
     access.account.id,
-    access.session.id
+    access.session.id,
+    access.account.role === "educator" ? "host" : undefined
   );
 
   if (!stream) {
