@@ -90,6 +90,7 @@ async function signToken(payload, secret) {
 
 
 
+
 async function signStreamCallToken(env, userId, sessionId, role) {
   const apiKey = env.STREAM_VIDEO_API_KEY;
   const secret = env.STREAM_VIDEO_API_SECRET;
@@ -98,97 +99,6 @@ async function signStreamCallToken(env, userId, sessionId, role) {
     return null;
   }
 
-  // Configure the livestream host permissions using server authentication.
-  // Cache the successful configuration promise within this Worker isolate.
-  if (role === "host") {
-    if (!signStreamCallToken.hostPermissionsPromise) {
-      signStreamCallToken.hostPermissionsPromise = (async () => {
-        const serverHeader = base64UrlEncode(
-          encoder.encode(
-            JSON.stringify({
-              alg: "HS256",
-              typ: "JWT",
-            })
-          )
-        );
-
-        const serverPayload = base64UrlEncode(
-          encoder.encode(
-            JSON.stringify({
-              server: true,
-            })
-          )
-        );
-
-        const serverData = `${serverHeader}.${serverPayload}`;
-
-        const serverKey = await crypto.subtle.importKey(
-          "raw",
-          encoder.encode(secret),
-          {
-            name: "HMAC",
-            hash: "SHA-256",
-          },
-          false,
-          ["sign"]
-        );
-
-        const serverSignature = await crypto.subtle.sign(
-          "HMAC",
-          serverKey,
-          encoder.encode(serverData)
-        );
-
-        const serverToken = `${serverData}.${base64UrlEncode(
-          new Uint8Array(serverSignature)
-        )}`;
-
-        const callTypeUrl =
-          `https://video.stream-io-api.com/api/v2/video/calltypes/livestream?api_key=${encodeURIComponent(apiKey)}`;
-
-        const permissionResponse = await fetch(callTypeUrl, {
-          method: "PUT",
-          headers: {
-            Authorization: serverToken,
-            "stream-auth-type": "jwt",
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            grants: {
-              host: [
-                "create-call",
-                "read-call",
-                "join-call",
-                "join-backstage",
-                "send-video",
-                "send-audio",
-                "start-broadcast-call",
-                "stop-broadcast-call",
-              ],
-            },
-          }),
-        });
-
-        if (!permissionResponse.ok) {
-          const errorText = await permissionResponse.text();
-
-          throw new Error(
-            `Stream livestream host permission configuration failed (${permissionResponse.status}): ${errorText}`
-          );
-        }
-      })();
-    }
-
-    try {
-      await signStreamCallToken.hostPermissionsPromise;
-    } catch (error) {
-      // Allow a later request to retry if Stream rejects the configuration.
-      signStreamCallToken.hostPermissionsPromise = null;
-      throw error;
-    }
-  }
-
-  // Generate the individual educator or student call token.
   const now = Math.floor(Date.now() / 1000);
   const callId = sessionId;
 
