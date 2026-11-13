@@ -4,7 +4,6 @@ import { Language, GradeLevelDef } from '../types';
 import { translations } from '../translations';
 
 import {
-  hasVideo,
   type Call,
   type StreamVideoClient,
 } from '@stream-io/video-client';
@@ -49,7 +48,39 @@ interface GradeSessionsViewProps {
   onBack: () => void;
   onEnterLiveClassroom?: (session?: any) => void;
 }
+const StreamParticipantVideo: React.FC<{
+  call: Call;
+  sessionId: string;
+  muted: boolean;
+}> = ({ call, sessionId, muted }) => {
+  const videoRef = useRef<HTMLVideoElement | null>(null);
 
+  useEffect(() => {
+    const videoElement = videoRef.current;
+
+    if (!videoElement) return;
+
+    const unbind = call.bindVideoElement(
+      videoElement,
+      sessionId,
+      'videoTrack'
+    );
+
+    return () => {
+      unbind?.();
+    };
+  }, [call, sessionId]);
+
+  return (
+    <video
+      ref={videoRef}
+      autoPlay
+      playsInline
+      muted={muted}
+      className="absolute inset-0 w-full h-full object-contain bg-black"
+    />
+  );
+};
 export const GradeSessionsView: React.FC<GradeSessionsViewProps> = ({
   currentLang,
   selectedGrade,
@@ -868,12 +899,7 @@ const studentPrimarySession =
                     participant.userId ||
                     'Participant';
 
-                  
-              const participantHasVideo =
-              hasVideo(participant);
-
-
-                  const isOwnParticipant =
+                    const isOwnParticipant =
                     participant.userId === registeredAccount?.id;
 
                   return (
@@ -882,45 +908,13 @@ const studentPrimarySession =
                       className="relative h-full min-h-0 w-full bg-black rounded-2xl overflow-hidden border border-slate-700"
                     >
                       
-<>
-  {/* Always mount the video element so Stream can bind
-      and request this participant's video track. */}
-  <video
-    ref={(videoElement) => {
-      if (!videoElement || !streamCall) return;
-
-      return streamCall.bindVideoElement(
-        videoElement,
-        participant.sessionId,
-        'videoTrack'
-      );
-    }}
-    autoPlay
-    playsInline
+{streamCall && (
+  <StreamParticipantVideo
+    call={streamCall}
+    sessionId={participant.sessionId}
     muted={isOwnParticipant}
-    className="absolute inset-0 w-full h-full object-contain bg-black"
   />
-
-  {/* Show the camera-off message only when Stream
-      confirms that the participant is not publishing video. */}
-  {!participantHasVideo && (
-    <div className="absolute inset-0 min-h-[260px] flex flex-col items-center justify-center text-center p-4 bg-slate-950">
-      <div className="w-16 h-16 rounded-full bg-slate-800 flex items-center justify-center mb-3">
-        <VideoOff className="w-8 h-8 text-slate-400" />
-      </div>
-
-      <p className="text-sm font-bold text-white">
-        {participantName}
-      </p>
-
-      <p className="text-xs text-slate-400 mt-1">
-        {currentLang === 'ar'
-          ? 'الكاميرا متوقفة'
-          : 'Camera is off'}
-      </p>
-    </div>
-  )}
-</>
+)}
 
 
                       <div className="absolute bottom-3 left-3 right-3 flex items-center justify-between gap-2">
