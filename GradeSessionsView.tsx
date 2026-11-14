@@ -1349,7 +1349,7 @@ const handleSendChatMessage = async () => {
                   return (
                     <div
                       key={participant.sessionId || studentId}
-                      className={`w-44 shrink-0 rounded-xl border p-2 ${
+                      className={`w-64 shrink-0 rounded-xl border p-2 ${
                         selected
                           ? 'border-indigo-400 bg-indigo-950'
                           : 'border-slate-700 bg-slate-900'
@@ -1360,7 +1360,7 @@ const handleSendChatMessage = async () => {
                         onClick={() => setSelectedParticipantId(studentId)}
                         className="w-full text-left cursor-pointer"
                       >
-                        <div className="relative w-full h-36 bg-black rounded-lg overflow-hidden">
+                        <div className="relative w-full aspect-video bg-black rounded-lg overflow-hidden">
                         {streamCall && (
                           <StreamParticipantVideo
                             call={streamCall}
