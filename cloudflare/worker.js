@@ -640,7 +640,46 @@ async function updateAccount(request, env, accountId) {
     updates.push("paid = ?");
     values.push(Number(body.paid));
   }
+  if (typeof body?.educatorId === "string") {
+    if (account.role !== "student") {
+      return json({
+        error: "Only student accounts can be assigned to an educator."
+      }, 400);
+    }
 
+    const selectedEducator = await env.DB.prepare(
+      `SELECT id, registered_session_id
+       FROM accounts
+       WHERE id = ?
+         AND role = 'educator'`
+    ).bind(body.educatorId).first();
+
+    if (!selectedEducator || !selectedEducator.registered_session_id) {
+      return json({
+        error: "The selected educator does not have an assigned classroom."
+      }, 400);
+    }
+
+    const selectedEducatorSession = await env.DB.prepare(
+      "SELECT * FROM sessions WHERE id = ?"
+    ).bind(selectedEducator.registered_session_id).first();
+
+    if (!selectedEducatorSession) {
+      return json({
+        error: "The selected educator classroom could not be found."
+      }, 400);
+    }
+
+    updates.push(
+      "registered_session_id = ?",
+      "grade_id = ?"
+    );
+
+    values.push(
+      selectedEducatorSession.id,
+      selectedEducatorSession.grade_id
+    );
+  }
   if (typeof body?.registeredSessionId === "string") {
     const selectedSession = await env.DB.prepare(
       "SELECT * FROM sessions WHERE id = ?"
