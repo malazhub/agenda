@@ -4,6 +4,7 @@ import { Language, GradeLevelDef } from '../types';
 import { translations } from '../translations';
 
 import {
+  OwnCapability,
   type Call,
   type StreamVideoClient,
 } from '@stream-io/video-client';
@@ -12,11 +13,14 @@ import {
   getLiveEducators,
   setEducatorLiveSession,
   getLiveStreamStatus,
+  getClassroomMessages,
+  sendClassroomMessage,
 } from '../services/cloudflareApi';
 
 import type {
   CloudflareAccount,
   StoredSessionRecord,
+  ClassroomMessage,
 } from '../services/cloudflareApi';
 import { 
   ArrowLeft, 
@@ -165,7 +169,17 @@ const [isVideoOn, setIsVideoOn] = useState(false);
 
 const [isFullscreen, setIsFullscreen] = useState(false);
 const [cameraError, setCameraError] = useState<string | null>(null);
+  const [chatMessages, setChatMessages] = useState<ClassroomMessage[]>([]);
+const [chatDraft, setChatDraft] = useState('');
+const [chatError, setChatError] = useState<string | null>(null);
+const [chatLoading, setChatLoading] = useState(false);
+const [selectedParticipantId, setSelectedParticipantId] =
+  useState<string | null>(null);
 
+const [raisedHandIds, setRaisedHandIds] = useState<string[]>([]);
+const [canSpeak, setCanSpeak] = useState(false);
+
+const callEventUnsubs = useRef<Array<() => void>>([]);
 const containerRef = useRef<HTMLDivElement>(null);
 
   
@@ -399,26 +413,36 @@ if (isEducator || isStudent) {
   }
 
   // Enable the microphone independently.
-  // A camera failure must not prevent microphone startup.
+  // Educators may publish audio immediately.
+// Students must wait until the educator grants SEND_AUDIO.
+if (isEducator) {
   try {
     await call.microphone.enable();
-
     setIsMicOn(true);
-
-    console.log(
-      'Classroom microphone enable completed:',
-      call.microphone.state
-    );
   } catch (micError) {
     console.error(
       'Classroom microphone startup failed:',
       micError
     );
-
     setIsMicOn(false);
   }
-}
+} else if (isStudent) {
+  try {
+    await call.microphone.disable();
+  } catch (micError) {
+    console.warn(
+      'Unable to keep the student microphone disabled:',
+      micError
+    );
+  }
 
+  setIsMicOn(false);
+  setCanSpeak(
+    call.permissionsContext.hasPermission(
+      OwnCapability.SEND_AUDIO
+    )
+  );
+}
 
 
 
@@ -437,6 +461,51 @@ if (isEducator || isStudent) {
 
         setCallParticipants(uniqueParticipants);
       });
+  // Remove old event listeners before registering new ones.
+callEventUnsubs.current.forEach((unsubscribe) => unsubscribe());
+callEventUnsubs.current = [];
+
+// Receive Raise Hand / Lower Hand notifications.
+const unsubscribeCustom = call.on('custom', (event: any) => {
+  const custom = event.custom;
+  const senderId = event.user?.id;
+
+  if (!senderId || custom?.type !== 'classroom.hand') {
+    return;
+  }
+
+  setRaisedHandIds((current) => {
+    if (custom.raised === true) {
+      return current.includes(senderId)
+        ? current
+        : [...current, senderId];
+    }
+
+    return current.filter((id) => id !== senderId);
+  });
+});
+
+// Receive permission updates on the student's own account.
+const unsubscribePermissions = call.on(
+  'call.permissions_updated',
+  (event: any) => {
+    if (event.user?.id !== registeredAccount.id) {
+      return;
+    }
+
+    const allowed = call!.permissionsContext.hasPermission(
+      OwnCapability.SEND_AUDIO
+    );
+
+    setCanSpeak(allowed);
+    setIsMicOn(allowed && call!.microphone.enabled);
+  }
+);
+
+callEventUnsubs.current.push(
+  unsubscribeCustom,
+  unsubscribePermissions
+);
 
     setStreamClient(client);
     setStreamCall(call);
@@ -447,6 +516,8 @@ if (isEducator || isStudent) {
     setTimerRunning(true);
 
   } catch (error) {
+    callEventUnsubs.current.forEach((unsubscribe) => unsubscribe());
+callEventUnsubs.current = [];
     console.error(
       'Unable to start or join Stream classroom:',
       error
@@ -516,7 +587,8 @@ const endLiveCall = async () => {
   try {
     participantsSubscription.current?.unsubscribe();
     participantsSubscription.current = null;
-
+    callEventUnsubs.current.forEach((unsubscribe) => unsubscribe());
+callEventUnsubs.current = [];
     if (streamCall && isEducator) {
       // Refresh Stream state before deciding whether to stop the classroom.
       // Another assigned educator may still be hosting this same call.
@@ -590,7 +662,12 @@ const endLiveCall = async () => {
 
   } finally {
     setCallParticipants([]);
-
+    setSelectedParticipantId(null);
+setRaisedHandIds([]);
+setCanSpeak(false);
+setChatMessages([]);
+setChatDraft('');
+setChatError(null);
     setStreamCall(null);
     setStreamClient(null);
 
@@ -606,7 +683,89 @@ const endLiveCall = async () => {
   }
 };
 
+  const handleRaiseHand = async () => {
+  if (!streamCall || !isStudent) return;
 
+  try {
+    // Show the raised hand to the educator.
+    await streamCall.sendCustomEvent({
+      type: 'classroom.hand',
+      raised: true,
+    });
+
+    setRaisedHandIds((current) =>
+      current.includes(registeredAccount!.id)
+        ? current
+        : [...current, registeredAccount!.id]
+    );
+
+    // Ask Stream for permission to publish audio.
+    await streamCall.requestPermissions({
+      permissions: [OwnCapability.SEND_AUDIO],
+    });
+  } catch (error) {
+    console.error('Unable to raise hand or request speaking permission:', error);
+    setCameraError(
+      'Unable to request speaking permission. Please try again.'
+    );
+
+    // Do not leave a false raised-hand indicator behind.
+    await streamCall.sendCustomEvent({
+      type: 'classroom.hand',
+      raised: false,
+    }).catch(() => undefined);
+
+    setRaisedHandIds((current) =>
+      current.filter((id) => id !== registeredAccount?.id)
+    );
+  }
+};
+
+const handleLowerHand = async () => {
+  if (!streamCall || !isStudent || !registeredAccount) return;
+
+  try {
+    await streamCall.sendCustomEvent({
+      type: 'classroom.hand',
+      raised: false,
+    });
+
+    setRaisedHandIds((current) =>
+      current.filter((id) => id !== registeredAccount.id)
+    );
+  } catch (error) {
+    console.error('Unable to lower hand:', error);
+    setCameraError('Unable to lower your hand. Please try again.');
+  }
+};
+
+const allowStudentToSpeak = async (studentId: string) => {
+  if (!streamCall || !isEducator || !studentId) return;
+
+  try {
+    await streamCall.grantPermissions(
+      studentId,
+      [OwnCapability.SEND_AUDIO]
+    );
+  } catch (error) {
+    console.error('Unable to grant speaking permission:', error);
+    setCameraError('Unable to allow this student to speak.');
+  }
+};
+
+const stopStudentSpeaking = async (studentId: string) => {
+  if (!streamCall || !isEducator || !studentId) return;
+
+  try {
+    await streamCall.revokePermissions(
+      studentId,
+      [OwnCapability.SEND_AUDIO]
+    );
+  } catch (error) {
+    console.error('Unable to revoke speaking permission:', error);
+    setCameraError('Unable to stop this student from speaking.');
+  }
+};
   // Video track toggle
   
 const toggleVideoTrack = async () => {
@@ -631,11 +790,28 @@ const toggleVideoTrack = async () => {
   const toggleAudioTrack = async () => {
   if (!streamCall || (!isEducator && !isStudent)) return;
 
+  // A student cannot turn on the microphone without Stream permission.
+  if (isStudent && !canSpeak) {
+    setIsMicOn(false);
+    return;
+  }
+
   try {
     if (isMicOn) {
       await streamCall.microphone.disable();
       setIsMicOn(false);
     } else {
+      if (
+        isStudent &&
+        !streamCall.permissionsContext.hasPermission(
+          OwnCapability.SEND_AUDIO
+        )
+      ) {
+        setCanSpeak(false);
+        setIsMicOn(false);
+        return;
+      }
+
       await streamCall.microphone.enable();
       setIsMicOn(true);
     }
@@ -777,6 +953,28 @@ const studentPrimarySession =
   };
 
     // Actual connected participants are supplied by the Stream call.
+  const selectedParticipant =
+  callParticipants.find(
+    (participant) =>
+      participant.userId === selectedParticipantId
+  ) ||
+  callParticipants.find(
+    (participant) =>
+      participant.userId !== registeredAccount?.id
+  ) ||
+  callParticipants[0] ||
+  null;
+
+const chatStudentId = isEducator
+  ? (
+      selectedParticipant &&
+      selectedParticipant.userId !== registeredAccount?.id
+        ? selectedParticipant.userId
+        : ''
+    )
+  : isStudent
+    ? registeredAccount?.id || ''
+    : '';
   // Do not create attendee records from the signed-in account alone.
 
   return (
@@ -853,89 +1051,286 @@ const studentPrimarySession =
           </div>
 
           {/* REAL STREAM VIDEO PARTICIPANTS */}
-          <div className="flex-1 min-h-0 overflow-hidden bg-slate-950 p-4 flex flex-col">
+          {/* CLASSROOM VIDEO, STUDENT THUMBNAILS AND PRIVATE CHAT */}
+<div className="flex-1 min-h-0 overflow-hidden bg-slate-950 p-4 flex flex-col">
 
-            <div className="flex items-center justify-between gap-3 mb-4">
-              <div>
-                <h3 className="text-sm font-black text-white">
-                  {currentLang === 'ar'
-                    ? 'البث المباشر للصف'
-                    : 'Live Classroom'}
-                </h3>
-                <p className="text-xs text-slate-400 mt-1">
-                  {currentLang === 'ar'
-                    ? 'الفيديو المباشر للمشاركين المتصلين فعلياً'
-                    : 'Live video from participants actually connected to this call'}
-                </p>
-              </div>
+  <div className="flex items-center justify-between gap-3 mb-4">
+    <div>
+      <h3 className="text-sm font-black text-white">
+        {currentLang === 'ar' ? 'البث المباشر للصف' : 'Live Classroom'}
+      </h3>
+      <p className="text-xs text-slate-400 mt-1">
+        {currentLang === 'ar'
+          ? 'الفيديو المباشر للمشاركين المتصلين فعلياً'
+          : 'Live video from connected classroom participants'}
+      </p>
+    </div>
 
-              <span className="text-xs font-bold bg-emerald-500/20 text-emerald-400 px-3 py-1.5 rounded-full border border-emerald-500/30">
-                {callParticipants.length}
-                {' '}
-                {currentLang === 'ar' ? 'مشاركون' : 'Connected'}
+    <span className="text-xs font-bold bg-emerald-500/20 text-emerald-400 px-3 py-1.5 rounded-full border border-emerald-500/30">
+      {callParticipants.length}
+      {' '}
+      {currentLang === 'ar' ? 'مشاركون' : 'Connected'}
+    </span>
+  </div>
+
+  {callParticipants.length === 0 ? (
+    <div className="flex-1 min-h-[40vh] flex flex-col items-center justify-center text-center">
+      <Users className="w-12 h-12 text-slate-500 mb-3" />
+      <h4 className="text-sm font-bold text-white">
+        {currentLang === 'ar'
+          ? 'في انتظار المشاركين'
+          : 'Waiting for participants'}
+      </h4>
+      <p className="text-xs text-slate-400 mt-2">
+        {currentLang === 'ar'
+          ? 'سيظهر الفيديو هنا عندما ينضم المشاركون إلى الصف.'
+          : 'Participant video will appear here when people join the classroom.'}
+      </p>
+    </div>
+  ) : (
+    <div className="flex-1 min-h-0 flex flex-col lg:flex-row gap-4">
+
+      {/* MAIN VIDEO */}
+      <div className="flex-1 min-w-0 min-h-[240px] flex flex-col gap-3">
+
+        <div className="relative flex-1 min-h-[240px] bg-black rounded-2xl overflow-hidden border border-slate-700">
+
+          {streamCall && selectedParticipant && (
+            <StreamParticipantVideo
+              call={streamCall}
+              sessionId={selectedParticipant.sessionId}
+              muted={
+                selectedParticipant.userId === registeredAccount?.id
+              }
+            />
+          )}
+
+          {selectedParticipant && (
+            <div className="absolute bottom-3 left-3 right-3 flex items-center justify-between gap-2">
+              <span className="bg-black/75 text-white text-xs font-bold px-3 py-2 rounded-lg truncate">
+                {selectedParticipant.name ||
+                  selectedParticipant.userId ||
+                  'Participant'}
+                {selectedParticipant.userId === registeredAccount?.id
+                  ? (currentLang === 'ar' ? ' (أنت)' : ' (You)')
+                  : ''}
+              </span>
+
+              <span className="shrink-0 bg-emerald-950/90 text-emerald-400 text-[10px] font-bold px-2 py-1 rounded-md">
+                ● LIVE
               </span>
             </div>
+          )}
+        </div>
 
-            {callParticipants.length === 0 ? (
-              <div className="min-h-[40vh] flex flex-col items-center justify-center text-center">
-                <Users className="w-12 h-12 text-slate-500 mb-3" />
-                <h4 className="text-sm font-bold text-white">
-                  {currentLang === 'ar'
-                    ? 'في انتظار المشاركين'
-                    : 'Waiting for participants'}
-                </h4>
-                <p className="text-xs text-slate-400 mt-2">
-                  {currentLang === 'ar'
-                    ? 'سيظهر الفيديو هنا عندما ينضم المشاركون إلى الصف.'
-                    : 'Participant video will appear here when people join the classroom.'}
-                </p>
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 grid-rows-1 gap-4 flex-1 min-h-0 w-full">
+        {/* EDUCATOR'S STUDENT THUMBNAILS */}
+        {isEducator && (
+          <div className="shrink-0">
+            <p className="text-xs font-bold text-slate-300 mb-2">
+              {currentLang === 'ar'
+                ? 'الطلاب المتصلون'
+                : 'Connected students'}
+            </p>
 
-                {callParticipants.map((participant) => {
-                  const participantName =
-                    participant.name ||
-                    participant.userId ||
-                    'Participant';
-
-                    const isOwnParticipant =
-                    participant.userId === registeredAccount?.id;
+            <div className="flex gap-3 overflow-x-auto pb-2">
+              {callParticipants
+                .filter(
+                  (participant) =>
+                    participant.userId !== registeredAccount?.id
+                )
+                .map((participant) => {
+                  const studentId = participant.userId;
+                  const handRaised = raisedHandIds.includes(studentId);
+                  const selected =
+                    selectedParticipantId === studentId ||
+                    (!selectedParticipantId &&
+                      selectedParticipant?.userId === studentId);
 
                   return (
-                    <article
-                      key={participant.sessionId || participant.userId}
-                      className="relative h-full min-h-0 w-full bg-black rounded-2xl overflow-hidden border border-slate-700"
+                    <div
+                      key={participant.sessionId || studentId}
+                      className={`w-44 shrink-0 rounded-xl border p-2 ${
+                        selected
+                          ? 'border-indigo-400 bg-indigo-950'
+                          : 'border-slate-700 bg-slate-900'
+                      }`}
                     >
-                      
-{streamCall && (
-  <StreamParticipantVideo
-    call={streamCall}
-    sessionId={participant.sessionId}
-    muted={isOwnParticipant}
-  />
-)}
+                      <button
+                        type="button"
+                        onClick={() => setSelectedParticipantId(studentId)}
+                        className="w-full text-left cursor-pointer"
+                      >
+                        <div className="relative h-24 bg-black rounded-lg overflow-hidden">
+                          {streamCall && (
+                            <StreamParticipantVideo
+                              call={streamCall}
+                              sessionId={participant.sessionId}
+                              muted={true}
+                            />
+                          )}
+                        </div>
 
+                        <p className="text-xs font-bold text-white truncate mt-2">
+                          {participant.name || studentId}
+                        </p>
+                      </button>
 
-                      <div className="absolute bottom-3 left-3 right-3 flex items-center justify-between gap-2">
-                        <span className="bg-black/75 backdrop-blur-md text-white text-xs font-bold px-3 py-2 rounded-lg truncate">
-                          {participantName}
-                          {isOwnParticipant
-                            ? (currentLang === 'ar' ? ' (أنت)' : ' (You)')
-                            : ''}
-                        </span>
-
-                        <span className="shrink-0 bg-emerald-950/90 text-emerald-400 text-[10px] font-bold px-2 py-1 rounded-md">
-                          ● LIVE
+                      <div className="mt-2 flex items-center justify-between gap-2">
+                        <span
+                          className={`text-[10px] font-bold ${
+                            handRaised
+                              ? 'text-amber-300'
+                              : 'text-slate-400'
+                          }`}
+                        >
+                          {handRaised
+                            ? (currentLang === 'ar'
+                                ? '✋ رفع اليد'
+                                : '✋ Hand raised')
+                            : (currentLang === 'ar'
+                                ? 'لم يرفع يده'
+                                : 'No raised hand')}
                         </span>
                       </div>
-                    </article>
+
+                      <div className="mt-2">
+                        <button
+                          type="button"
+                          onClick={() => void allowStudentToSpeak(studentId)}
+                          className="w-full rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-bold py-2 cursor-pointer"
+                        >
+                          {currentLang === 'ar'
+                            ? 'السماح بالكلام'
+                            : 'Allow to speak'}
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => void stopStudentSpeaking(studentId)}
+                          className="w-full rounded-lg bg-rose-700 hover:bg-rose-600 text-white text-[11px] font-bold py-2 mt-1 cursor-pointer"
+                        >
+                          {currentLang === 'ar'
+                            ? 'إيقاف الكلام'
+                            : 'Stop speaking'}
+                        </button>
+                      </div>
+                    </div>
                   );
                 })}
-
-              </div>
-            )}
+            </div>
           </div>
+        )}
+      </div>
+
+      {/* PRIVATE CHAT */}
+      <aside className="w-full lg:w-80 shrink-0 min-h-[220px] lg:min-h-0 bg-slate-900 border border-slate-700 rounded-2xl flex flex-col overflow-hidden">
+
+        <div className="px-3 py-3 border-b border-slate-700">
+          <h4 className="text-sm font-black text-white">
+            {currentLang === 'ar' ? 'محادثة خاصة' : 'Private chat'}
+          </h4>
+
+          <p className="text-[11px] text-slate-400 mt-1">
+            {isEducator
+              ? (
+                  selectedParticipant &&
+                  selectedParticipant.userId !== registeredAccount?.id
+                    ? (selectedParticipant.name || selectedParticipant.userId)
+                    : (currentLang === 'ar'
+                        ? 'اختر طالباً لبدء المحادثة'
+                        : 'Select a student to start chatting')
+                )
+              : (currentLang === 'ar'
+                  ? 'محادثتك الخاصة مع الأستاذ'
+                  : 'Your private conversation with the educator')}
+          </p>
+        </div>
+
+        <div className="flex-1 min-h-[120px] overflow-y-auto p-3 space-y-2">
+          {!chatStudentId ? (
+            <p className="text-xs text-slate-400 text-center mt-6">
+              {currentLang === 'ar'
+                ? 'اختر طالباً من الصور لفتح المحادثة.'
+                : 'Select a student thumbnail to open the conversation.'}
+            </p>
+          ) : chatMessages.length === 0 ? (
+            <p className="text-xs text-slate-400 text-center mt-6">
+              {currentLang === 'ar'
+                ? 'لا توجد رسائل بعد.'
+                : 'No messages yet.'}
+            </p>
+          ) : (
+            chatMessages.map((message) => {
+              const ownMessage =
+                message.senderId === registeredAccount?.id;
+
+              return (
+                <div
+                  key={message.id}
+                  className={`flex ${
+                    ownMessage ? 'justify-end' : 'justify-start'
+                  }`}
+                >
+                  <div
+                    className={`max-w-[90%] rounded-xl px-3 py-2 text-xs ${
+                      ownMessage
+                        ? 'bg-indigo-600 text-white'
+                        : 'bg-slate-700 text-slate-100'
+                    }`}
+                  >
+                    <p className="whitespace-pre-wrap break-words">
+                      {message.message}
+                    </p>
+                    <p className="text-[9px] opacity-60 mt-1">
+                      {message.createdAt}
+                    </p>
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+
+        {chatError && (
+          <p className="px-3 pb-2 text-[11px] text-rose-300" role="alert">
+            {chatError}
+          </p>
+        )}
+
+        <div className="p-3 border-t border-slate-700">
+          <textarea
+            value={chatDraft}
+            onChange={(event) => setChatDraft(event.target.value)}
+            maxLength={2000}
+            rows={2}
+            disabled={!chatStudentId || chatLoading}
+            placeholder={
+              currentLang === 'ar'
+                ? 'اكتب رسالة خاصة...'
+                : 'Write a private message...'
+            }
+            className="w-full resize-none rounded-lg bg-slate-800 border border-slate-600 text-white text-xs p-2 outline-none focus:border-indigo-400 disabled:opacity-50"
+          />
+
+          <button
+            type="button"
+            onClick={() => void handleSendChatMessage()}
+            disabled={
+              !chatStudentId ||
+              !chatDraft.trim() ||
+              chatLoading
+            }
+            className="w-full mt-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 text-white text-xs font-bold py-2 cursor-pointer disabled:cursor-not-allowed"
+          >
+            {chatLoading
+              ? (currentLang === 'ar' ? 'جارٍ الإرسال...' : 'Sending...')
+              : (currentLang === 'ar' ? 'إرسال' : 'Send')}
+          </button>
+        </div>
+      </aside>
+    </div>
+  )}
+</div>
 
           {/* CLASSROOM CONTROLS AND PARTICIPANT COUNT */}
           <div className="w-full bg-slate-800 p-4 border-t border-slate-700">
