@@ -134,12 +134,13 @@ export const CoursesHub: React.FC<CoursesHubProps> = ({
   
 const updateAccount = async (
   account: DirectorRow,
-  update: {
+    update: {
     activated?: boolean;
     paid?: boolean;
     renew?: boolean;
     password?: string;
     registeredSessionId?: string;
+    educatorId?: string;
   }
 ) => {
   if (!directorToken) return;
@@ -319,7 +320,7 @@ const updateAccount = async (
     setActiveGradeForSessions(targetGrade);
   };
 
-  const renderDirectorTable = (title: string, rows: DirectorRow[]) => (
+    const renderDirectorTable = (     title: string,     rows: DirectorRow[],     showEducatorColumn = false   ) => (
     <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white">
       <h3 className="px-4 py-3 text-sm font-black text-slate-900 bg-slate-100 border-b border-slate-200">
         {title} ({rows.length})
@@ -328,6 +329,15 @@ const updateAccount = async (
         <thead className="bg-slate-100">
           <tr>
             <th className="px-3 py-3 text-left font-black text-slate-700">{t.fullNameLabel}</th>
+                        {showEducatorColumn && (
+              <th className="px-3 py-3 text-left font-black text-slate-700">
+                {currentLang === 'ar'
+                  ? 'المعلّم'
+                  : currentLang === 'fr'
+                    ? 'Éducateur'
+                    : 'Educator'}
+              </th>
+            )}
             <th className="px-3 py-3 text-left font-black text-slate-700">{t.usernameLabel}</th>
             <th className="px-3 py-3 text-left font-black text-slate-700">{t.passwordLabel}</th>
             <th className="px-3 py-3 text-left font-black text-slate-700">{t.emailLabel}</th>
@@ -345,6 +355,47 @@ const updateAccount = async (
           {rows.map((row) => (
             <tr key={row.id} className="border-t border-slate-200">
               <td className="px-3 py-3 font-semibold text-slate-800">{row.fullName}</td>
+                            {showEducatorColumn && (
+                <td className="px-3 py-3 text-slate-700">
+                  <select
+                    aria-label={`${row.fullName} educator`}
+                    value={
+                      educatorRows.find(
+                        (educator) =>
+                          educator.registeredSessionId &&
+                          educator.registeredSessionId === row.registeredSessionId
+                      )?.id || ''
+                    }
+                    onChange={(event) =>
+                      void updateAccount(row, {
+                        educatorId: event.target.value
+                      })
+                    }
+                    className="min-w-40 max-w-56 rounded border border-slate-300 bg-white p-2 text-xs"
+                  >
+                    <option value="" disabled>
+                      {currentLang === 'ar'
+                        ? 'اختر المعلّم'
+                        : currentLang === 'fr'
+                          ? 'Choisir un éducateur'
+                          : 'Choose educator'}
+                    </option>
+
+                    {educatorRows.map((educator) => (
+                      <option
+                        key={educator.id}
+                        value={educator.id}
+                        disabled={!educator.registeredSessionId}
+                      >
+                        {educator.fullName}
+                        {!educator.registeredSessionId
+                          ? ' — no classroom assigned'
+                          : ''}
+                      </option>
+                    ))}
+                  </select>
+                </td>
+              )}
               <td className="px-3 py-3 text-slate-700">{row.username}</td>
               <td className="px-3 py-3 text-slate-700">
                 <span aria-label={t.passwordNotStored}>••••••••</span>
@@ -437,7 +488,7 @@ const updateAccount = async (
           ))}
           {rows.length === 0 && (
             <tr>
-              <td colSpan={12} className="px-4 py-8 text-center text-slate-500">
+                            <td                 colSpan={showEducatorColumn ? 13 : 12}                 className="px-4 py-8 text-center text-slate-500"               >
                 {currentLang === 'ar' ? 'لا توجد تسجيلات بعد.' : currentLang === 'fr' ? 'Aucune inscription pour le moment.' : 'No registrations yet.'}
               </td>
             </tr>
@@ -625,8 +676,16 @@ const updateAccount = async (
           </div>
         ) : (
           <div className="space-y-6">
-            {renderDirectorTable(currentLang === 'ar' ? 'الطلاب' : currentLang === 'fr' ? 'Étudiants' : 'Students', studentRows)}
-            {renderDirectorTable(currentLang === 'ar' ? 'المعلمون' : currentLang === 'fr' ? 'Éducateurs' : 'Educators', educatorRows)}
+                        {renderDirectorTable(
+              currentLang === 'ar' ? 'الطلاب' : currentLang === 'fr' ? 'Étudiants' : 'Students',
+              studentRows,
+              true
+            )}
+
+            {renderDirectorTable(
+              currentLang === 'ar' ? 'المعلمون' : currentLang === 'fr' ? 'Éducateurs' : 'Educators',
+              educatorRows
+            )}
           </div>
         )}
       </div>
