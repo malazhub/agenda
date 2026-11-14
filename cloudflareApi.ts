@@ -100,7 +100,12 @@ export interface LiveStreamSetup {
   userId: string;
   userName: string;
 }
-
+export interface ClassroomMessage {
+  id: number;
+  senderId: string;
+  message: string;
+  createdAt: string;
+}
 const API_BASE_URL = (import.meta.env.VITE_CLOUDFLARE_API_URL || '').replace(/\/+$/, '');
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -239,6 +244,30 @@ export function setupLiveStream(token: string): Promise<LiveStreamSetup> {
   return request('/api/director/live-stream', {
     method: 'POST',
     headers: authHeaders(token),
+  });
+}
+export function getClassroomMessages(
+  token: string,
+  sessionId: string,
+  studentId: string,
+): Promise<{ messages: ClassroomMessage[] }> {
+  const query = new URLSearchParams({ sessionId, studentId });
+
+  return request(`/api/classroom/messages?${query.toString()}`, {
+    headers: authHeaders(token),
+  });
+}
+
+export function sendClassroomMessage(
+  token: string,
+  sessionId: string,
+  studentId: string,
+  message: string,
+): Promise<{ sent: boolean }> {
+  return request('/api/classroom/messages', {
+    method: 'POST',
+    headers: authHeaders(token),
+    body: JSON.stringify({ sessionId, studentId, message }),
   });
 }
 export function setEducatorLiveSession(
