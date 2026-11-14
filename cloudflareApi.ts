@@ -175,7 +175,14 @@ export function getDirectorAccounts(token: string): Promise<{
 export function updateDirectorAccount(
   token: string,
   accountId: string,
-  update: { activated?: boolean; paid?: boolean; renew?: boolean; password?: string; registeredSessionId?: string },
+  update: {
+    activated?: boolean;
+    paid?: boolean;
+    renew?: boolean;
+    password?: string;
+    registeredSessionId?: string;
+    educatorId?: string;
+  },
 ): Promise<{ account: CloudflareAccount }> {
   return request(`/api/director/accounts/${encodeURIComponent(accountId)}`, {
     method: 'PATCH',
