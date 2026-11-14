@@ -412,41 +412,40 @@ if (isEducator || isStudent) {
     );
   }
 
-  // Enable the microphone independently.
+    // Enable the microphone independently.
   // Educators may publish audio immediately.
-// Students must wait until the educator grants SEND_AUDIO.
-if (isEducator) {
-  try {
-    await call.microphone.enable();
-    setIsMicOn(true);
-  } catch (micError) {
-    console.error(
-      'Classroom microphone startup failed:',
-      micError
-    );
-    setIsMicOn(false);
-  }
-} else if (isStudent) {
-  try {
-    await call.microphone.disable();
-  } catch (micError) {
-    console.warn(
-      'Unable to keep the student microphone disabled:',
-      micError
-    );
-  }
+  // Students must wait until the educator grants SEND_AUDIO.
+  if (isEducator) {
+    try {
+      await call.microphone.enable();
+      setIsMicOn(true);
+    } catch (micError) {
+      console.error(
+        'Classroom microphone startup failed:',
+        micError
+      );
+      setIsMicOn(false);
+    }
+  } else if (isStudent) {
+    try {
+      await call.microphone.disable();
+    } catch (micError) {
+      console.warn(
+        'Unable to keep the student microphone disabled:',
+        micError
+      );
+    }
 
-  setIsMicOn(false);
-  setCanSpeak(
-    call.permissionsContext.hasPermission(
-      OwnCapability.SEND_AUDIO
-    )
-  );
+    setIsMicOn(false);
+    setCanSpeak(
+      call.permissionsContext.hasPermission(
+        OwnCapability.SEND_AUDIO
+      )
+    );
+  }
 }
 
-
-
-    participantsSubscription.current?.unsubscribe();
+participantsSubscription.current?.unsubscribe();
 
     participantsSubscription.current =
       call.state.participants$.subscribe((participants) => {
@@ -975,6 +974,107 @@ const chatStudentId = isEducator
   : isStudent
     ? registeredAccount?.id || ''
     : '';
+  const classroomSessionId = String(activeCallSession?.id || '');
+
+useEffect(() => {
+  if (
+    !inLiveConference ||
+    !sessionToken ||
+    !classroomSessionId ||
+    !chatStudentId
+  ) {
+    setChatMessages([]);
+    return;
+  }
+
+  let cancelled = false;
+
+  const loadMessages = async () => {
+    setChatLoading(true);
+    setChatError(null);
+
+    try {
+      const result = await getClassroomMessages(
+        sessionToken,
+        classroomSessionId,
+        chatStudentId
+      );
+
+      if (!cancelled) {
+        setChatMessages(result.messages);
+      }
+    } catch (error) {
+      if (!cancelled) {
+        console.error('Unable to load classroom messages:', error);
+        setChatError(
+          error instanceof Error
+            ? error.message
+            : 'Unable to load classroom messages.'
+        );
+      }
+    } finally {
+      if (!cancelled) {
+        setChatLoading(false);
+      }
+    }
+  };
+
+  void loadMessages();
+
+  return () => {
+    cancelled = true;
+  };
+}, [
+  inLiveConference,
+  sessionToken,
+  classroomSessionId,
+  chatStudentId,
+]);
+
+const handleSendChatMessage = async () => {
+  const message = chatDraft.trim();
+
+  if (
+    !sessionToken ||
+    !classroomSessionId ||
+    !chatStudentId ||
+    !message ||
+    chatLoading
+  ) {
+    return;
+  }
+
+  setChatLoading(true);
+  setChatError(null);
+
+  try {
+    await sendClassroomMessage(
+      sessionToken,
+      classroomSessionId,
+      chatStudentId,
+      message
+    );
+
+    const result = await getClassroomMessages(
+      sessionToken,
+      classroomSessionId,
+      chatStudentId
+    );
+
+    setChatMessages(result.messages);
+    setChatDraft('');
+  } catch (error) {
+    console.error('Unable to send classroom message:', error);
+
+    setChatError(
+      error instanceof Error
+        ? error.message
+        : 'Unable to send your message.'
+    );
+  } finally {
+    setChatLoading(false);
+  }
+};
   // Do not create attendee records from the signed-in account alone.
 
   return (
