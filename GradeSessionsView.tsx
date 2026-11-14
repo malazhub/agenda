@@ -500,7 +500,26 @@ const unsubscribeCustom = call.on('custom', (event: any) => {
   });
 });
 
-// Receive actual Stream microphone permission requests.
+// Receive permission updates on the student's own account.
+// This listener is required to keep the student's microphone
+// state synchronized after the educator grants or revokes permission.
+const unsubscribePermissions = call.on(
+  'call.permissions_updated',
+  (event: any) => {
+    if (event.user?.id !== registeredAccount.id) {
+      return;
+    }
+
+    const allowed = call!.permissionsContext.hasPermission(
+      OwnCapability.SEND_AUDIO
+    );
+
+    setCanSpeak(allowed);
+    setIsMicOn(allowed && call!.microphone.enabled);
+  }
+);
+
+// Receive actual Stream microphone permission requests from students.
 const unsubscribePermissionRequests = call.on(
   'call.permission_request',
   (event: any) => {
@@ -743,7 +762,23 @@ setChatError(null);
   }
 };
 
+const handleLowerHand = async () => {
+  if (!streamCall || !isStudent || !registeredAccount) return;
 
+  try {
+    await streamCall.sendCustomEvent({
+      type: 'classroom.hand',
+      raised: false,
+    });
+
+    setRaisedHandIds((current) =>
+      current.filter((id) => id !== registeredAccount.id)
+    );
+  } catch (error) {
+    console.error('Unable to lower hand:', error);
+    setCameraError('Unable to lower your hand. Please try again.');
+  }
+};
 const clearStudentHand = async (studentId: string) => {
   if (!streamCall || !isEducator || !studentId) return;
 
@@ -994,19 +1029,37 @@ const studentPrimarySession =
     ) ||
     null;
 
-  // Educators always see their own camera as the primary video.
-  // Students see the educator (admin/host) as the primary video.
+    // Educators always see their own camera as the primary video.
+  const educatorOwnParticipant = callParticipants.find(
+    (participant) =>
+      participant.userId === registeredAccount?.id
+  );
+
+  // On the student screen, prefer the educator's Stream host role.
+  // If Stream does not expose that role, use the assigned educator's
+  // participant name. Finally, retain a non-self participant fallback
+  // so the main video does not disappear when roles are missing.
+  const studentEducatorParticipant =
+    callParticipants.find(
+      (participant) =>
+        participant.roles?.some(
+          (role: string) => role === 'admin' || role === 'host'
+        )
+    ) ||
+    callParticipants.find(
+      (participant) =>
+        participant.name?.trim().toLowerCase() ===
+        activeCallSession?.educatorName?.trim().toLowerCase()
+    ) ||
+    callParticipants.find(
+      (participant) =>
+        participant.userId !== registeredAccount?.id
+    ) ||
+    null;
+
   const primaryVideoParticipant = isEducator
-    ? callParticipants.find(
-        (participant) =>
-          participant.userId === registeredAccount?.id
-      ) || null
-    : callParticipants.find(
-        (participant) =>
-          participant.roles?.some(
-            (role: string) => role === 'admin' || role === 'host'
-          )
-      ) || null;
+    ? educatorOwnParticipant || null
+    : studentEducatorParticipant;
 
 const chatStudentId = isEducator
   ? (
