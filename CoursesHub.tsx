@@ -358,42 +358,48 @@ const updateAccount = async (
                             {showEducatorColumn && (
                 <td className="px-3 py-3 text-slate-700">
                   <select
-                    aria-label={`${row.fullName} educator`}
-                    value={
-                      educatorRows.find(
-                        (educator) =>
-                          educator.registeredSessionId &&
-                          educator.registeredSessionId === row.registeredSessionId
-                      )?.id || ''
-                    }
-                    onChange={(event) =>
-                      void updateAccount(row, {
-                        educatorId: event.target.value
-                      })
-                    }
-                    className="min-w-40 max-w-56 rounded border border-slate-300 bg-white p-2 text-xs"
-                  >
-                    <option value="" disabled>
-                      {currentLang === 'ar'
-                        ? 'اختر المعلّم'
-                        : currentLang === 'fr'
-                          ? 'Choisir un éducateur'
-                          : 'Choose educator'}
-                    </option>
+  aria-label={`${row.fullName} educator`}
+  value={
+    educatorRows.find(
+      (educator) =>
+        educator.registeredSessionId === row.registeredSessionId &&
+        Boolean(educator.registeredSessionId)
+    )?.id || '__assignment_not_found__'
+  }
+  onChange={(event) =>
+    void updateAccount(row, {
+      educatorId: event.target.value
+    })
+  }
+  className="min-w-40 max-w-56 rounded border border-slate-300 bg-white p-2 text-xs"
+>
+  {!educatorRows.some(
+    (educator) =>
+      educator.registeredSessionId === row.registeredSessionId &&
+      Boolean(educator.registeredSessionId)
+  ) && (
+    <option value="__assignment_not_found__" disabled>
+      {currentLang === 'ar'
+        ? 'لم يتم العثور على المعلّم المسجّل'
+        : currentLang === 'fr'
+          ? 'Éducateur inscrit introuvable'
+          : 'Registered educator not found'}
+    </option>
+  )}
 
-                    {educatorRows.map((educator) => (
-                      <option
-                        key={educator.id}
-                        value={educator.id}
-                        disabled={!educator.registeredSessionId}
-                      >
-                        {educator.fullName}
-                        {!educator.registeredSessionId
-                          ? ' — no classroom assigned'
-                          : ''}
-                      </option>
-                    ))}
-                  </select>
+  {educatorRows.map((educator) => (
+    <option
+      key={educator.id}
+      value={educator.id}
+      disabled={!educator.registeredSessionId}
+    >
+      {educator.fullName}
+      {!educator.registeredSessionId
+        ? ' — no classroom assigned'
+        : ''}
+    </option>
+  ))}
+</select>
                 </td>
               )}
               <td className="px-3 py-3 text-slate-700">{row.username}</td>
