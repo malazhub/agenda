@@ -1360,15 +1360,15 @@ const handleSendChatMessage = async () => {
                         onClick={() => setSelectedParticipantId(studentId)}
                         className="w-full text-left cursor-pointer"
                       >
-                        <div className="relative h-24 bg-black rounded-lg overflow-hidden">
-                          {streamCall && (
-                            <StreamParticipantVideo
-                              call={streamCall}
-                              sessionId={participant.sessionId}
-                              muted={true}
-                            />
-                          )}
-                        </div>
+                        <div className="relative w-full h-36 bg-black rounded-lg overflow-hidden">
+                        {streamCall && (
+                          <StreamParticipantVideo
+                            call={streamCall}
+                            sessionId={participant.sessionId}
+                            muted={true}
+                          />
+                        )}
+                      </div>
 
                         <p className="text-xs font-bold text-white truncate mt-2">
                           {participant.name || studentId}
