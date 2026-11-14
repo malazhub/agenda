@@ -175,7 +175,7 @@ const [chatError, setChatError] = useState<string | null>(null);
 const [chatLoading, setChatLoading] = useState(false);
 const [selectedParticipantId, setSelectedParticipantId] =
   useState<string | null>(null);
-
+const [permissionRequests, setPermissionRequests] = useState<any[]>([]);
 const [raisedHandIds, setRaisedHandIds] = useState<string[]>([]);
 const [canSpeak, setCanSpeak] = useState(false);
 
@@ -473,37 +473,59 @@ const unsubscribeCustom = call.on('custom', (event: any) => {
     return;
   }
 
+  const targetId = custom.targetUserId || senderId;
+
+  if (custom.targetUserId) {
+    const senderIsEducator = call.state.participants.some(
+      (participant) =>
+        participant.userId === senderId &&
+        participant.roles?.some(
+          (role: string) => role === 'admin' || role === 'host'
+        )
+    );
+
+    if (!senderIsEducator) {
+      return;
+    }
+  }
+
   setRaisedHandIds((current) => {
     if (custom.raised === true) {
-      return current.includes(senderId)
+      return current.includes(targetId)
         ? current
-        : [...current, senderId];
+        : [...current, targetId];
     }
 
-    return current.filter((id) => id !== senderId);
+    return current.filter((id) => id !== targetId);
   });
 });
 
-// Receive permission updates on the student's own account.
-const unsubscribePermissions = call.on(
-  'call.permissions_updated',
+// Receive actual Stream microphone permission requests.
+const unsubscribePermissionRequests = call.on(
+  'call.permission_request',
   (event: any) => {
-    if (event.user?.id !== registeredAccount.id) {
+    if (
+      !isEducator ||
+      !event.user?.id ||
+      !event.permissions?.includes(OwnCapability.SEND_AUDIO)
+    ) {
       return;
     }
 
-    const allowed = call!.permissionsContext.hasPermission(
-      OwnCapability.SEND_AUDIO
+    setPermissionRequests((current) =>
+      current.some(
+        (request) => request.user?.id === event.user.id
+      )
+        ? current
+        : [...current, event]
     );
-
-    setCanSpeak(allowed);
-    setIsMicOn(allowed && call!.microphone.enabled);
   }
 );
 
 callEventUnsubs.current.push(
   unsubscribeCustom,
-  unsubscribePermissions
+  unsubscribePermissions,
+  unsubscribePermissionRequests
 );
 
     setStreamClient(client);
@@ -664,6 +686,7 @@ callEventUnsubs.current = [];
     setSelectedParticipantId(null);
 setRaisedHandIds([]);
 setCanSpeak(false);
+    setPermissionRequests([]);
 setChatMessages([]);
 setChatDraft('');
 setChatError(null);
@@ -720,21 +743,23 @@ setChatError(null);
   }
 };
 
-const handleLowerHand = async () => {
-  if (!streamCall || !isStudent || !registeredAccount) return;
+
+const clearStudentHand = async (studentId: string) => {
+  if (!streamCall || !isEducator || !studentId) return;
 
   try {
     await streamCall.sendCustomEvent({
       type: 'classroom.hand',
       raised: false,
+      targetUserId: studentId,
     });
 
     setRaisedHandIds((current) =>
-      current.filter((id) => id !== registeredAccount.id)
+      current.filter((id) => id !== studentId)
     );
   } catch (error) {
-    console.error('Unable to lower hand:', error);
-    setCameraError('Unable to lower your hand. Please try again.');
+    console.error('Unable to clear student raised hand:', error);
+    setCameraError('Unable to clear the student raised hand.');
   }
 };
 
@@ -745,6 +770,9 @@ const allowStudentToSpeak = async (studentId: string) => {
     await streamCall.grantPermissions(
       studentId,
       [OwnCapability.SEND_AUDIO]
+    );
+        setPermissionRequests((current) =>
+      current.filter((request) => request.user?.id !== studentId)
     );
   } catch (error) {
     console.error('Unable to grant speaking permission:', error);
@@ -759,6 +787,9 @@ const stopStudentSpeaking = async (studentId: string) => {
     await streamCall.revokePermissions(
       studentId,
       [OwnCapability.SEND_AUDIO]
+    );
+        setPermissionRequests((current) =>
+      current.filter((request) => request.user?.id !== studentId)
     );
   } catch (error) {
     console.error('Unable to revoke speaking permission:', error);
@@ -951,18 +982,31 @@ const studentPrimarySession =
     window.open(url, '_blank', 'noopener,noreferrer');
   };
 
-    // Actual connected participants are supplied by the Stream call.
+      // Keep chat selection independent from the main classroom video.
   const selectedParticipant =
-  callParticipants.find(
-    (participant) =>
-      participant.userId === selectedParticipantId
-  ) ||
-  callParticipants.find(
-    (participant) =>
-      participant.userId !== registeredAccount?.id
-  ) ||
-  callParticipants[0] ||
-  null;
+    callParticipants.find(
+      (participant) =>
+        participant.userId === selectedParticipantId
+    ) ||
+    callParticipants.find(
+      (participant) =>
+        participant.userId !== registeredAccount?.id
+    ) ||
+    null;
+
+  // Educators always see their own camera as the primary video.
+  // Students see the educator (admin/host) as the primary video.
+  const primaryVideoParticipant = isEducator
+    ? callParticipants.find(
+        (participant) =>
+          participant.userId === registeredAccount?.id
+      ) || null
+    : callParticipants.find(
+        (participant) =>
+          participant.roles?.some(
+            (role: string) => role === 'admin' || role === 'host'
+          )
+      ) || null;
 
 const chatStudentId = isEducator
   ? (
@@ -1195,23 +1239,23 @@ const handleSendChatMessage = async () => {
 
         <div className="relative flex-1 min-h-[240px] bg-black rounded-2xl overflow-hidden border border-slate-700">
 
-          {streamCall && selectedParticipant && (
+                    {streamCall && primaryVideoParticipant && (
             <StreamParticipantVideo
               call={streamCall}
-              sessionId={selectedParticipant.sessionId}
+              sessionId={primaryVideoParticipant.sessionId}
               muted={
-                selectedParticipant.userId === registeredAccount?.id
+                primaryVideoParticipant.userId === registeredAccount?.id
               }
             />
           )}
 
-          {selectedParticipant && (
+          {primaryVideoParticipant && (
             <div className="absolute bottom-3 left-3 right-3 flex items-center justify-between gap-2">
               <span className="bg-black/75 text-white text-xs font-bold px-3 py-2 rounded-lg truncate">
-                {selectedParticipant.name ||
-                  selectedParticipant.userId ||
+                {primaryVideoParticipant.name ||
+                  primaryVideoParticipant.userId ||
                   'Participant'}
-                {selectedParticipant.userId === registeredAccount?.id
+                {primaryVideoParticipant.userId === registeredAccount?.id
                   ? (currentLang === 'ar' ? ' (أنت)' : ' (You)')
                   : ''}
               </span>
@@ -1233,10 +1277,13 @@ const handleSendChatMessage = async () => {
             </p>
 
             <div className="flex gap-3 overflow-x-auto pb-2">
-              {callParticipants
+                            {callParticipants
                 .filter(
                   (participant) =>
-                    participant.userId !== registeredAccount?.id
+                    participant.userId !== registeredAccount?.id &&
+                    !participant.roles?.some(
+                      (role: string) => role === 'admin' || role === 'host'
+                    )
                 )
                 .map((participant) => {
                   const studentId = participant.userId;
@@ -1275,7 +1322,9 @@ const handleSendChatMessage = async () => {
                         </p>
                       </button>
 
-                      <div className="mt-2 flex items-center justify-between gap-2">
+                                            {/* Student raised-hand status */}
+                      <div className="mt-2 flex flex-col gap-2">
+
                         <span
                           className={`text-[10px] font-bold ${
                             handRaised
@@ -1284,16 +1333,36 @@ const handleSendChatMessage = async () => {
                           }`}
                         >
                           {handRaised
-                            ? (currentLang === 'ar'
-                                ? '✋ رفع اليد'
-                                : '✋ Hand raised')
-                            : (currentLang === 'ar'
-                                ? 'لم يرفع يده'
-                                : 'No raised hand')}
+                            ? (
+                                currentLang === 'ar'
+                                  ? '✋ الطالب يطلب الكلام'
+                                  : '✋ Student requests to speak'
+                              )
+                            : (
+                                currentLang === 'ar'
+                                  ? 'لم يرفع يده'
+                                  : 'No raised hand'
+                              )}
                         </span>
+
+                        {/* Educator clears this student's raised hand */}
+                        {handRaised && (
+                          <button
+                            type="button"
+                            onClick={() => void clearStudentHand(studentId)}
+                            className="w-full rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 text-[11px] font-black py-2 cursor-pointer"
+                          >
+                            {currentLang === 'ar'
+                              ? 'مسح طلب رفع اليد'
+                              : 'Clear Raised Hand'}
+                          </button>
+                        )}
+
                       </div>
 
+                      {/* Educator microphone permission controls */}
                       <div className="mt-2">
+
                         <button
                           type="button"
                           onClick={() => void allowStudentToSpeak(studentId)}
@@ -1313,6 +1382,7 @@ const handleSendChatMessage = async () => {
                             ? 'إيقاف الكلام'
                             : 'Stop speaking'}
                         </button>
+
                       </div>
                     </div>
                   );
@@ -1450,10 +1520,49 @@ const handleSendChatMessage = async () => {
                 </span>
               </div>
 
-              {/* Students control their camera; both roles control their microphone. */}
-{(isEducator || isStudent) && (
+                            {/* Live classroom controls */}
+              {(isEducator || isStudent) && (
                 <div className="flex items-center gap-2">
 
+                  {/* Student Raise Hand / Lower Hand */}
+                  {isStudent && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (
+                          registeredAccount &&
+                          raisedHandIds.includes(registeredAccount.id)
+                        ) {
+                          void handleLowerHand();
+                        } else {
+                          void handleRaiseHand();
+                        }
+                      }}
+                      className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-black transition cursor-pointer ${
+                        registeredAccount &&
+                        raisedHandIds.includes(registeredAccount.id)
+                          ? 'bg-amber-400 text-slate-950 hover:bg-amber-300'
+                          : 'bg-amber-600 text-white hover:bg-amber-500'
+                      }`}
+                    >
+                      <span className="text-base">✋</span>
+
+                      {registeredAccount &&
+                      raisedHandIds.includes(registeredAccount.id)
+                        ? (
+                            currentLang === 'ar'
+                              ? 'خفض اليد'
+                              : 'Lower Hand'
+                          )
+                        : (
+                            currentLang === 'ar'
+                              ? 'رفع اليد'
+                              : 'Raise Hand'
+                          )}
+                    </button>
+                  )}
+
+                  {/* Camera control */}
                   <button
                     type="button"
                     onClick={() => void toggleVideoTrack()}
@@ -1469,6 +1578,7 @@ const handleSendChatMessage = async () => {
                       : <VideoOff className="w-4 h-4" />}
                   </button>
 
+                  {/* Microphone control */}
                   <button
                     type="button"
                     onClick={() => void toggleAudioTrack()}
