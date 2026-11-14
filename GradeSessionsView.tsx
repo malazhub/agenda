@@ -1288,7 +1288,7 @@ const handleSendChatMessage = async () => {
     <div className={`flex-1 min-h-0 grid gap-4 ${   isEducator     ? 'lg:grid-cols-[minmax(0,1fr)_18rem_20rem]'     : 'lg:grid-cols-[minmax(0,1fr)_20rem]' }`}>
 
       {/* MAIN VIDEO */}
-      <div className="flex-1 min-w-0 min-h-[240px] flex flex-col lg:flex-row gap-3">
+      <div className="min-w-0 min-h-0 flex flex-col">
 
         <div className="relative flex-1 min-h-[240px] bg-black rounded-2xl overflow-hidden border border-slate-700">
 
@@ -1317,12 +1317,13 @@ const handleSendChatMessage = async () => {
                 ● LIVE
               </span>
             </div>
-          )}
+                    )}
         </div>
+      </div>
 
-        {/* EDUCATOR'S STUDENT THUMBNAILS */}
+      {/* EDUCATOR'S STUDENT THUMBNAILS */}
         {isEducator && (
-          <div className="shrink-0 lg:w-72 lg:min-h-0 lg:flex lg:flex-col">
+          <div className="min-w-0 min-h-0 lg:flex lg:flex-col">
             <p className="text-xs font-bold text-slate-300 mb-2">
               {currentLang === 'ar'
                 ? 'الطلاب المتصلون'
@@ -1349,7 +1350,7 @@ const handleSendChatMessage = async () => {
                   return (
                     <div
                       key={participant.sessionId || studentId}
-                      className={`w-64 shrink-0 rounded-xl border p-2 ${
+                      className={`w-64 lg:w-full shrink-0 rounded-xl border p-2 ${
                         selected
                           ? 'border-indigo-400 bg-indigo-950'
                           : 'border-slate-700 bg-slate-900'
@@ -1439,11 +1440,10 @@ const handleSendChatMessage = async () => {
                       </div>
                     </div>
                   );
-                })}
+                 })}
             </div>
           </div>
         )}
-      </div>
 
       {/* PRIVATE CHAT */}
       <aside className="w-full lg:w-80 shrink-0 min-h-[220px] lg:min-h-0 bg-slate-900 border border-slate-700 rounded-2xl flex flex-col overflow-hidden">
