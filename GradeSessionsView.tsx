@@ -1285,10 +1285,10 @@ const handleSendChatMessage = async () => {
       </p>
     </div>
   ) : (
-    <div className="flex-1 min-h-0 flex flex-col lg:flex-row gap-4">
+    <div className={`flex-1 min-h-0 grid gap-4 ${   isEducator     ? 'lg:grid-cols-[minmax(0,1fr)_18rem_20rem]'     : 'lg:grid-cols-[minmax(0,1fr)_20rem]' }`}>
 
       {/* MAIN VIDEO */}
-      <div className="flex-1 min-w-0 min-h-[240px] flex flex-col gap-3">
+      <div className="flex-1 min-w-0 min-h-[240px] flex flex-col lg:flex-row gap-3">
 
         <div className="relative flex-1 min-h-[240px] bg-black rounded-2xl overflow-hidden border border-slate-700">
 
@@ -1322,14 +1322,14 @@ const handleSendChatMessage = async () => {
 
         {/* EDUCATOR'S STUDENT THUMBNAILS */}
         {isEducator && (
-          <div className="shrink-0">
+          <div className="shrink-0 lg:w-72 lg:min-h-0 lg:flex lg:flex-col">
             <p className="text-xs font-bold text-slate-300 mb-2">
               {currentLang === 'ar'
                 ? 'الطلاب المتصلون'
                 : 'Connected students'}
             </p>
 
-            <div className="flex gap-3 overflow-x-auto pb-2">
+            <div className="flex gap-3 overflow-x-auto pb-2 lg:flex-1 lg:min-h-0 lg:flex-col lg:overflow-x-hidden lg:overflow-y-auto lg:pr-1">
                             {callParticipants
                 .filter(
                   (participant) =>
