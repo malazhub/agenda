@@ -1448,10 +1448,175 @@ async function readMedia(env, objectKey) {
   return new Response(object.body, { headers });
 }
 
+async function classroomChatAccess(request, env, sessionId, studentId) {
+  if (!/^[a-zA-Z0-9_-]{1,100}$/.test(sessionId || "")) {
+    return { error: json({ error: "A valid classroom is required." }, 400) };
+  }
+
+  const access = await registeredLiveSession(request, env, sessionId);
+
+  if (access.error) return { error: access.error };
+
+  const account = access.account;
+
+  if (!["educator", "student"].includes(account.role)) {
+    return { error: json({ error: "Classroom access denied." }, 403) };
+  }
+
+  const student = await env.DB.prepare(
+    `SELECT id, role, registered_session_id, grade_id
+     FROM accounts
+     WHERE id = ?
+       AND role = 'student'
+       AND registered_session_id = ?
+       AND grade_id = ?`
+  ).bind(
+    studentId,
+    sessionId,
+    access.session.grade_id
+  ).first();
+
+  if (!student) {
+    return {
+      error: json({ error: "This student is not assigned to this classroom." }, 403)
+    };
+  }
+
+  let educatorId;
+
+  if (account.role === "educator") {
+    educatorId = account.id;
+  } else {
+    if (account.id !== student.id) {
+      return {
+        error: json({ error: "Students can only access their own private chat." }, 403)
+      };
+    }
+
+    const educator = await env.DB.prepare(
+      `SELECT id
+       FROM accounts
+       WHERE role = 'educator'
+         AND registered_session_id = ?
+       LIMIT 1`
+    ).bind(sessionId).first();
+
+    if (!educator) {
+      return {
+        error: json({ error: "The assigned educator was not found." }, 404)
+      };
+    }
+
+    educatorId = educator.id;
+  }
+
+  return {
+    account,
+    session: access.session,
+    educatorId,
+    studentId: student.id
+  };
+}
+
+async function getClassroomMessages(request, env) {
+  const url = new URL(request.url);
+  const sessionId = url.searchParams.get("sessionId") || "";
+  const studentId = url.searchParams.get("studentId") || "";
+
+  const access = await classroomChatAccess(
+    request,
+    env,
+    sessionId,
+    studentId
+  );
+
+  if (access.error) return access.error;
+
+  const result = await env.DB.prepare(
+    `SELECT
+       id,
+       sender_id AS senderId,
+       message,
+       created_at AS createdAt
+     FROM classroom_messages
+     WHERE session_id = ?
+       AND educator_id = ?
+       AND student_id = ?
+     ORDER BY id DESC
+     LIMIT 100`
+  ).bind(
+    sessionId,
+    access.educatorId,
+    access.studentId
+  ).all();
+
+  return json({
+    messages: (result.results || []).reverse()
+  });
+}
+
+async function sendClassroomMessage(request, env) {
+  const claims = await authenticate(request, env, null);
+
+  if (!claims || !["educator", "student"].includes(claims.role)) {
+    return json({ error: "Classroom authentication required." }, 401);
+  }
+
+  const body = await requestJson(request);
+
+  const sessionId =
+    typeof body?.sessionId === "string" ? body.sessionId.trim() : "";
+
+  const studentId =
+    typeof body?.studentId === "string" ? body.studentId.trim() : "";
+
+  const message =
+    typeof body?.message === "string" ? body.message.trim() : "";
+
+  if (!message || message.length > 2000) {
+    return json({
+      error: "Messages must contain between 1 and 2,000 characters."
+    }, 400);
+  }
+
+  const access = await classroomChatAccess(
+    request,
+    env,
+    sessionId,
+    studentId
+  );
+
+  if (access.error) return access.error;
+
+  await env.DB.prepare(
+    `INSERT INTO classroom_messages (
+       session_id,
+       educator_id,
+       student_id,
+       sender_id,
+       message
+     ) VALUES (?, ?, ?, ?, ?)`
+  ).bind(
+    sessionId,
+    access.educatorId,
+    access.studentId,
+    access.account.id,
+    message
+  ).run();
+
+  return json({ sent: true }, 201);
+}
+
 async function handle(request, env) {
   const url = new URL(request.url);
   const path = url.pathname.replace(/\/+$/, "") || "/";
+  if (request.method === "GET" && path === "/api/classroom/messages") {
+  return getClassroomMessages(request, env);
+}
 
+if (request.method === "POST" && path === "/api/classroom/messages") {
+  return sendClassroomMessage(request, env);
+}
   if (request.method === "GET" && path === "/api/health") return json({ status: "ok" });
   if (request.method === "POST" && path === "/api/auth/register") return handleRegister(request, env);
   if (request.method === "POST" && path === "/api/auth/login") return handleLogin(request, env);
