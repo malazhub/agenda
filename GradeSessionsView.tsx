@@ -853,36 +853,53 @@ const toggleVideoTrack = async () => {
 
   // Mic track toggle
   const toggleAudioTrack = async () => {
-  if (!streamCall || (!isEducator && !isStudent)) return;
+  const call = streamCall;
 
-  // A student cannot turn on the microphone without Stream permission.
-  if (isStudent && !canSpeak) {
+  if (!call || (!isEducator && !isStudent)) return;
+
+  // A real button click is a browser user gesture.
+  // Use it to resume incoming classroom audio if autoplay was blocked.
+  call.resumeAudio();
+
+  // Students must have explicit Stream permission before publishing audio.
+  if (
+    isStudent &&
+    !call.permissionsContext.hasPermission(
+      OwnCapability.SEND_AUDIO
+    )
+  ) {
+    setCanSpeak(false);
     setIsMicOn(false);
+    setCameraError(
+      'Your educator must grant microphone permission before you can speak. Raise your hand to request permission.'
+    );
     return;
   }
 
   try {
-    if (isMicOn) {
-      await streamCall.microphone.disable();
+    if (call.microphone.enabled) {
+      await call.microphone.disable();
       setIsMicOn(false);
+      setCameraError(null);
     } else {
-      if (
-        isStudent &&
-        !streamCall.permissionsContext.hasPermission(
-          OwnCapability.SEND_AUDIO
-        )
-      ) {
-        setCanSpeak(false);
-        setIsMicOn(false);
-        return;
-      }
+      await call.microphone.enable();
 
-      await streamCall.microphone.enable();
-      setIsMicOn(true);
+      setIsMicOn(call.microphone.enabled);
+      setCameraError(null);
     }
   } catch (error) {
-    console.error('Unable to toggle classroom microphone:', error);
-    setCameraError('Unable to change microphone settings.');
+    console.error(
+      'Classroom microphone operation failed:',
+      error
+    );
+
+    setIsMicOn(false);
+
+    setCameraError(
+      error instanceof Error
+        ? `Microphone could not start: ${error.message}`
+        : 'Microphone could not start. Check browser and operating-system microphone permissions.'
+    );
   }
 };
 
