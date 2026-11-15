@@ -1456,7 +1456,7 @@ const handleSendChatMessage = async () => {
 
           {/* REAL STREAM VIDEO PARTICIPANTS */}
           {/* CLASSROOM VIDEO, STUDENT THUMBNAILS AND PRIVATE CHAT */}
-<div className="flex-1 min-h-0 overflow-hidden bg-slate-950 p-4 flex flex-col">
+<div className="flex-1 min-h-0 overflow-y-auto overscroll-contain lg:overflow-hidden bg-slate-950 p-4 flex flex-col">
 
   <div className="flex items-center justify-between gap-3 mb-4">
     <div>
@@ -1492,7 +1492,7 @@ const handleSendChatMessage = async () => {
       </p>
     </div>
   ) : (
-    <div className={`flex-1 min-h-0 grid gap-4 ${   isEducator     ? 'lg:grid-cols-[minmax(0,1fr)_18rem_20rem]'     : 'lg:grid-cols-[minmax(0,1fr)_20rem]' }`}>
+        <div       className={`flex-none lg:flex-1 min-h-0 grid grid-cols-1 gap-4 ${         isEducator           ? 'lg:grid-cols-[minmax(0,1fr)_18rem_20rem]'           : 'lg:grid-cols-[minmax(0,1fr)_20rem]'       }`}     >
 
       {/* MAIN VIDEO */}
       <div className="min-w-0 min-h-0 flex flex-col">
@@ -1665,7 +1665,7 @@ const handleSendChatMessage = async () => {
         )}
 
       {/* PRIVATE CHAT */}
-      <aside className="w-full lg:w-80 shrink-0 min-h-[220px] lg:min-h-0 bg-slate-900 border border-slate-700 rounded-2xl flex flex-col overflow-hidden">
+      <aside className="w-full lg:w-80 shrink-0 min-h-[360px] lg:min-h-0 bg-slate-900 border border-slate-700 rounded-2xl flex flex-col overflow-hidden">
 
         <div className="px-3 py-3 border-b border-slate-700">
           <h4 className="text-sm font-black text-white">
