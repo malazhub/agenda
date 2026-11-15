@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { 
   Language, 
   UserProfile, 
@@ -58,7 +58,14 @@ export default function App() {
   const [directorLoginRequest, setDirectorLoginRequest] = useState(0);
   const [registeredAccount, setRegisteredAccount] = useState<CloudflareAccount | null>(null);
   const [sessionToken, setSessionToken] = useState('');
-  
+  const signOutCleanupRef = useRef<(() => Promise<void>) | null>(null);
+
+const registerSignOutCleanup = useCallback(
+  (cleanup: (() => Promise<void>) | null) => {
+    signOutCleanupRef.current = cleanup;
+  },
+  []
+);
   // Archive Sessions Modal State
   const [isArchiveSessionsOpen, setIsArchiveSessionsOpen] = useState(false);
 
@@ -223,6 +230,7 @@ export default function App() {
             directorLoginRequest={directorLoginRequest}
             registeredAccount={registeredAccount}
             sessionToken={sessionToken}
+            onRegisterSignOutCleanup={registerSignOutCleanup}
             onShowMessage={showToast}
             onBookTeacher={handleBookTeacherDirect}
             onSelectQuestionForBooking={handleSelectQuestionForBooking}
