@@ -130,6 +130,15 @@ export const GradeSessionsView: React.FC<GradeSessionsViewProps> = ({
 }) => {
   const isRTL = currentLang === 'ar';
   const t = translations[currentLang];
+    const classroomLabel = (
+    ar: string,
+    fr: string,
+    en: string
+  ) => {
+    if (currentLang === 'ar') return ar;
+    if (currentLang === 'fr') return fr;
+    return en;
+  };
   const [activeTab, setActiveTab] = useState<'stored' | 'live'>(initialTab);
   const [storedSessions, setStoredSessions] = useState<StoredSessionRecord[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -203,10 +212,29 @@ const [isVideoOn, setIsVideoOn] = useState(false);
 
 const [isFullscreen, setIsFullscreen] = useState(false);
 const [cameraError, setCameraError] = useState<string | null>(null);
-  const [chatMessages, setChatMessages] = useState<ClassroomMessage[]>([]);
+
+const [isStudentVideoSharing, setIsStudentVideoSharing] =
+  useState(false);
+
+const studentVideoInputRef =
+  useRef<HTMLInputElement | null>(null);
+
+const studentVideoShareRef = useRef<any>(null);
+
+const [chatMessages, setChatMessages] =
+  useState<ClassroomMessage[]>([]);
+
 const [chatDraft, setChatDraft] = useState('');
+
+const [chatAttachmentFile, setChatAttachmentFile] =
+  useState<File | null>(null);
+
+const chatAttachmentInputRef =
+  useRef<HTMLInputElement | null>(null);
+
 const [chatError, setChatError] = useState<string | null>(null);
 const [chatLoading, setChatLoading] = useState(false);
+const [chatClearing, setChatClearing] = useState(false);
 const [selectedParticipantId, setSelectedParticipantId] =
   useState<string | null>(null);
 const [permissionRequests, setPermissionRequests] = useState<any[]>([]);
@@ -668,6 +696,10 @@ const endLiveCall = async () => {
   let shouldStopSharedBroadcast = false;
 
   try {
+    if (studentVideoShareRef.current) {
+      await stopStudentVideoShare();
+    }
+
     participantsSubscription.current?.unsubscribe();
     participantsSubscription.current = null;
     callEventUnsubs.current.forEach((unsubscribe) => unsubscribe());
@@ -1667,12 +1699,60 @@ const handleSendChatMessage = async () => {
       {/* PRIVATE CHAT */}
       <aside className="w-full lg:w-80 shrink-0 min-h-[360px] lg:min-h-0 bg-slate-900 border border-slate-700 rounded-2xl flex flex-col overflow-hidden">
 
-        <div className="px-3 py-3 border-b border-slate-700">
-          <h4 className="text-sm font-black text-white">
-            {currentLang === 'ar' ? 'محادثة خاصة' : 'Private chat'}
-          </h4>
+                <div className="px-3 py-3 border-b border-slate-700">
+          <div className="flex items-center justify-between gap-2">
+            <h4 className="text-sm font-black text-white">
+              {classroomLabel(
+                'محادثة خاصة',
+                'Chat privé',
+                'Private Chat'
+              )}
+            </h4>
+
+            <button
+              type="button"
+              onClick={() => void handleClearChatMessages()}
+              disabled={
+                !chatStudentId ||
+                chatLoading ||
+                chatClearing
+              }
+              className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg bg-rose-700 hover:bg-rose-600 disabled:opacity-40 text-white text-[10px] font-bold transition cursor-pointer disabled:cursor-not-allowed"
+              title={classroomLabel(
+                'حذف جميع الرسائل للطرفين',
+                'Effacer tous les messages pour les deux participants',
+                'Clear all messages for both participants'
+              )}
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+
+              {classroomLabel(
+                'مسح المحادثة',
+                'Effacer',
+                'Clear chat'
+              )}
+            </button>
+          </div>
 
           <p className="text-[11px] text-slate-400 mt-1">
+            {isEducator
+              ? (
+                  selectedParticipant &&
+                  selectedParticipant.userId !== registeredAccount?.id
+                    ? (selectedParticipant.name || selectedParticipant.userId)
+                    : classroomLabel(
+                        'اختر طالباً لبدء المحادثة',
+                        'Choisissez un élève pour démarrer la conversation',
+                        'Select a student to start chatting'
+                      )
+                )
+              : classroomLabel(
+                  'محادثتك الخاصة مع الأستاذ',
+                  'Votre conversation privée avec le professeur',
+                  'Your private conversation with the educator'
+                )}
+          </p>
+        </div>
             {isEducator
               ? (
                   selectedParticipant &&
@@ -1702,7 +1782,7 @@ const handleSendChatMessage = async () => {
                 : 'No messages yet.'}
             </p>
           ) : (
-            chatMessages.map((message) => {
+                        chatMessages.map((message) => {
               const ownMessage =
                 message.senderId === registeredAccount?.id;
 
@@ -1714,15 +1794,57 @@ const handleSendChatMessage = async () => {
                   }`}
                 >
                   <div
-                    className={`max-w-[90%] rounded-xl px-3 py-2 text-xs ${
+                    className={`max-w-[95%] min-w-0 rounded-xl px-3 py-2 text-xs ${
                       ownMessage
                         ? 'bg-indigo-600 text-white'
                         : 'bg-slate-700 text-slate-100'
                     }`}
                   >
-                    <p className="whitespace-pre-wrap break-words">
-                      {message.message}
-                    </p>
+                    {message.message !== '[Attachment]' && (
+                      <p className="whitespace-pre-wrap break-words">
+                        {message.message}
+                      </p>
+                    )}
+
+                    {message.attachmentUrl &&
+                      message.attachmentType?.startsWith('image/') && (
+                        <a
+                          href={message.attachmentUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        >
+                          <img
+                            src={message.attachmentUrl}
+                            alt={message.attachmentName || 'Exercise image'}
+                            className="mt-2 max-h-64 w-full rounded-lg object-contain bg-black"
+                          />
+                        </a>
+                      )}
+
+                    {message.attachmentUrl &&
+                      message.attachmentType?.startsWith('video/') && (
+                        <video
+                          src={message.attachmentUrl}
+                          controls
+                          playsInline
+                          preload="metadata"
+                          className="mt-2 w-full max-h-64 rounded-lg bg-black"
+                        />
+                      )}
+
+                    {message.attachmentUrl &&
+                      message.attachmentType === 'application/pdf' && (
+                        <a
+                          href={message.attachmentUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="mt-2 flex items-center gap-2 rounded-lg bg-slate-950/40 p-3 text-white underline break-all"
+                        >
+                          <FileText className="w-5 h-5 shrink-0" />
+                          {message.attachmentName || 'PDF'}
+                        </a>
+                      )}
+
                     <p className="text-[9px] opacity-60 mt-1">
                       {message.createdAt}
                     </p>
@@ -1739,7 +1861,7 @@ const handleSendChatMessage = async () => {
           </p>
         )}
 
-        <div className="p-3 border-t border-slate-700">
+                <div className="p-3 border-t border-slate-700">           <input             ref={chatAttachmentInputRef}             type="file"             accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm,video/quicktime,application/pdf"             className="hidden"             onChange={(event) => {               const file = event.currentTarget.files?.[0] || null;                event.currentTarget.value = '';                if (!file) return;                if (file.size > 25 * 1024 * 1024) {                 setChatError(                   classroomLabel(                     'الحد الأقصى لحجم الملف هو 25 ميغابايت.',                     'La taille maximale du fichier est de 25 Mo.',                     'The maximum file size is 25 MB.'                   )                 );                 return;               }                setChatError(null);               setChatAttachmentFile(file);             }}           />            {chatAttachmentFile && (             <div className="mb-2 flex items-center justify-between gap-2 rounded-lg bg-slate-800 border border-slate-600 p-2">               <span className="min-w-0 truncate text-[11px] text-slate-200">                 {chatAttachmentFile.name}               </span>                <button                 type="button"                 onClick={() => setChatAttachmentFile(null)}                 className="shrink-0 rounded-lg p-1 text-slate-300 hover:bg-slate-700"                 title={classroomLabel(                   'إزالة المرفق',                   'Retirer le fichier',                   'Remove attachment'                 )}               >                 <X className="w-4 h-4" />               </button>             </div>           )}            <textarea             value={chatDraft}             onChange={(event) => setChatDraft(event.target.value)}             maxLength={2000}             rows={2}             disabled={!chatStudentId || chatLoading || chatClearing}             placeholder={classroomLabel(               'اكتب رسالة خاصة...',               'Écrire un message privé...',               'Write a private message...'             )}             className="w-full resize-none rounded-lg bg-slate-800 border border-slate-600 text-white text-xs p-2 outline-none focus:border-indigo-400 disabled:opacity-50"           />            <div className="mt-2 flex gap-2">             <button               type="button"               onClick={() => chatAttachmentInputRef.current?.click()}               disabled={                 !chatStudentId ||                 chatLoading ||                 chatClearing               }               className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-slate-700 hover:bg-slate-600 disabled:opacity-40 text-white text-xs font-bold py-2 cursor-pointer disabled:cursor-not-allowed"             >               <Paperclip className="w-4 h-4" />                {classroomLabel(                 'إرفاق تمرين أو فيديو',                 'Joindre un exercice ou une vidéo',                 'Attach exercise or video'               )}             </button>              <button               type="button"               onClick={() => void handleSendChatMessage()}               disabled={                 !chatStudentId ||                 (!chatDraft.trim() && !chatAttachmentFile) ||                 chatLoading ||                 chatClearing               }               className="flex-1 rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 text-white text-xs font-bold py-2 cursor-pointer disabled:cursor-not-allowed"             >               {chatLoading                 ? classroomLabel(                     'جارٍ الإرسال...',                     'Envoi...',                     'Sending...'                   )                 : classroomLabel(                     'إرسال',                     'Envoyer',                     'Send'                   )}             </button>           </div>         </div>
           <textarea
             value={chatDraft}
             onChange={(event) => setChatDraft(event.target.value)}
@@ -1862,7 +1984,83 @@ const handleSendChatMessage = async () => {
                           )}
                     </span>
                   )}
-                  {/* Camera control */}
+                                    {isStudent && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => void startStudentSelfCam()}
+                        className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition cursor-pointer"
+                      >
+                        <Camera className="w-4 h-4" />
+                        {classroomLabel(
+                          'كاميرتي',
+                          'Ma caméra',
+                          'Self Cam'
+                        )}
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => void flipStudentCamera()}
+                        className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-slate-700 hover:bg-slate-600 text-white text-xs font-bold transition cursor-pointer"
+                      >
+                        <Camera className="w-4 h-4" />
+                        {classroomLabel(
+                          'تبديل الكاميرا',
+                          'Retourner la caméra',
+                          'Flip Camera'
+                        )}
+                      </button>
+
+                      <input
+                        ref={studentVideoInputRef}
+                        type="file"
+                        accept="video/*"
+                        className="hidden"
+                        onChange={(event) => {
+                          const file =
+                            event.currentTarget.files?.[0];
+
+                          event.currentTarget.value = '';
+
+                          if (file) {
+                            void startStudentVideoShare(file);
+                          }
+                        }}
+                      />
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (isStudentVideoSharing) {
+                            void stopStudentVideoShare();
+                          } else {
+                            studentVideoInputRef.current?.click();
+                          }
+                        }}
+                        className={`flex items-center gap-2 px-3 py-2.5 rounded-xl text-xs font-bold transition cursor-pointer ${
+                          isStudentVideoSharing
+                            ? 'bg-rose-600 hover:bg-rose-500 text-white'
+                            : 'bg-emerald-600 hover:bg-emerald-500 text-white'
+                        }`}
+                      >
+                        <Video className="w-4 h-4" />
+                        {isStudentVideoSharing
+                          ? classroomLabel(
+                              'إيقاف مشاركة الفيديو',
+                              'Arrêter le partage vidéo',
+                              'Stop Video'
+                            )
+                          : classroomLabel(
+                              'مشاركة فيديو مباشر',
+                              'Partager une vidéo en direct',
+                              'Share Video Live'
+                            )}
+                      </button>
+                    </>
+                  )}
+
+                  {/* Camera on/off control */}
                   <button
                     type="button"
                     onClick={() => void toggleVideoTrack()}
@@ -1871,7 +2069,19 @@ const handleSendChatMessage = async () => {
                         ? 'bg-slate-700 text-slate-200'
                         : 'bg-rose-600 text-white'
                     }`}
-                    title={isVideoOn ? 'Turn Video Off' : 'Turn Video On'}
+                    title={
+                      isVideoOn
+                        ? classroomLabel(
+                            'إيقاف الكاميرا',
+                            'Désactiver la caméra',
+                            'Turn Camera Off'
+                          )
+                        : classroomLabel(
+                            'تشغيل الكاميرا',
+                            'Activer la caméra',
+                            'Turn Camera On'
+                          )
+                    }
                   >
                     {isVideoOn
                       ? <Video className="w-4 h-4" />
