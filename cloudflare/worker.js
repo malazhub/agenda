@@ -1752,8 +1752,12 @@ async function classroomChatAccess(request, env, sessionId, studentId) {
 
 async function getClassroomMessages(request, env) {
   const url = new URL(request.url);
-  const sessionId = url.searchParams.get("sessionId") || "";
-  const studentId = url.searchParams.get("studentId") || "";
+
+  const sessionId =
+    url.searchParams.get("sessionId") || "";
+
+  const studentId =
+    url.searchParams.get("studentId") || "";
 
   const access = await classroomChatAccess(
     request,
@@ -1769,7 +1773,10 @@ async function getClassroomMessages(request, env) {
        id,
        sender_id AS senderId,
        message,
-       created_at AS createdAt
+       created_at AS createdAt,
+       attachment_key AS attachmentKey,
+       attachment_name AS attachmentName,
+       attachment_type AS attachmentType
      FROM classroom_messages
      WHERE session_id = ?
        AND educator_id = ?
@@ -1782,19 +1789,39 @@ async function getClassroomMessages(request, env) {
     access.studentId
   ).all();
 
-  return json({
-    messages: (result.results || []).reverse()
-  });
+  const messages = await Promise.all(
+    (result.results || [])
+      .reverse()
+      .map(async (row) => ({
+        id: row.id,
+        senderId: row.senderId,
+        message: row.message,
+        createdAt: row.createdAt,
+        attachmentName: row.attachmentName || null,
+        attachmentType: row.attachmentType || null,
+        attachmentUrl: row.attachmentKey
+          ? await createClassroomAttachmentUrl(
+              request,
+              env,
+              row.attachmentKey
+            )
+          : null
+      }))
+  );
+
+  return json({ messages });
 }
 
 async function sendClassroomMessage(request, env) {
   const claims = await authenticate(request, env, null);
 
-  if (!claims || !["educator", "student"].includes(claims.role)) {
-    return json(
-      { error: "Classroom authentication required." },
-      401
-    );
+  if (
+    !claims ||
+    !["educator", "student"].includes(claims.role)
+  ) {
+    return json({
+      error: "Classroom authentication required."
+    }, 401);
   }
 
   const body = await requestJson(request);
@@ -1814,12 +1841,17 @@ async function sendClassroomMessage(request, env) {
       ? body.message.trim()
       : "";
 
+  const attachmentKey =
+    typeof body?.attachmentKey === "string"
+      ? body.attachmentKey.trim()
+      : "";
+
   if (
-    !message ||
+    (!message && !attachmentKey) ||
     message.length > 2000
   ) {
     return json({
-      error: "Messages must contain between 1 and 2,000 characters."
+      error: "Write a message or attach a file. Messages cannot exceed 2,000 characters."
     }, 400);
   }
 
@@ -1830,25 +1862,81 @@ async function sendClassroomMessage(request, env) {
     studentId
   );
 
-  if (access.error) {
-    return access.error;
+  if (access.error) return access.error;
+
+  let attachmentName = null;
+  let attachmentType = null;
+
+  if (attachmentKey) {
+    if (!/^[0-9a-f-]{36}$/i.test(attachmentKey)) {
+      return json({
+        error: "Invalid attachment reference."
+      }, 400);
+    }
+
+    const object = await env.SESSION_MEDIA_BUCKET.head(
+      `classroom-chat/${attachmentKey}`
+    );
+
+    if (!object) {
+      return json({
+        error: "The uploaded attachment could not be found."
+      }, 404);
+    }
+
+    const metadata = object.customMetadata || {};
+
+    if (
+      metadata.sessionId !== sessionId ||
+      metadata.studentId !== access.studentId ||
+      metadata.uploadedBy !== access.account.id
+    ) {
+      return json({
+        error: "You do not have permission to attach this file."
+      }, 403);
+    }
+
+    attachmentName =
+      metadata.attachmentName || "Attachment";
+
+    attachmentType =
+      object.httpMetadata?.contentType || "";
+
+    const allowedType =
+      /^(image\/(jpeg|png|webp|gif)|video\/(mp4|webm|quicktime)|application\/pdf)$/;
+
+    if (!allowedType.test(attachmentType)) {
+      return json({
+        error: "This attachment type is not supported."
+      }, 415);
+    }
   }
 
-  // Insert the message and obtain its database row ID.
+  // The existing message column is NOT NULL.
+  // Store a placeholder for a message containing only a file.
+  const storedMessage =
+    message || "[Attachment]";
+
   const insertResult = await env.DB.prepare(
     `INSERT INTO classroom_messages (
        session_id,
        educator_id,
        student_id,
        sender_id,
-       message
-     ) VALUES (?, ?, ?, ?, ?)`
+       message,
+       attachment_key,
+       attachment_name,
+       attachment_type
+     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
   ).bind(
     sessionId,
     access.educatorId,
     access.studentId,
     access.account.id,
-    message
+    storedMessage,
+    attachmentKey || null,
+    attachmentName,
+    attachmentType
   ).run();
 
   const messageId = Number(
@@ -1860,17 +1948,19 @@ async function sendClassroomMessage(request, env) {
     messageId < 1
   ) {
     throw new Error(
-      "The database did not return the inserted classroom message ID."
+      "The database did not return the inserted message ID."
     );
   }
 
-  // Read back the exact record that was inserted.
   const savedMessage = await env.DB.prepare(
     `SELECT
        id,
        sender_id AS senderId,
        message,
-       created_at AS createdAt
+       created_at AS createdAt,
+       attachment_key AS attachmentKey,
+       attachment_name AS attachmentName,
+       attachment_type AS attachmentType
      FROM classroom_messages
      WHERE id = ?
        AND session_id = ?
@@ -1886,13 +1976,27 @@ async function sendClassroomMessage(request, env) {
 
   if (!savedMessage) {
     throw new Error(
-      "The message was inserted but could not be retrieved."
+      "The saved message could not be retrieved."
     );
   }
 
   return json({
     sent: true,
-    message: savedMessage
+    message: {
+      id: savedMessage.id,
+      senderId: savedMessage.senderId,
+      message: savedMessage.message,
+      createdAt: savedMessage.createdAt,
+      attachmentName: savedMessage.attachmentName,
+      attachmentType: savedMessage.attachmentType,
+      attachmentUrl: savedMessage.attachmentKey
+        ? await createClassroomAttachmentUrl(
+            request,
+            env,
+            savedMessage.attachmentKey
+          )
+        : null
+    }
   }, 201);
 }
 
