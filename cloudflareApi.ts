@@ -263,11 +263,21 @@ export function sendClassroomMessage(
   sessionId: string,
   studentId: string,
   message: string,
-): Promise<{ sent: boolean }> {
-  return request('/api/classroom/messages', {
+): Promise<{
+  sent: boolean;
+  message: ClassroomMessage;
+}> {
+  return request<{
+    sent: boolean;
+    message: ClassroomMessage;
+  }>('/api/classroom/messages', {
     method: 'POST',
     headers: authHeaders(token),
-    body: JSON.stringify({ sessionId, studentId, message }),
+    body: JSON.stringify({
+      sessionId,
+      studentId,
+      message
+    }),
   });
 }
 export function setEducatorLiveSession(
