@@ -685,10 +685,8 @@ callEventUnsubs.current = [];
       await client.disconnectUser().catch(() => undefined);
     }
 
-    setCameraError(
-      error instanceof Error
-        ? error.message
-        : 'Unable to connect to the live classroom.'
+        setCameraError(
+      'Unable to connect to the live classroom. Please try again.'
     );
 
   } finally {
@@ -1046,9 +1044,11 @@ const startStudentSelfCam = async () => {
     }
 
     setCameraError(null);
-  } catch (error) {
-    console.error(
-      'Unable to enable student front camera:',
+    } catch (error) {
+    // Keep the technical error in the browser console only.
+    // Never display browser or Stream video-source errors to students.
+    console.warn(
+      'Student front camera could not start:',
       error
     );
 
@@ -1056,15 +1056,7 @@ const startStudentSelfCam = async () => {
       call.camera.state.status === 'enabled'
     );
 
-    setCameraError(
-      error instanceof Error
-        ? error.message
-        : classroomLabel(
-            'تعذر تشغيل الكاميرا الأمامية.',
-            'Impossible de démarrer la caméra avant.',
-            'Unable to start the front camera.'
-          )
-    );
+    setCameraError(null);
   }
 };
 
@@ -1108,9 +1100,10 @@ const flipStudentCamera = async () => {
     }
 
     setCameraError(null);
-  } catch (error) {
-    console.error(
-      'Unable to flip student camera:',
+    } catch (error) {
+    // Keep the technical error in the browser console only.
+    console.warn(
+      'Student camera switch failed:',
       error
     );
 
@@ -1118,15 +1111,7 @@ const flipStudentCamera = async () => {
       call.camera.state.status === 'enabled'
     );
 
-    setCameraError(
-      error instanceof Error
-        ? error.message
-        : classroomLabel(
-            'تعذر تبديل الكاميرا.',
-            'Impossible de changer de caméra.',
-            'Unable to switch cameras.'
-          )
-    );
+    setCameraError(null);
   }
 };
 
