@@ -22,6 +22,13 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
+            - name: Apply D1 database migrations
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: 15cd99734560c6868dd06d79236a0334
+          command: d1 migrations apply agenda-db --remote --config cloudflare/wrangler.toml
+
       - name: Deploy Cloudflare Worker
         uses: cloudflare/wrangler-action@v3
         with:
