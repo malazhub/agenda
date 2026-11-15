@@ -1205,14 +1205,24 @@ useEffect(() => {
     !chatStudentId
   ) {
     setChatMessages([]);
+    setChatError(null);
+    setChatLoading(false);
     return;
   }
 
   let cancelled = false;
+  let requestInProgress = false;
 
-  const loadMessages = async () => {
-    setChatLoading(true);
-    setChatError(null);
+  const loadMessages = async (showLoading: boolean) => {
+    // Do not allow overlapping message requests.
+    if (requestInProgress || cancelled) return;
+
+    requestInProgress = true;
+
+    if (showLoading) {
+      setChatLoading(true);
+      setChatError(null);
+    }
 
     try {
       const result = await getClassroomMessages(
@@ -1221,29 +1231,68 @@ useEffect(() => {
         chatStudentId
       );
 
-      if (!cancelled) {
-        setChatMessages(result.messages);
-      }
+      if (cancelled) return;
+
+      // Merge messages by database ID. This prevents a message
+      // received by polling from appearing twice when the
+      // sender's POST response arrives at the same time.
+      setChatMessages((current) => {
+        const messagesById = new Map<
+          number,
+          ClassroomMessage
+        >();
+
+        for (const message of current) {
+          messagesById.set(message.id, message);
+        }
+
+        for (const message of result.messages || []) {
+          messagesById.set(message.id, message);
+        }
+
+        return Array.from(messagesById.values())
+          .sort((a, b) => a.id - b.id)
+          .slice(-100);
+      });
+
+      setChatError(null);
     } catch (error) {
       if (!cancelled) {
-        console.error('Unable to load classroom messages:', error);
+        console.error(
+          'Unable to refresh classroom messages:',
+          error
+        );
+
         setChatError(
           error instanceof Error
             ? error.message
-            : 'Unable to load classroom messages.'
+            : 'Unable to receive classroom messages.'
         );
       }
     } finally {
-      if (!cancelled) {
+      requestInProgress = false;
+
+      // Only the initial load controls the chat input's
+      // loading state. Background refreshes must not
+      // disable the message box.
+      if (showLoading && !cancelled) {
         setChatLoading(false);
       }
     }
   };
 
-  void loadMessages();
+  // Load existing conversation immediately.
+  void loadMessages(true);
+
+  // Check for messages from the other participant every
+  // two seconds while this conversation is open.
+  const refreshInterval = window.setInterval(() => {
+    void loadMessages(false);
+  }, 2000);
 
   return () => {
     cancelled = true;
+    window.clearInterval(refreshInterval);
   };
 }, [
   inLiveConference,
@@ -1285,10 +1334,19 @@ const handleSendChatMessage = async () => {
     // Display the exact message returned by the database.
     // Do not make a second GET request to decide whether
     // the POST succeeded.
-    setChatMessages((current) => [
-      ...current,
-      result.message
-    ]);
+        setChatMessages((current) => {
+      const alreadyReceived = current.some(
+        (message) => message.id === result.message.id
+      );
+
+      if (alreadyReceived) {
+        return current;
+      }
+
+      return [...current, result.message]
+        .sort((a, b) => a.id - b.id)
+        .slice(-100);
+    });
 
     setChatDraft('');
   } catch (error) {
