@@ -1447,13 +1447,85 @@ async function readMedia(env, objectKey) {
   headers.set("cache-control", "public, max-age=3600");
   return new Response(object.body, { headers });
 }
+async function ensureClassroomChatSchema(env) {
+  // Check whether the classroom assignment column exists.
+  const accountColumns = await env.DB.prepare(
+    "PRAGMA table_info(accounts)"
+  ).all();
 
-async function classroomChatAccess(request, env, sessionId, studentId) {
-  if (!/^[a-zA-Z0-9_-]{1,100}$/.test(sessionId || "")) {
-    return { error: json({ error: "A valid classroom is required." }, 400) };
+  const hasRegisteredSessionId =
+    (accountColumns.results || []).some(
+      (column) => column.name === "registered_session_id"
+    );
+
+  // Repair the column if its migration was not applied.
+  if (!hasRegisteredSessionId) {
+    try {
+      await env.DB.prepare(
+        `ALTER TABLE accounts
+         ADD COLUMN registered_session_id TEXT
+         REFERENCES sessions(id) ON DELETE SET NULL`
+      ).run();
+    } catch (error) {
+      // Another simultaneous request may have added it.
+      const updatedColumns = await env.DB.prepare(
+        "PRAGMA table_info(accounts)"
+      ).all();
+
+      const columnNowExists =
+        (updatedColumns.results || []).some(
+          (column) => column.name === "registered_session_id"
+        );
+
+      if (!columnNowExists) {
+        throw error;
+      }
+    }
   }
 
-  const access = await registeredLiveSession(request, env, sessionId);
+  // Ensure the private-chat table and its lookup index exist.
+  await env.DB.batch([
+    env.DB.prepare(
+      `CREATE TABLE IF NOT EXISTS classroom_messages (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        session_id TEXT NOT NULL,
+        educator_id TEXT NOT NULL,
+        student_id TEXT NOT NULL,
+        sender_id TEXT NOT NULL,
+        message TEXT NOT NULL
+          CHECK (length(message) BETWEEN 1 AND 2000),
+        created_at TEXT NOT NULL DEFAULT (datetime('now'))
+      )`
+    ),
+
+    env.DB.prepare(
+      `CREATE INDEX IF NOT EXISTS classroom_messages_pair_idx
+       ON classroom_messages (
+         session_id,
+         educator_id,
+         student_id,
+         id
+       )`
+    )
+  ]);
+}
+async function classroomChatAccess(request, env, sessionId, studentId) {
+    if (!/^[a-zA-Z0-9_-]{1,100}$/.test(sessionId || "")) {
+    return {
+      error: json(
+        { error: "A valid classroom is required." },
+        400
+      )
+    };
+  }
+
+  await ensureClassroomChatSchema(env);
+
+  const access = await registeredLiveSession(
+    request,
+    env,
+    sessionId
+  );
 
   if (access.error) return { error: access.error };
 
@@ -1602,30 +1674,59 @@ async function sendClassroomMessage(request, env) {
     return access.error;
   }
 
-  const savedMessage = await env.DB.prepare(
+  // Insert the message and obtain its database row ID.
+  const insertResult = await env.DB.prepare(
     `INSERT INTO classroom_messages (
        session_id,
        educator_id,
        student_id,
        sender_id,
        message
-     ) VALUES (?, ?, ?, ?, ?)
-     RETURNING
-       id,
-       sender_id AS senderId,
-       message,
-       created_at AS createdAt`
+     ) VALUES (?, ?, ?, ?, ?)`
   ).bind(
     sessionId,
     access.educatorId,
     access.studentId,
     access.account.id,
     message
+  ).run();
+
+  const messageId = Number(
+    insertResult.meta?.last_row_id
+  );
+
+  if (
+    !Number.isSafeInteger(messageId) ||
+    messageId < 1
+  ) {
+    throw new Error(
+      "The database did not return the inserted classroom message ID."
+    );
+  }
+
+  // Read back the exact record that was inserted.
+  const savedMessage = await env.DB.prepare(
+    `SELECT
+       id,
+       sender_id AS senderId,
+       message,
+       created_at AS createdAt
+     FROM classroom_messages
+     WHERE id = ?
+       AND session_id = ?
+       AND educator_id = ?
+       AND student_id = ?
+     LIMIT 1`
+  ).bind(
+    messageId,
+    sessionId,
+    access.educatorId,
+    access.studentId
   ).first();
 
   if (!savedMessage) {
     throw new Error(
-      "Classroom message INSERT did not return the saved message."
+      "The message was inserted but could not be retrieved."
     );
   }
 
@@ -1688,9 +1789,52 @@ export default {
       const responseHeaders = new Headers(response.headers);
       for (const [key, value] of Object.entries(headers)) responseHeaders.set(key, value);
       return new Response(response.body, { status: response.status, headers: responseHeaders });
-    } catch (error) {
-      console.error("Agenda API request failed", error);
-      return json({ error: "The service could not complete the request." }, 500, headers);
+        } catch (error) {
+      const path =
+        new URL(request.url).pathname.replace(/\/+$/, "") || "/";
+
+      const isClassroomChat =
+        path === "/api/classroom/messages";
+
+      const errorMessage =
+        error instanceof Error
+          ? error.message
+          : String(error);
+
+      const cause =
+        error && typeof error === "object"
+          ? error.cause
+          : null;
+
+      const causeMessage =
+        cause instanceof Error
+          ? cause.message
+          : cause
+            ? String(cause)
+            : "";
+
+      const detail = causeMessage || errorMessage;
+
+      console.error("Agenda API request failed", {
+        method: request.method,
+        path,
+        message: errorMessage,
+        cause: causeMessage || null,
+        stack:
+          error instanceof Error
+            ? error.stack
+            : null
+      });
+
+      return json(
+        {
+          error: isClassroomChat
+            ? `Private chat failed: ${detail}`
+            : "The service could not complete the request."
+        },
+        500,
+        headers
+      );
     }
   },
 };
