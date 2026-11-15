@@ -2202,22 +2202,7 @@ const handleClearChatMessages = async () => {
                 )}
           </p>
         </div>
-            {isEducator
-              ? (
-                  selectedParticipant &&
-                  selectedParticipant.userId !== registeredAccount?.id
-                    ? (selectedParticipant.name || selectedParticipant.userId)
-                    : (currentLang === 'ar'
-                        ? 'اختر طالباً لبدء المحادثة'
-                        : 'Select a student to start chatting')
-                )
-              : (currentLang === 'ar'
-                  ? 'محادثتك الخاصة مع الأستاذ'
-                  : 'Your private conversation with the educator')}
-          </p>
-        </div>
-
-        <div className="flex-1 min-h-[120px] overflow-y-auto p-3 space-y-2">
+         <div className="flex-1 min-h-[120px] overflow-y-auto p-3 space-y-2">
           {!chatStudentId ? (
             <p className="text-xs text-slate-400 text-center mt-6">
               {currentLang === 'ar'
