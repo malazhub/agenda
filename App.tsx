@@ -170,10 +170,23 @@ const registerSignOutCleanup = useCallback(
     showToast(`${account.fullName}: ${account.activated ? t.accountSignedIn : t.registrationPendingActivation}`);
   };
 
-  const handleSignOut = () => {
+    const handleSignOut = async () => {
+    // First leave the live classroom and clear its private chat.
+    try {
+      await signOutCleanupRef.current?.();
+    } catch (error) {
+      console.error(
+        'Unable to clean up the classroom before signing out:',
+        error
+      );
+    }
+
+    // Only remove the account credentials after classroom cleanup.
     sessionStorage.removeItem('agenda-session-token');
+
     setSessionToken('');
     setRegisteredAccount(null);
+
     setUserProfile({
       name: '',
       email: '',
@@ -186,8 +199,14 @@ const registerSignOutCleanup = useCallback(
       savedExamCount: 0,
       preferredLanguage: currentLang
     });
+
     setIsClassroomActive(false);
-    showToast(currentLang === 'ar' ? 'تم تسجيل الخروج والعودة للشاشة الرئيسية' : 'Signed out successfully');
+
+    showToast(
+      currentLang === 'ar'
+        ? 'تم تسجيل الخروج والعودة للشاشة الرئيسية'
+        : 'Signed out successfully'
+    );
   };
 
   return (
