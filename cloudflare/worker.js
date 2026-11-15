@@ -1447,6 +1447,166 @@ async function readMedia(env, objectKey) {
   headers.set("cache-control", "public, max-age=3600");
   return new Response(object.body, { headers });
 }
+async function createClassroomAttachmentUrl(
+  request,
+  env,
+  attachmentKey
+) {
+  if (!attachmentKey) return null;
+
+  const token = await signToken(
+    {
+      purpose: "classroom_attachment",
+      key: attachmentKey,
+      exp: Math.floor(Date.now() / 1000) + 60 * 60
+    },
+    env.SESSION_SIGNING_KEY
+  );
+
+  return (
+    `${new URL(request.url).origin}` +
+    `/api/classroom/attachments/${attachmentKey}` +
+    `?token=${encodeURIComponent(token)}`
+  );
+}
+
+async function uploadClassroomAttachment(request, env) {
+  const formData = await request.formData();
+
+  const sessionId = String(
+    formData.get("sessionId") || ""
+  ).trim();
+
+  const studentId = String(
+    formData.get("studentId") || ""
+  ).trim();
+
+  const file = formData.get("file");
+
+  if (
+    !file ||
+    typeof file.arrayBuffer !== "function"
+  ) {
+    return json({
+      error: "Choose an image, video or PDF to upload."
+    }, 400);
+  }
+
+  if (file.size > 25 * 1024 * 1024) {
+    return json({
+      error: "Chat attachments must be 25 MB or smaller."
+    }, 413);
+  }
+
+  const contentType = String(file.type || "").toLowerCase();
+
+  const allowedType =
+    /^(image\/(jpeg|png|webp|gif)|video\/(mp4|webm|quicktime)|application\/pdf)$/;
+
+  if (!allowedType.test(contentType)) {
+    return json({
+      error: "Supported attachments are JPG, PNG, WebP, GIF, MP4, WebM, MOV and PDF."
+    }, 415);
+  }
+
+  const access = await classroomChatAccess(
+    request,
+    env,
+    sessionId,
+    studentId
+  );
+
+  if (access.error) return access.error;
+
+  const attachmentKey = randomId();
+
+  const attachmentName = String(
+    file.name || "attachment"
+  )
+    .replace(/[\\/\r\n"]/g, "_")
+    .slice(0, 180) || "attachment";
+
+  await env.SESSION_MEDIA_BUCKET.put(
+    `classroom-chat/${attachmentKey}`,
+    await file.arrayBuffer(),
+    {
+      httpMetadata: {
+        contentType
+      },
+      customMetadata: {
+        sessionId,
+        studentId: access.studentId,
+        uploadedBy: access.account.id,
+        attachmentName
+      }
+    }
+  );
+
+  return json({
+    attachmentKey,
+    attachmentName,
+    attachmentType: contentType
+  }, 201);
+}
+
+async function readClassroomAttachment(
+  request,
+  env,
+  attachmentKey
+) {
+  if (!/^[0-9a-f-]{36}$/i.test(attachmentKey)) {
+    return json({ error: "Invalid attachment." }, 400);
+  }
+
+  const url = new URL(request.url);
+  const token = url.searchParams.get("token") || "";
+
+  const grant = await verifyToken(
+    token,
+    env.SESSION_SIGNING_KEY
+  );
+
+  if (
+    !grant ||
+    grant.purpose !== "classroom_attachment" ||
+    grant.key !== attachmentKey
+  ) {
+    return json({
+      error: "This attachment link is invalid or expired."
+    }, 403);
+  }
+
+  const object = await env.SESSION_MEDIA_BUCKET.get(
+    `classroom-chat/${attachmentKey}`
+  );
+
+  if (!object) {
+    return json({ error: "Attachment not found." }, 404);
+  }
+
+  const headers = new Headers();
+
+  object.writeHttpMetadata(headers);
+
+  headers.set(
+    "cache-control",
+    "private, max-age=300"
+  );
+
+  headers.set(
+    "x-content-type-options",
+    "nosniff"
+  );
+
+  headers.set(
+    "content-disposition",
+    "inline"
+  );
+
+  return new Response(object.body, {
+    headers
+  });
+}
 async function ensureClassroomChatSchema(env) {
   // Check whether the classroom assignment column exists.
   const accountColumns = await env.DB.prepare(
@@ -1739,13 +1899,48 @@ async function sendClassroomMessage(request, env) {
 async function handle(request, env) {
   const url = new URL(request.url);
   const path = url.pathname.replace(/\/+$/, "") || "/";
-  if (request.method === "GET" && path === "/api/classroom/messages") {
-  return getClassroomMessages(request, env);
-}
+    if (
+    request.method === "GET" &&
+    path === "/api/classroom/messages"
+  ) {
+    return getClassroomMessages(request, env);
+  }
 
-if (request.method === "POST" && path === "/api/classroom/messages") {
-  return sendClassroomMessage(request, env);
-}
+  if (
+    request.method === "POST" &&
+    path === "/api/classroom/messages"
+  ) {
+    return sendClassroomMessage(request, env);
+  }
+
+  if (
+    request.method === "POST" &&
+    path === "/api/classroom/attachments"
+  ) {
+    return uploadClassroomAttachment(request, env);
+  }
+
+  if (
+    request.method === "POST" &&
+    path === "/api/classroom/messages/clear"
+  ) {
+    return clearClassroomMessages(request, env);
+  }
+
+  const classroomAttachmentMatch = path.match(
+    /^\/api\/classroom\/attachments\/([0-9a-f-]{36})$/i
+  );
+
+  if (
+    request.method === "GET" &&
+    classroomAttachmentMatch
+  ) {
+    return readClassroomAttachment(
+      request,
+      env,
+      classroomAttachmentMatch[1]
+    );
+  }
   if (request.method === "GET" && path === "/api/health") return json({ status: "ok" });
   if (request.method === "POST" && path === "/api/auth/register") return handleRegister(request, env);
   if (request.method === "POST" && path === "/api/auth/login") return handleLogin(request, env);
