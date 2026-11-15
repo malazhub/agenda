@@ -85,6 +85,36 @@ const StreamParticipantVideo: React.FC<{
     />
   );
 };
+
+const StreamParticipantAudio: React.FC<{
+  call: Call;
+  sessionId: string;
+}> = ({ call, sessionId }) => {
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  useEffect(() => {
+    const audioElement = audioRef.current;
+
+    if (!audioElement) return;
+
+    const unbind = call.bindAudioElement(
+      audioElement,
+      sessionId
+    );
+
+    return () => {
+      unbind?.();
+    };
+  }, [call, sessionId]);
+
+  return (
+    <audio
+      ref={audioRef}
+      autoPlay
+      className="sr-only"
+    />
+  );
+};
 export const GradeSessionsView: React.FC<GradeSessionsViewProps> = ({
   currentLang,
   selectedGrade,
@@ -178,6 +208,7 @@ const [selectedParticipantId, setSelectedParticipantId] =
 const [permissionRequests, setPermissionRequests] = useState<any[]>([]);
 const [raisedHandIds, setRaisedHandIds] = useState<string[]>([]);
 const [canSpeak, setCanSpeak] = useState(false);
+const [allowedStudentIds, setAllowedStudentIds] = useState<string[]>([]);
 
 const callEventUnsubs = useRef<Array<() => void>>([]);
 const containerRef = useRef<HTMLDivElement>(null);
@@ -806,29 +837,33 @@ const allowStudentToSpeak = async (studentId: string) => {
       studentId,
       [OwnCapability.SEND_AUDIO]
     );
-        setPermissionRequests((current) =>
-      current.filter((request) => request.user?.id !== studentId)
-    );
-  } catch (error) {
-    console.error('Unable to grant speaking permission:', error);
-    setCameraError('Unable to allow this student to speak.');
-  }
-};
 
-const stopStudentSpeaking = async (studentId: string) => {
-  if (!streamCall || !isEducator || !studentId) return;
+    setAllowedStudentIds((current) => {
+      if (current.includes(studentId)) {
+        return current;
+      }
 
-  try {
-    await streamCall.revokePermissions(
-      studentId,
-      [OwnCapability.SEND_AUDIO]
+      return [...current, studentId];
+    });
+
+    setPermissionRequests((current) =>
+      current.filter(
+        (request) => request.user?.id !== studentId
+      )
     );
-        setPermissionRequests((current) =>
-      current.filter((request) => request.user?.id !== studentId)
-    );
+
+    setCameraError(null);
   } catch (error) {
-    console.error('Unable to revoke speaking permission:', error);
-    setCameraError('Unable to stop this student from speaking.');
+    console.error(
+      'Unable to grant speaking permission:',
+      error
+    );
+
+    setCameraError(
+      error instanceof Error
+        ? `Unable to allow this student to speak: ${error.message}`
+        : 'Unable to allow this student to speak.'
+    );
   }
 };
   // Video track toggle
@@ -1264,6 +1299,21 @@ const handleSendChatMessage = async () => {
             </div>
           </div>
 
+                    {/* RECEIVE AUDIO FROM ALL REMOTE CLASSROOM PARTICIPANTS */}
+          {streamCall &&
+            callParticipants
+              .filter(
+                (participant) =>
+                  participant.userId !== registeredAccount?.id
+              )
+              .map((participant) => (
+                <StreamParticipantAudio
+                  key={participant.sessionId}
+                  call={streamCall}
+                  sessionId={participant.sessionId}
+                />
+              ))}
+
           {/* REAL STREAM VIDEO PARTICIPANTS */}
           {/* CLASSROOM VIDEO, STUDENT THUMBNAILS AND PRIVATE CHAT */}
 <div className="flex-1 min-h-0 overflow-hidden bg-slate-950 p-4 flex flex-col">
@@ -1434,14 +1484,26 @@ const handleSendChatMessage = async () => {
                       {/* Educator microphone permission controls */}
                       <div className="mt-2">
 
-                        <button
+                                                <button
                           type="button"
                           onClick={() => void allowStudentToSpeak(studentId)}
-                          className="w-full rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-bold py-2 cursor-pointer"
+                          className={`w-full rounded-lg text-white text-[11px] font-bold py-2 cursor-pointer transition ${
+                            allowedStudentIds.includes(studentId)
+                              ? 'bg-emerald-500 ring-2 ring-emerald-300'
+                              : 'bg-slate-600 hover:bg-emerald-600'
+                          }`}
                         >
-                          {currentLang === 'ar'
-                            ? 'السماح بالكلام'
-                            : 'Allow to speak'}
+                          {allowedStudentIds.includes(studentId)
+                            ? (
+                                currentLang === 'ar'
+                                  ? '✓ مسموح له بالكلام'
+                                  : '✓ Speaking Allowed'
+                              )
+                            : (
+                                currentLang === 'ar'
+                                  ? 'السماح بالكلام'
+                                  : 'Allow to speak'
+                              )}
                         </button>
 
                         <button
