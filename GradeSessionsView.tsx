@@ -1044,12 +1044,36 @@ const startStudentSelfCam = async () => {
 
   if (!call || !isStudent) return;
 
+  if (
+    !call.permissionsContext.hasPermission(
+      OwnCapability.SEND_VIDEO
+    )
+  ) {
+    setCameraError(
+      classroomLabel(
+        'لم يمنح نظام الصف إذن إرسال الفيديو.',
+        'Le rôle dans la classe ne permet pas l’envoi vidéo.',
+        'Your classroom role does not allow video publishing.'
+      )
+    );
+    return;
+  }
+
   try {
     await stopStudentVideoShare();
 
     await call.camera.selectDirection('front');
+    await call.camera.enable();
 
-    setIsVideoOn(true);
+    const cameraEnabled =
+      call.camera.state.status === 'enabled';
+
+    setIsVideoOn(cameraEnabled);
+
+    if (!cameraEnabled) {
+      throw new Error('The front camera did not become enabled.');
+    }
+
     setCameraError(null);
   } catch (error) {
     console.error(
@@ -1057,28 +1081,63 @@ const startStudentSelfCam = async () => {
       error
     );
 
+    setIsVideoOn(
+      call.camera.state.status === 'enabled'
+    );
+
     setCameraError(
-      classroomLabel(
-        'تعذر تشغيل الكاميرا الأمامية. تحقق من إذن الكاميرا.',
-        'Impossible de démarrer la caméra avant. Vérifiez son autorisation.',
-        'Unable to start the front camera. Check camera permission.'
-      )
+      error instanceof Error
+        ? error.message
+        : classroomLabel(
+            'تعذر تشغيل الكاميرا الأمامية.',
+            'Impossible de démarrer la caméra avant.',
+            'Unable to start the front camera.'
+          )
     );
   }
 };
 
-// Flip to the rear camera to show a notebook or exercise.
+// Switch between the student's front and rear cameras.
 const flipStudentCamera = async () => {
   const call = streamCall;
 
   if (!call || !isStudent) return;
 
+  if (
+    !call.permissionsContext.hasPermission(
+      OwnCapability.SEND_VIDEO
+    )
+  ) {
+    setCameraError(
+      classroomLabel(
+        'لم يمنح نظام الصف إذن إرسال الفيديو.',
+        'Le rôle dans la classe ne permet pas l’envoi vidéo.',
+        'Your classroom role does not allow video publishing.'
+      )
+    );
+    return;
+  }
+
   try {
     await stopStudentVideoShare();
 
-    await call.camera.flip();
+    const nextDirection =
+      call.camera.state.direction === 'back'
+        ? 'front'
+        : 'back';
 
-    setIsVideoOn(true);
+    await call.camera.selectDirection(nextDirection);
+    await call.camera.enable();
+
+    const cameraEnabled =
+      call.camera.state.status === 'enabled';
+
+    setIsVideoOn(cameraEnabled);
+
+    if (!cameraEnabled) {
+      throw new Error('The selected camera did not become enabled.');
+    }
+
     setCameraError(null);
   } catch (error) {
     console.error(
@@ -1086,12 +1145,77 @@ const flipStudentCamera = async () => {
       error
     );
 
+    setIsVideoOn(
+      call.camera.state.status === 'enabled'
+    );
+
+    setCameraError(
+      error instanceof Error
+        ? error.message
+        : classroomLabel(
+            'تعذر تبديل الكاميرا.',
+            'Impossible de changer de caméra.',
+            'Unable to switch cameras.'
+          )
+    );
+  }
+};
+
+// Show a physical exercise using the rear-facing camera.
+const showStudentExercise = async () => {
+  const call = streamCall;
+
+  if (!call || !isStudent) return;
+
+  if (
+    !call.permissionsContext.hasPermission(
+      OwnCapability.SEND_VIDEO
+    )
+  ) {
     setCameraError(
       classroomLabel(
-        'تعذر تبديل الكاميرا.',
-        'Impossible de changer de caméra.',
-        'Unable to switch cameras.'
+        'لم يمنح نظام الصف إذن إرسال الفيديو.',
+        'Le rôle dans la classe ne permet pas l’envoi vidéo.',
+        'Your classroom role does not allow video publishing.'
       )
+    );
+    return;
+  }
+
+  try {
+    await stopStudentVideoShare();
+
+    await call.camera.selectDirection('back');
+    await call.camera.enable();
+
+    const cameraEnabled =
+      call.camera.state.status === 'enabled';
+
+    setIsVideoOn(cameraEnabled);
+
+    if (!cameraEnabled) {
+      throw new Error('The rear camera did not become enabled.');
+    }
+
+    setCameraError(null);
+  } catch (error) {
+    console.error(
+      'Unable to show student exercise:',
+      error
+    );
+
+    setIsVideoOn(
+      call.camera.state.status === 'enabled'
+    );
+
+    setCameraError(
+      error instanceof Error
+        ? error.message
+        : classroomLabel(
+            'تعذر تشغيل الكاميرا الخلفية.',
+            'Impossible de démarrer la caméra arrière.',
+            'Unable to start the rear camera.'
+          )
     );
   }
 };
@@ -1101,6 +1225,21 @@ const startStudentVideoShare = async (file: File) => {
   const call = streamCall;
 
   if (!call || !isStudent || !file) return;
+
+  if (
+    !call.permissionsContext.hasPermission(
+      OwnCapability.SEND_VIDEO
+    )
+  ) {
+    setCameraError(
+      classroomLabel(
+        'لم يمنح نظام الصف إذن إرسال الفيديو.',
+        'Le rôle dans la classe ne permet pas l’envoi vidéo.',
+        'Your classroom role does not allow video publishing.'
+      )
+    );
+    return;
+  }
 
   const isVideoFile =
     file.type.startsWith('video/') ||
@@ -1582,6 +1721,13 @@ const studentPrimarySession =
     ) ||
     null;
 
+    const studentOwnParticipant = isStudent
+    ? callParticipants.find(
+        (participant) =>
+          participant.userId === registeredAccount?.id
+      ) || null
+    : null;
+
   const primaryVideoParticipant = isEducator
     ? educatorOwnParticipant || null
     : studentEducatorParticipant;
@@ -1960,29 +2106,37 @@ const handleClearChatMessages = async () => {
     </span>
   </div>
 
-  {callParticipants.length === 0 ? (
-    <div className="flex-1 min-h-[40vh] flex flex-col items-center justify-center text-center">
-      <Users className="w-12 h-12 text-slate-500 mb-3" />
-      <h4 className="text-sm font-bold text-white">
-        {currentLang === 'ar'
-          ? 'في انتظار المشاركين'
-          : 'Waiting for participants'}
-      </h4>
-      <p className="text-xs text-slate-400 mt-2">
-        {currentLang === 'ar'
-          ? 'سيظهر الفيديو هنا عندما ينضم المشاركون إلى الصف.'
-          : 'Participant video will appear here when people join the classroom.'}
-      </p>
-    </div>
-  ) : (
-        <div       className={`flex-none lg:flex-1 min-h-0 grid grid-cols-1 gap-4 ${         isEducator           ? 'lg:grid-cols-[minmax(0,1fr)_18rem_20rem]'           : 'lg:grid-cols-[minmax(0,1fr)_20rem]'       }`}     >
+    <div
+    className={`flex-none lg:flex-1 min-h-0 grid grid-cols-1 gap-4 ${
+      isEducator
+        ? 'lg:grid-cols-[minmax(0,1fr)_18rem_20rem]'
+        : 'lg:grid-cols-[minmax(0,1fr)_20rem]'
+    }`}
+  >
+    {callParticipants.length === 0 ? (
+      <div className="lg:col-span-2 min-h-[40vh] flex flex-col items-center justify-center text-center">
+        <Users className="w-12 h-12 text-slate-500 mb-3" />
 
+        <h4 className="text-sm font-bold text-white">
+          {currentLang === 'ar'
+            ? 'في انتظار المشاركين'
+            : 'Waiting for participants'}
+        </h4>
+
+        <p className="text-xs text-slate-400 mt-2">
+          {currentLang === 'ar'
+            ? 'سيظهر الفيديو هنا عندما ينضم المشاركون إلى الصف.'
+            : 'Participant video will appear here when people join the classroom.'}
+        </p>
+      </div>
+    ) : (
+      <>
       {/* MAIN VIDEO */}
       <div className="min-w-0 min-h-0 flex flex-col">
 
-        <div className="relative flex-1 min-h-[240px] bg-black rounded-2xl overflow-hidden border border-slate-700">
+                <div className="relative flex-1 min-h-[240px] bg-black rounded-2xl overflow-hidden border border-slate-700">
 
-                    {streamCall && primaryVideoParticipant && (
+          {streamCall && primaryVideoParticipant && (
             <StreamParticipantVideo
               call={streamCall}
               sessionId={primaryVideoParticipant.sessionId}
@@ -2007,7 +2161,28 @@ const handleClearChatMessages = async () => {
                 ● LIVE
               </span>
             </div>
-                    )}
+          )}
+
+          {isStudent &&
+            isVideoOn &&
+            streamCall &&
+            studentOwnParticipant && (
+              <div className="absolute top-3 right-3 z-10 w-32 sm:w-44 aspect-video rounded-xl overflow-hidden border-2 border-white shadow-xl bg-black">
+                <StreamParticipantVideo
+                  call={streamCall}
+                  sessionId={studentOwnParticipant.sessionId}
+                  muted={true}
+                />
+
+                <span className="absolute bottom-1 left-1 rounded bg-black/75 px-2 py-1 text-[9px] font-bold text-white">
+                  {classroomLabel(
+                    'معاينة كاميرتي',
+                    'Aperçu caméra',
+                    'Camera preview'
+                  )}
+                </span>
+              </div>
+            )}
         </div>
       </div>
 
@@ -2141,11 +2316,14 @@ const handleClearChatMessages = async () => {
 
                       </div>
                     </div>
-                  );
+                                    );
                  })}
             </div>
           </div>
         )}
+
+      </>
+    )}
 
       {/* PRIVATE CHAT */}
       <aside className="w-full lg:w-80 shrink-0 min-h-[360px] lg:min-h-0 bg-slate-900 border border-slate-700 rounded-2xl flex flex-col overflow-hidden">
@@ -2298,9 +2476,8 @@ const handleClearChatMessages = async () => {
         )}
 
                 <div className="p-3 border-t border-slate-700">           <input             ref={chatAttachmentInputRef}             type="file"             accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm,video/quicktime,application/pdf"             className="hidden"             onChange={(event) => {               const file = event.currentTarget.files?.[0] || null;                event.currentTarget.value = '';                if (!file) return;                if (file.size > 25 * 1024 * 1024) {                 setChatError(                   classroomLabel(                     'الحد الأقصى لحجم الملف هو 25 ميغابايت.',                     'La taille maximale du fichier est de 25 Mo.',                     'The maximum file size is 25 MB.'                   )                 );                 return;               }                setChatError(null);               setChatAttachmentFile(file);             }}           />            {chatAttachmentFile && (             <div className="mb-2 flex items-center justify-between gap-2 rounded-lg bg-slate-800 border border-slate-600 p-2">               <span className="min-w-0 truncate text-[11px] text-slate-200">                 {chatAttachmentFile.name}               </span>                <button                 type="button"                 onClick={() => setChatAttachmentFile(null)}                 className="shrink-0 rounded-lg p-1 text-slate-300 hover:bg-slate-700"                 title={classroomLabel(                   'إزالة المرفق',                   'Retirer le fichier',                   'Remove attachment'                 )}               >                 <X className="w-4 h-4" />               </button>             </div>           )}            <textarea             value={chatDraft}             onChange={(event) => setChatDraft(event.target.value)}             maxLength={2000}             rows={2}             disabled={!chatStudentId || chatLoading || chatClearing}             placeholder={classroomLabel(               'اكتب رسالة خاصة...',               'Écrire un message privé...',               'Write a private message...'             )}             className="w-full resize-none rounded-lg bg-slate-800 border border-slate-600 text-white text-xs p-2 outline-none focus:border-indigo-400 disabled:opacity-50"           />            <div className="mt-2 flex gap-2">             <button               type="button"               onClick={() => chatAttachmentInputRef.current?.click()}               disabled={                 !chatStudentId ||                 chatLoading ||                 chatClearing               }               className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-slate-700 hover:bg-slate-600 disabled:opacity-40 text-white text-xs font-bold py-2 cursor-pointer disabled:cursor-not-allowed"             >               <Paperclip className="w-4 h-4" />                {classroomLabel(                 'إرفاق تمرين أو فيديو',                 'Joindre un exercice ou une vidéo',                 'Attach exercise or video'               )}             </button>              <button               type="button"               onClick={() => void handleSendChatMessage()}               disabled={                 !chatStudentId ||                 (!chatDraft.trim() && !chatAttachmentFile) ||                 chatLoading ||                 chatClearing               }               className="flex-1 rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 text-white text-xs font-bold py-2 cursor-pointer disabled:cursor-not-allowed"             >               {chatLoading                 ? classroomLabel(                     'جارٍ الإرسال...',                     'Envoi...',                     'Sending...'                   )                 : classroomLabel(                     'إرسال',                     'Envoyer',                     'Send'                   )}             </button>           </div>         </div>
-      </aside>
+            </aside>
     </div>
-  )}
 </div>
 
           {/* CLASSROOM CONTROLS AND PARTICIPANT COUNT */}
@@ -2323,7 +2500,7 @@ const handleClearChatMessages = async () => {
 
                             {/* Live classroom controls */}
               {(isEducator || isStudent) && (
-                <div className="flex items-center gap-2">
+               <div className="flex flex-wrap items-center gap-2">
 
                   {/* Student Raise Hand / Lower Hand */}
                   {isStudent && (
@@ -2391,7 +2568,7 @@ const handleClearChatMessages = async () => {
                           )}
                     </span>
                   )}
-                                    {isStudent && (
+                                     {isStudent && (
                     <>
                       <button
                         type="button"
@@ -2400,8 +2577,8 @@ const handleClearChatMessages = async () => {
                       >
                         <Camera className="w-4 h-4" />
                         {classroomLabel(
-                          'كاميرتي',
-                          'Ma caméra',
+                          'كاميرتي الأمامية',
+                          'Caméra avant',
                           'Self Cam'
                         )}
                       </button>
@@ -2419,14 +2596,27 @@ const handleClearChatMessages = async () => {
                         )}
                       </button>
 
+                      <button
+                        type="button"
+                        onClick={() => void showStudentExercise()}
+                        className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold transition cursor-pointer"
+                      >
+                        <Camera className="w-4 h-4" />
+                        {classroomLabel(
+                          'إظهار التمرين',
+                          'Montrer mon exercice',
+                          'Show Exercise'
+                        )}
+                      </button>
+
                       <input
                         ref={studentVideoInputRef}
                         type="file"
-                        accept="video/*"
+                        accept="video/mp4,video/webm,video/quicktime,video/*"
                         className="hidden"
                         onChange={(event) => {
                           const file =
-                            event.currentTarget.files?.[0];
+                            event.currentTarget.files?.[0] || null;
 
                           event.currentTarget.value = '';
 
@@ -2456,82 +2646,6 @@ const handleClearChatMessages = async () => {
                           ? classroomLabel(
                               'إيقاف مشاركة الفيديو',
                               'Arrêter le partage vidéo',
-                              'Stop Video'
-                            )
-                          : classroomLabel(
-                              'مشاركة فيديو مباشر',
-                              'Partager une vidéo en direct',
-                              'Share Video Live'
-                            )}
-                      </button>
-                    </>
-                  )}
-
-                                    {isStudent && (
-                    <>
-                      <button
-                        type="button"
-                        onClick={() => void startStudentSelfCam()}
-                        className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition cursor-pointer"
-                      >
-                        <Camera className="w-4 h-4" />
-                        {classroomLabel(
-                          'كاميرتي الأمامية',
-                          'Caméra avant',
-                          'Self Cam'
-                        )}
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => void flipStudentCamera()}
-                        className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-slate-700 hover:bg-slate-600 text-white text-xs font-bold transition cursor-pointer"
-                      >
-                        <Camera className="w-4 h-4" />
-                        {classroomLabel(
-                          'إظهار التمرين',
-                          'Montrer mon exercice',
-                          'Show Exercise'
-                        )}
-                      </button>
-
-                      <input
-                        ref={studentVideoInputRef}
-                        type="file"
-                        accept="video/mp4,video/webm,video/quicktime,video/*"
-                        className="hidden"
-                        onChange={(event) => {
-                          const file =
-                            event.currentTarget.files?.[0];
-
-                          event.currentTarget.value = '';
-
-                          if (file) {
-                            void startStudentVideoShare(file);
-                          }
-                        }}
-                      />
-
-                      <button
-                        type="button"
-                        onClick={() => {
-                          if (isStudentVideoSharing) {
-                            void stopStudentVideoShare();
-                          } else {
-                            studentVideoInputRef.current?.click();
-                          }
-                        }}
-                        className={`flex items-center gap-2 px-3 py-2.5 rounded-xl text-xs font-bold transition cursor-pointer ${
-                          isStudentVideoSharing
-                            ? 'bg-rose-600 hover:bg-rose-500 text-white'
-                            : 'bg-emerald-600 hover:bg-emerald-500 text-white'
-                        }`}
-                      >
-                        <Video className="w-4 h-4" />
-                        {isStudentVideoSharing
-                          ? classroomLabel(
-                              'إيقاف الفيديو',
-                              'Arrêter la vidéo',
                               'Stop Video'
                             )
                           : classroomLabel(
