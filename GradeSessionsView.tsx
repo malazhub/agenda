@@ -135,9 +135,11 @@ export const GradeSessionsView: React.FC<GradeSessionsViewProps> = ({
   sessionToken,
   onBack,
 }) => {
-  const isRTL = currentLang === 'ar';
-    const t = translations[currentLang];    const classroomLabel = (     ar: string,     fr: string,     en: string   ) => {     if (currentLang === 'ar') return ar;     if (currentLang === 'fr') return fr;     return en;   };
-    const classroomLabel = (
+    const isRTL = currentLang === 'ar';
+
+  const t = translations[currentLang];
+
+  const classroomLabel = (
     ar: string,
     fr: string,
     en: string
