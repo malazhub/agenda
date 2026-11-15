@@ -58,6 +58,9 @@ interface GradeSessionsViewProps {
   sessionToken: string;
   onBack: () => void;
   onEnterLiveClassroom?: (session?: any) => void;
+  onRegisterSignOutCleanup?: (
+    cleanup: (() => Promise<void>) | null
+  ) => void;
 }
 const StreamParticipantVideo: React.FC<{
   call: Call;
@@ -134,6 +137,7 @@ export const GradeSessionsView: React.FC<GradeSessionsViewProps> = ({
   registeredAccount,
   sessionToken,
   onBack,
+  onRegisterSignOutCleanup,
 }) => {
     const isRTL = currentLang === 'ar';
 
@@ -220,6 +224,8 @@ const [isMicOn, setIsMicOn] = useState(false);
 const [isVideoOn, setIsVideoOn] = useState(false);
 
 const [isFullscreen, setIsFullscreen] = useState(false);
+const [isStudentPreviewExpanded, setIsStudentPreviewExpanded] =
+  useState(false);
 const [cameraError, setCameraError] = useState<string | null>(null);
 const [chatMessages, setChatMessages] =
   useState<ClassroomMessage[]>([]);
@@ -231,7 +237,10 @@ const [chatAttachmentFile, setChatAttachmentFile] =
 
 const chatAttachmentInputRef =
   useRef<HTMLInputElement | null>(null);
+const chatRequestVersionRef = useRef(0);
 
+const signOutCleanupRef =
+  useRef<(() => Promise<void>) | null>(null);
 const [chatError, setChatError] = useState<string | null>(null);
 const [chatLoading, setChatLoading] = useState(false);
 const [chatClearing, setChatClearing] = useState(false);
@@ -463,16 +472,14 @@ if (isEducator || isStudent) {
       'Classroom camera enable completed:',
       call.camera.state
     );
-  } catch (cameraError) {
-    console.error(
-      'Classroom camera startup failed:',
+    } catch (cameraError) {
+    console.warn(
+      'Classroom camera startup failed; camera remains disabled:',
       cameraError
     );
 
     setIsVideoOn(false);
-    setCameraError(
-      'Camera could not start. Check browser camera permission and make sure no other application is using it.'
-    );
+    setCameraError(null);
   }
 
     // Enable the microphone independently.
@@ -693,6 +700,11 @@ callEventUnsubs.current = [];
     // Stop the broadcast and leave the assigned Stream classroom.
   
 const endLiveCall = async () => {
+  // Invalidate pending chat requests before leaving the classroom.
+  chatRequestVersionRef.current += 1;
+
+  setIsStudentPreviewExpanded(false);
+
   let shouldStopSharedBroadcast = false;
   try {
     participantsSubscription.current?.unsubscribe();
@@ -794,7 +806,28 @@ setChatError(null);
     setCameraError(null);
   }
 };
+// Keep the newest endLiveCall function available to App.tsx.
+signOutCleanupRef.current = endLiveCall;
 
+// Allow the app-level Sign Out button to clean up this classroom
+// before the account and session token are removed.
+useEffect(() => {
+  if (!onRegisterSignOutCleanup) return;
+
+  const cleanup = () => {
+    const currentCleanup = signOutCleanupRef.current;
+
+    return currentCleanup
+      ? currentCleanup()
+      : Promise.resolve();
+  };
+
+  onRegisterSignOutCleanup(cleanup);
+
+  return () => {
+    onRegisterSignOutCleanup(null);
+  };
+}, [onRegisterSignOutCleanup]);
   const handleRaiseHand = async () => {
   if (!streamCall || !isStudent) return;
 
@@ -1093,9 +1126,10 @@ const toggleVideoTrack = async () => {
   const cameraWasOn = isVideoOn;
 
   try {
-    if (cameraWasOn) {
+        if (cameraWasOn) {
       await call.camera.disable();
       setIsVideoOn(false);
+      setIsStudentPreviewExpanded(false);
     } else {
       if (isStudent) {
         await call.camera.selectDirection('front', {
@@ -1371,15 +1405,24 @@ const chatStudentId = isEducator
   const classroomSessionId = String(activeCallSession?.id || '');
 
 useEffect(() => {
+    const requestVersion = ++chatRequestVersionRef.current;
   if (
     !inLiveConference ||
     !sessionToken ||
     !classroomSessionId ||
     !chatStudentId
   ) {
-    setChatMessages([]);
+        setChatMessages([]);
+    setChatDraft('');
+    setChatAttachmentFile(null);
     setChatError(null);
     setChatLoading(false);
+    setChatClearing(false);
+
+    if (chatAttachmentInputRef.current) {
+      chatAttachmentInputRef.current.value = '';
+    }
+
     return;
   }
 
@@ -1388,7 +1431,7 @@ useEffect(() => {
 
   const loadMessages = async (showLoading: boolean) => {
     // Do not allow overlapping message requests.
-    if (requestInProgress || cancelled) return;
+    if (   requestInProgress ||   cancelled ||   requestVersion !== chatRequestVersionRef.current ) {   return; }
 
     requestInProgress = true;
 
@@ -1404,7 +1447,7 @@ useEffect(() => {
         chatStudentId
       );
 
-      if (cancelled) return;
+            if (         cancelled ||         requestVersion !== chatRequestVersionRef.current       ) {         return;       }
 
       // Merge messages by database ID. This prevents a message
       // received by polling from appearing twice when the
@@ -1430,7 +1473,7 @@ useEffect(() => {
 
       setChatError(null);
     } catch (error) {
-      if (!cancelled) {
+            if (         !cancelled &&         requestVersion === chatRequestVersionRef.current       ) {
         console.error(
           'Unable to refresh classroom messages:',
           error
@@ -1448,7 +1491,11 @@ useEffect(() => {
       // Only the initial load controls the chat input's
       // loading state. Background refreshes must not
       // disable the message box.
-      if (showLoading && !cancelled) {
+            if (
+        showLoading &&
+        !cancelled &&
+        requestVersion === chatRequestVersionRef.current
+      ) {
         setChatLoading(false);
       }
     }
@@ -1578,7 +1625,7 @@ const handleClearChatMessages = async () => {
   );
 
   if (!confirmed) return;
-
+const requestVersion = chatRequestVersionRef.current;
   setChatClearing(true);
   setChatError(null);
 
@@ -1789,25 +1836,56 @@ const handleClearChatMessages = async () => {
             </div>
           )}
 
-          {isStudent &&
+                    {isStudent &&
             isVideoOn &&
             streamCall &&
             studentOwnParticipant && (
-              <div className="absolute top-3 right-3 z-10 w-32 sm:w-44 aspect-video rounded-xl overflow-hidden border-2 border-white shadow-xl bg-black">
-                <StreamParticipantVideo
-                  call={streamCall}
-                  sessionId={studentOwnParticipant.sessionId}
-                  muted={true}
-                />
-
-                <span className="absolute bottom-1 left-1 rounded bg-black/75 px-2 py-1 text-[9px] font-bold text-white">
-                  {classroomLabel(
-                    'معاينة كاميرتي',
-                    'Aperçu caméra',
-                    'Camera preview'
-                  )}
-                </span>
-              </div>
+              <button
+                type="button"
+                onClick={() =>
+                  setIsStudentPreviewExpanded((expanded) => !expanded)
+                }
+                aria-expanded={isStudentPreviewExpanded}
+                aria-label={
+                  isStudentPreviewExpanded
+                    ? classroomLabel(
+                        'إغلاق عرض الكاميرا المكبّر',
+                        'Fermer la vidéo agrandie',
+                        'Close enlarged camera'
+                      )
+                    : classroomLabel(
+                        'تكبير الكاميرا',
+                        'Agrandir la caméra',
+                        'Enlarge camera'
+                      )
+                }
+                title={
+                  isStudentPreviewExpanded
+                    ? classroomLabel(
+                        'اضغط للعودة إلى الحجم الصغير',
+                        'Cliquer pour réduire',
+                        'Click to return to small view'
+                      )
+                    : classroomLabel(
+                        'اضغط لتكبير الكاميرا',
+                        'Cliquer pour agrandir',
+                        'Click to enlarge camera'
+                      )
+                }
+                className={
+                  isStudentPreviewExpanded
+                    ? 'fixed inset-0 z-[100] flex items-center justify-center bg-black/95 p-3 sm:p-6 cursor-zoom-out'
+                    : 'absolute top-3 right-3 z-10 block w-32 sm:w-44 aspect-video overflow-hidden rounded-xl border-2 border-white shadow-xl bg-black cursor-zoom-in'
+                }
+              >
+                <div className="relative w-full h-full overflow-hidden">
+                  <StreamParticipantVideo
+                    call={streamCall}
+                    sessionId={studentOwnParticipant.sessionId}
+                    muted={true}
+                  />
+                </div>
+              </button>
             )}
         </div>
       </div>
@@ -2101,7 +2179,7 @@ const handleClearChatMessages = async () => {
           </p>
         )}
 
-                <div className="p-3 border-t border-slate-700">           <input             ref={chatAttachmentInputRef}             type="file"             accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm,video/quicktime,application/pdf"             className="hidden"             onChange={(event) => {               const file = event.currentTarget.files?.[0] || null;                event.currentTarget.value = '';                if (!file) return;                if (file.size > 25 * 1024 * 1024) {                 setChatError(                   classroomLabel(                     'الحد الأقصى لحجم الملف هو 25 ميغابايت.',                     'La taille maximale du fichier est de 25 Mo.',                     'The maximum file size is 25 MB.'                   )                 );                 return;               }                setChatError(null);               setChatAttachmentFile(file);             }}           />            {chatAttachmentFile && (             <div className="mb-2 flex items-center justify-between gap-2 rounded-lg bg-slate-800 border border-slate-600 p-2">               <span className="min-w-0 truncate text-[11px] text-slate-200">                 {chatAttachmentFile.name}               </span>                <button                 type="button"                 onClick={() => setChatAttachmentFile(null)}                 className="shrink-0 rounded-lg p-1 text-slate-300 hover:bg-slate-700"                 title={classroomLabel(                   'إزالة المرفق',                   'Retirer le fichier',                   'Remove attachment'                 )}               >                 <X className="w-4 h-4" />               </button>             </div>           )}            <textarea             value={chatDraft}             onChange={(event) => setChatDraft(event.target.value)}             maxLength={2000}             rows={2}             disabled={!chatStudentId || chatLoading || chatClearing}             placeholder={classroomLabel(               'اكتب رسالة خاصة...',               'Écrire un message privé...',               'Write a private message...'             )}             className="w-full resize-none rounded-lg bg-slate-800 border border-slate-600 text-white text-xs p-2 outline-none focus:border-indigo-400 disabled:opacity-50"           />            <div className="mt-2 flex gap-2">             <button               type="button"               onClick={() => chatAttachmentInputRef.current?.click()}               disabled={                 !chatStudentId ||                 chatLoading ||                 chatClearing               }               className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-slate-700 hover:bg-slate-600 disabled:opacity-40 text-white text-xs font-bold py-2 cursor-pointer disabled:cursor-not-allowed"             >               <Paperclip className="w-4 h-4" />                {classroomLabel(                 'إرفاق تمرين أو فيديو',                 'Joindre un exercice ou une vidéo',                 'Attach exercise or video'               )}             </button>              <button               type="button"               onClick={() => void handleSendChatMessage()}               disabled={                 !chatStudentId ||                 (!chatDraft.trim() && !chatAttachmentFile) ||                 chatLoading ||                 chatClearing               }               className="flex-1 rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 text-white text-xs font-bold py-2 cursor-pointer disabled:cursor-not-allowed"             >               {chatLoading                 ? classroomLabel(                     'جارٍ الإرسال...',                     'Envoi...',                     'Sending...'                   )                 : classroomLabel(                     'إرسال',                     'Envoyer',                     'Send'                   )}             </button>           </div>         </div>
+                <div className="p-3 border-t border-slate-700">           <input             ref={chatAttachmentInputRef}             type="file"             accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm,video/quicktime,application/pdf"             className="hidden"             onChange={(event) => {               const file = event.currentTarget.files?.[0] || null;                event.currentTarget.value = '';                if (!file) return;                if (file.size > 25 * 1024 * 1024) {                 setChatError(                   classroomLabel(                     'الحد الأقصى لحجم الملف هو 25 ميغابايت.',                     'La taille maximale du fichier est de 25 Mo.',                     'The maximum file size is 25 MB.'                   )                 );                 return;               }                setChatError(null);               setChatAttachmentFile(file);             }}           />            {chatAttachmentFile && (             <div className="mb-2 flex items-center justify-between gap-2 rounded-lg bg-slate-800 border border-slate-600 p-2">               <span className="min-w-0 truncate text-[11px] text-slate-200">                 {chatAttachmentFile.name}               </span>                <button                 type="button"                 onClick={() => setChatAttachmentFile(null)}                 className="shrink-0 rounded-lg p-1 text-slate-300 hover:bg-slate-700"                 title={classroomLabel(                   'إزالة المرفق',                   'Retirer le fichier',                   'Remove attachment'                 )}               >                 <X className="w-4 h-4" />               </button>             </div>           )}            <textarea             value={chatDraft}             onChange={(event) => setChatDraft(event.target.value)}             maxLength={2000}             rows={2}             disabled={!chatStudentId || chatLoading || chatClearing}             placeholder={classroomLabel(               'اكتب رسالة خاصة...',               'Écrire un message privé...',               'Write a private message...'             )}             className="w-full resize-none rounded-lg bg-slate-800 border border-slate-600 text-white text-xs p-2 outline-none focus:border-indigo-400 disabled:opacity-50"           />            <div className="mt-2 flex gap-2">             <button               type="button"               onClick={() => chatAttachmentInputRef.current?.click()}               disabled={                 !chatStudentId ||                 chatLoading ||                 chatClearing               }               className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-slate-700 hover:bg-slate-600 disabled:opacity-40 text-white text-xs font-bold py-2 cursor-pointer disabled:cursor-not-allowed"             >               <Paperclip className="w-4 h-4" />                {classroomLabel(                 'إرفاق',                 'Joindre',                 'Attach'               )}             </button>              <button               type="button"               onClick={() => void handleSendChatMessage()}               disabled={                 !chatStudentId ||                 (!chatDraft.trim() && !chatAttachmentFile) ||                 chatLoading ||                 chatClearing               }               className="flex-1 rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 text-white text-xs font-bold py-2 cursor-pointer disabled:cursor-not-allowed"             >               {chatLoading                 ? classroomLabel(                     'جارٍ الإرسال...',                     'Envoi...',                     'Sending...'                   )                 : classroomLabel(                     'إرسال',                     'Envoyer',                     'Send'                   )}             </button>           </div>         </div>
             </aside>
     </div>
 </div>
