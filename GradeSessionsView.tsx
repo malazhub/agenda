@@ -1269,23 +1269,33 @@ const handleSendChatMessage = async () => {
   setChatError(null);
 
   try {
-    await sendClassroomMessage(
+    const result = await sendClassroomMessage(
       sessionToken,
       classroomSessionId,
       chatStudentId,
       message
     );
 
-    const result = await getClassroomMessages(
-      sessionToken,
-      classroomSessionId,
-      chatStudentId
-    );
+    if (!result.sent || !result.message) {
+      throw new Error(
+        'The server did not confirm that the message was saved.'
+      );
+    }
 
-    setChatMessages(result.messages);
+    // Display the exact message returned by the database.
+    // Do not make a second GET request to decide whether
+    // the POST succeeded.
+    setChatMessages((current) => [
+      ...current,
+      result.message
+    ]);
+
     setChatDraft('');
   } catch (error) {
-    console.error('Unable to send classroom message:', error);
+    console.error(
+      'Unable to send classroom message:',
+      error
+    );
 
     setChatError(
       error instanceof Error
