@@ -23,6 +23,7 @@ import type {
   CloudflareAccount,
   StoredSessionRecord,
   ClassroomMessage,
+} from '../services/cloudflareApi';
 
 import {
   ArrowLeft,
@@ -45,7 +46,7 @@ import {
   Camera,
   Paperclip,
   Trash2,
-  X
+  X,
 } from 'lucide-react';
 
 interface GradeSessionsViewProps {
