@@ -221,15 +221,6 @@ const [isVideoOn, setIsVideoOn] = useState(false);
 
 const [isFullscreen, setIsFullscreen] = useState(false);
 const [cameraError, setCameraError] = useState<string | null>(null);
-
-const [isStudentVideoSharing, setIsStudentVideoSharing] =
-  useState(false);
-
-const studentVideoInputRef =
-  useRef<HTMLInputElement | null>(null);
-
-const studentVideoShareRef = useRef<any>(null);
-
 const [chatMessages, setChatMessages] =
   useState<ClassroomMessage[]>([]);
 
@@ -703,12 +694,7 @@ callEventUnsubs.current = [];
   
 const endLiveCall = async () => {
   let shouldStopSharedBroadcast = false;
-
   try {
-    if (studentVideoShareRef.current) {
-      await stopStudentVideoShare();
-    }
-
     participantsSubscription.current?.unsubscribe();
     participantsSubscription.current = null;
     callEventUnsubs.current.forEach((unsubscribe) => unsubscribe());
@@ -979,65 +965,6 @@ const stopStudentSpeaking = async (studentId: string) => {
   }
 };
 
-// Stop the prerecorded video and restore the student's original camera.
-const stopStudentVideoShare = async () => {
-  const active = studentVideoShareRef.current;
-
-  if (!active) {
-    setIsStudentVideoSharing(false);
-    return;
-  }
-
-  studentVideoShareRef.current = null;
-
-  try {
-    await active.handle.unregister();
-  } catch (error) {
-    console.warn(
-      'Unable to unregister student video device:',
-      error
-    );
-  }
-
-  active.cleanup();
-
-  try {
-    if (active.originalDirection) {
-      await active.call.camera.selectDirection(
-        active.originalDirection,
-        { enableCamera: false }
-      );
-    } else if (active.originalDeviceId) {
-      await active.call.camera.select(
-        active.originalDeviceId
-      );
-    }
-
-    if (active.cameraWasEnabled) {
-      await active.call.camera.enable();
-      setIsVideoOn(true);
-    } else {
-      await active.call.camera.disable();
-      setIsVideoOn(false);
-    }
-  } catch (error) {
-    console.error(
-      'Unable to restore student camera:',
-      error
-    );
-
-    setCameraError(
-      classroomLabel(
-        'تعذر استعادة الكاميرا.',
-        'Impossible de rétablir la caméra.',
-        'Unable to restore the camera.'
-      )
-    );
-  }
-
-  setIsStudentVideoSharing(false);
-};
-
 // Start the student's front-facing camera.
 const startStudentSelfCam = async () => {
   const call = streamCall;
@@ -1060,8 +987,6 @@ const startStudentSelfCam = async () => {
   }
 
   try {
-    await stopStudentVideoShare();
-
     await call.camera.selectDirection('front');
     await call.camera.enable();
 
@@ -1119,8 +1044,6 @@ const flipStudentCamera = async () => {
   }
 
   try {
-    await stopStudentVideoShare();
-
     const nextDirection =
       call.camera.state.direction === 'back'
         ? 'front'
@@ -1161,298 +1084,6 @@ const flipStudentCamera = async () => {
   }
 };
 
-// Show a physical exercise using the rear-facing camera.
-const showStudentExercise = async () => {
-  const call = streamCall;
-
-  if (!call || !isStudent) return;
-
-  if (
-    !call.permissionsContext.hasPermission(
-      OwnCapability.SEND_VIDEO
-    )
-  ) {
-    setCameraError(
-      classroomLabel(
-        'لم يمنح نظام الصف إذن إرسال الفيديو.',
-        'Le rôle dans la classe ne permet pas l’envoi vidéo.',
-        'Your classroom role does not allow video publishing.'
-      )
-    );
-    return;
-  }
-
-  try {
-    await stopStudentVideoShare();
-
-    await call.camera.selectDirection('back');
-    await call.camera.enable();
-
-    const cameraEnabled =
-      call.camera.state.status === 'enabled';
-
-    setIsVideoOn(cameraEnabled);
-
-    if (!cameraEnabled) {
-      throw new Error('The rear camera did not become enabled.');
-    }
-
-    setCameraError(null);
-  } catch (error) {
-    console.error(
-      'Unable to show student exercise:',
-      error
-    );
-
-    setIsVideoOn(
-      call.camera.state.status === 'enabled'
-    );
-
-    setCameraError(
-      error instanceof Error
-        ? error.message
-        : classroomLabel(
-            'تعذر تشغيل الكاميرا الخلفية.',
-            'Impossible de démarrer la caméra arrière.',
-            'Unable to start the rear camera.'
-          )
-    );
-  }
-};
-
-// Publish a selected video file as the student's camera video.
-const startStudentVideoShare = async (file: File) => {
-  const call = streamCall;
-
-  if (!call || !isStudent || !file) return;
-
-  if (
-    !call.permissionsContext.hasPermission(
-      OwnCapability.SEND_VIDEO
-    )
-  ) {
-    setCameraError(
-      classroomLabel(
-        'لم يمنح نظام الصف إذن إرسال الفيديو.',
-        'Le rôle dans la classe ne permet pas l’envoi vidéo.',
-        'Your classroom role does not allow video publishing.'
-      )
-    );
-    return;
-  }
-
-  const isVideoFile =
-    file.type.startsWith('video/') ||
-    /\.(mp4|mov|webm|m4v)$/i.test(file.name);
-
-  if (!isVideoFile) {
-    setCameraError(
-      classroomLabel(
-        'اختر ملف فيديو صالحاً.',
-        'Choisissez un fichier vidéo valide.',
-        'Choose a valid video file.'
-      )
-    );
-    return;
-  }
-
-  await stopStudentVideoShare();
-
-  const originalDeviceId =
-    call.camera.state.selectedDevice;
-
-  const originalDirection =
-    call.camera.state.direction;
-
-  const cameraWasEnabled =
-    call.camera.state.status === 'enabled';
-
-  const objectUrl = URL.createObjectURL(file);
-
-  const video = document.createElement('video');
-
-  video.src = objectUrl;
-  video.muted = true;
-  video.loop = true;
-  video.playsInline = true;
-  video.preload = 'auto';
-
-  let handle: any = null;
-  let capturedStream: MediaStream | null = null;
-  let frameId = 0;
-  let cleaned = false;
-
-  let cleanup: (() => void) | null = null;
-
-  try {
-    const metadataLoaded = new Promise<void>(
-      (resolve, reject) => {
-        video.onloadedmetadata = () => resolve();
-
-        video.onerror = () => {
-          reject(
-            new Error('The selected video could not be opened.')
-          );
-        };
-      }
-    );
-
-    video.load();
-
-    await metadataLoaded;
-
-    if (!video.videoWidth || !video.videoHeight) {
-      throw new Error(
-        'The selected video has no readable video frames.'
-      );
-    }
-
-    await video.play();
-
-    const scale = Math.min(
-      1,
-      1280 / video.videoWidth,
-      720 / video.videoHeight
-    );
-
-    const canvas = document.createElement('canvas');
-
-    canvas.width = Math.max(
-      1,
-      Math.round(video.videoWidth * scale)
-    );
-
-    canvas.height = Math.max(
-      1,
-      Math.round(video.videoHeight * scale)
-    );
-
-    const context = canvas.getContext('2d');
-
-    if (!context) {
-      throw new Error(
-        'Video sharing is unavailable in this browser.'
-      );
-    }
-
-    cleanup = () => {
-      if (cleaned) return;
-
-      cleaned = true;
-
-      cancelAnimationFrame(frameId);
-
-      capturedStream?.getTracks().forEach((track) => {
-        track.stop();
-      });
-
-      video.pause();
-      video.removeAttribute('src');
-      video.load();
-
-      URL.revokeObjectURL(objectUrl);
-    };
-
-    const drawFrame = () => {
-      if (cleaned) return;
-
-      if (video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
-        context.drawImage(
-          video,
-          0,
-          0,
-          canvas.width,
-          canvas.height
-        );
-      }
-
-      frameId = requestAnimationFrame(drawFrame);
-    };
-
-    drawFrame();
-
-    if (typeof canvas.captureStream !== 'function') {
-      throw new Error(
-        'This browser does not support live video sharing.'
-      );
-    }
-
-    capturedStream = canvas.captureStream(20);
-
-    handle = call.camera.registerVirtualDevice({
-      label: file.name,
-
-      getUserMedia: async () => ({
-        stream: capturedStream!,
-        stop: () => cleanup?.()
-      })
-    });
-
-    await call.camera.select(handle.deviceId);
-    await call.camera.enable();
-
-    studentVideoShareRef.current = {
-      call,
-      handle,
-      originalDeviceId,
-      originalDirection,
-      cameraWasEnabled,
-      cleanup
-    };
-
-    setIsVideoOn(true);
-    setIsStudentVideoSharing(true);
-    setCameraError(null);
-
-  } catch (error) {
-    console.error(
-      'Unable to share student video:',
-      error
-    );
-
-    if (handle) {
-      await handle.unregister().catch(() => undefined);
-    }
-
-    cleanup?.();
-
-    try {
-      if (originalDirection) {
-        await call.camera.selectDirection(
-          originalDirection,
-          { enableCamera: false }
-        );
-      } else if (originalDeviceId) {
-        await call.camera.select(originalDeviceId);
-      }
-
-      if (cameraWasEnabled) {
-        await call.camera.enable();
-      } else {
-        await call.camera.disable();
-      }
-    } catch (restoreError) {
-      console.warn(
-        'Unable to restore camera after video sharing failed:',
-        restoreError
-      );
-    }
-
-    setIsVideoOn(cameraWasEnabled);
-    setIsStudentVideoSharing(false);
-
-    setCameraError(
-      error instanceof Error
-        ? error.message
-        : classroomLabel(
-            'تعذر مشاركة الفيديو مباشرة.',
-            'Impossible de partager la vidéo en direct.',
-            'Unable to share the video live.'
-          )
-    );
-  }
-};
-
 // Normal camera on/off control.
 const toggleVideoTrack = async () => {
   const call = streamCall;
@@ -1462,10 +1093,6 @@ const toggleVideoTrack = async () => {
   const cameraWasOn = isVideoOn;
 
   try {
-    if (isStudent && studentVideoShareRef.current) {
-      await stopStudentVideoShare();
-    }
-
     if (cameraWasOn) {
       await call.camera.disable();
       setIsVideoOn(false);
@@ -1496,7 +1123,6 @@ const toggleVideoTrack = async () => {
     );
   }
 };
-
 
   // Mic track toggle
   const toggleAudioTrack = async () => {
@@ -2568,7 +2194,7 @@ const handleClearChatMessages = async () => {
                           )}
                     </span>
                   )}
-                                     {isStudent && (
+                                    {isStudent && (
                     <>
                       <button
                         type="button"
@@ -2594,65 +2220,6 @@ const handleClearChatMessages = async () => {
                           'Retourner la caméra',
                           'Flip Camera'
                         )}
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => void showStudentExercise()}
-                        className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold transition cursor-pointer"
-                      >
-                        <Camera className="w-4 h-4" />
-                        {classroomLabel(
-                          'إظهار التمرين',
-                          'Montrer mon exercice',
-                          'Show Exercise'
-                        )}
-                      </button>
-
-                      <input
-                        ref={studentVideoInputRef}
-                        type="file"
-                        accept="video/mp4,video/webm,video/quicktime,video/*"
-                        className="hidden"
-                        onChange={(event) => {
-                          const file =
-                            event.currentTarget.files?.[0] || null;
-
-                          event.currentTarget.value = '';
-
-                          if (file) {
-                            void startStudentVideoShare(file);
-                          }
-                        }}
-                      />
-
-                      <button
-                        type="button"
-                        onClick={() => {
-                          if (isStudentVideoSharing) {
-                            void stopStudentVideoShare();
-                          } else {
-                            studentVideoInputRef.current?.click();
-                          }
-                        }}
-                        className={`flex items-center gap-2 px-3 py-2.5 rounded-xl text-xs font-bold transition cursor-pointer ${
-                          isStudentVideoSharing
-                            ? 'bg-rose-600 hover:bg-rose-500 text-white'
-                            : 'bg-emerald-600 hover:bg-emerald-500 text-white'
-                        }`}
-                      >
-                        <Video className="w-4 h-4" />
-                        {isStudentVideoSharing
-                          ? classroomLabel(
-                              'إيقاف مشاركة الفيديو',
-                              'Arrêter le partage vidéo',
-                              'Stop Video'
-                            )
-                          : classroomLabel(
-                              'مشاركة فيديو مباشر',
-                              'Partager une vidéo en direct',
-                              'Share Video Live'
-                            )}
                       </button>
                     </>
                   )}
