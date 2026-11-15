@@ -97,9 +97,13 @@ const StreamParticipantAudio: React.FC<{
 
     if (!audioElement) return;
 
+    audioElement.autoplay = true;
+    audioElement.muted = false;
+
     const unbind = call.bindAudioElement(
       audioElement,
-      sessionId
+      sessionId,
+      'audioTrack'
     );
 
     return () => {
@@ -111,7 +115,7 @@ const StreamParticipantAudio: React.FC<{
     <audio
       ref={audioRef}
       autoPlay
-      className="sr-only"
+      playsInline
     />
   );
 };
@@ -531,36 +535,32 @@ const unsubscribeCustom = call.on('custom', (event: any) => {
   });
 });
 
-// Receive permission updates on the student's own account.
-const unsubscribePermissions = call.on(
-  'call.permissions_updated',
-  (event: any) => {
-    if (event.user?.id !== registeredAccount.id) {
-      return;
-    }
+// Keep the student's speaking permission synchronized with
+// Stream's actual local capabilities.
+const permissionStateSubscription =
+  call.state.ownCapabilities$.subscribe((capabilities) => {
+    if (!isStudent) return;
 
-    const allowed =
-      Array.isArray(event.own_capabilities) &&
-      event.own_capabilities.includes(
-        OwnCapability.SEND_AUDIO
-      );
+    const allowed = capabilities.includes(
+      OwnCapability.SEND_AUDIO
+    );
 
     setCanSpeak(allowed);
 
-    // A student whose permission is revoked must no longer
-    // appear to have an active microphone.
     if (!allowed) {
       setIsMicOn(false);
       return;
     }
 
-    // Permission being granted does not mean the student
-    // has switched on their own microphone.
-    setIsMicOn(call!.microphone.enabled);
-
+    // Permission is granted, but the student still controls
+    // whether their microphone is switched on.
+    setIsMicOn(call.microphone.enabled);
     setCameraError(null);
-  }
-);
+  });
+
+const unsubscribePermissions = () => {
+  permissionStateSubscription.unsubscribe();
+};
 
 // Receive actual Stream microphone permission requests from students.
 const unsubscribePermissionRequests = call.on(
@@ -1299,7 +1299,7 @@ const handleSendChatMessage = async () => {
   // Do not create attendee records from the signed-in account alone.
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-300 text-start" ref={containerRef}>
+    <div   className="space-y-6 animate-in fade-in duration-300 text-start"   ref={containerRef}   onPointerDown={() => {     if (isEducator && streamCall) {       streamCall.resumeAudio();     }   }} >
       
             {/* IN-CALL VIDEO CLASSROOM VIEW */}
       {inLiveConference && activeCallSession ? (
