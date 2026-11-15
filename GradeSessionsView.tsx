@@ -782,16 +782,29 @@ callEventUnsubs.current = [];
       }
     }
 
-  } finally {
-        setCallParticipants([]);
+    } finally {
+    // Clear connected participants and classroom permissions.
+    setCallParticipants([]);
     setSelectedParticipantId(null);
     setRaisedHandIds([]);
     setCanSpeak(false);
     setAllowedStudentIds([]);
     setPermissionRequests([]);
-setChatMessages([]);
-setChatDraft('');
-setChatError(null);
+
+    // Completely clear private chat from this browser session.
+    setChatMessages([]);
+    setChatDraft('');
+    setChatAttachmentFile(null);
+    setChatError(null);
+    setChatLoading(false);
+    setChatClearing(false);
+
+    // Reset the file selector so the old attachment is not retained.
+    if (chatAttachmentInputRef.current) {
+      chatAttachmentInputRef.current.value = '';
+    }
+
+    // Disconnect the live classroom.
     setStreamCall(null);
     setStreamClient(null);
 
@@ -1404,15 +1417,21 @@ const chatStudentId = isEducator
     : '';
   const classroomSessionId = String(activeCallSession?.id || '');
 
+// Refresh private chat while the live classroom is active.
 useEffect(() => {
-    const requestVersion = ++chatRequestVersionRef.current;
+  // Each effect instance gets its own request version.
+  // Sign-out and classroom cleanup invalidate older versions.
+  const requestVersion =
+    ++chatRequestVersionRef.current;
+
+  // Do not poll when the classroom or chat participant is unavailable.
   if (
     !inLiveConference ||
     !sessionToken ||
     !classroomSessionId ||
     !chatStudentId
   ) {
-        setChatMessages([]);
+    setChatMessages([]);
     setChatDraft('');
     setChatAttachmentFile(null);
     setChatError(null);
@@ -1429,9 +1448,19 @@ useEffect(() => {
   let cancelled = false;
   let requestInProgress = false;
 
+  // A response is valid only while this exact effect is active.
+  const isCurrentRequest = () =>
+    !cancelled &&
+    requestVersion === chatRequestVersionRef.current;
+
   const loadMessages = async (showLoading: boolean) => {
-    // Do not allow overlapping message requests.
-    if (   requestInProgress ||   cancelled ||   requestVersion !== chatRequestVersionRef.current ) {   return; }
+    // Prevent overlapping polls and reject outdated requests.
+    if (
+      requestInProgress ||
+      !isCurrentRequest()
+    ) {
+      return;
+    }
 
     requestInProgress = true;
 
@@ -1447,11 +1476,13 @@ useEffect(() => {
         chatStudentId
       );
 
-            if (         cancelled ||         requestVersion !== chatRequestVersionRef.current       ) {         return;       }
+      // Sign-out may have happened while the request was running.
+      // Never allow that old response to restore private messages.
+      if (!isCurrentRequest()) {
+        return;
+      }
 
-      // Merge messages by database ID. This prevents a message
-      // received by polling from appearing twice when the
-      // sender's POST response arrives at the same time.
+      // Merge by message ID to prevent duplicate messages.
       setChatMessages((current) => {
         const messagesById = new Map<
           number,
@@ -1472,8 +1503,10 @@ useEffect(() => {
       });
 
       setChatError(null);
+
     } catch (error) {
-            if (         !cancelled &&         requestVersion === chatRequestVersionRef.current       ) {
+      // Do not show errors from requests belonging to an old session.
+      if (isCurrentRequest()) {
         console.error(
           'Unable to refresh classroom messages:',
           error
@@ -1485,35 +1518,36 @@ useEffect(() => {
             : 'Unable to receive classroom messages.'
         );
       }
+
     } finally {
       requestInProgress = false;
 
-      // Only the initial load controls the chat input's
-      // loading state. Background refreshes must not
-      // disable the message box.
-            if (
+      // Only the initial request controls the loading indicator.
+      // Background polling must not disable the chat input.
+      if (
         showLoading &&
-        !cancelled &&
-        requestVersion === chatRequestVersionRef.current
+        isCurrentRequest()
       ) {
         setChatLoading(false);
       }
     }
   };
 
-  // Load existing conversation immediately.
+  // Load the conversation immediately when the chat opens.
   void loadMessages(true);
 
-  // Check for messages from the other participant every
-  // two seconds while this conversation is open.
+  // Refresh the conversation every two seconds.
   const refreshInterval = window.setInterval(() => {
     void loadMessages(false);
   }, 2000);
 
+  // Stop this polling session when leaving the classroom,
+  // changing participants, signing out, or unmounting.
   return () => {
     cancelled = true;
     window.clearInterval(refreshInterval);
   };
+
 }, [
   inLiveConference,
   sessionToken,
@@ -1535,6 +1569,9 @@ const handleSendChatMessage = async () => {
     return;
   }
 
+  // Remember which classroom session this request belongs to.
+  const requestVersion = chatRequestVersionRef.current;
+
   setChatLoading(true);
   setChatError(null);
 
@@ -1547,6 +1584,7 @@ const handleSendChatMessage = async () => {
         }
       | undefined;
 
+    // Upload an optional attachment first.
     if (chatAttachmentFile) {
       uploadedAttachment = await uploadClassroomAttachment(
         sessionToken,
@@ -1554,6 +1592,13 @@ const handleSendChatMessage = async () => {
         chatStudentId,
         chatAttachmentFile
       );
+
+      // Stop if the user signed out while the file was uploading.
+      if (
+        requestVersion !== chatRequestVersionRef.current
+      ) {
+        return;
+      }
     }
 
     const result = await sendClassroomMessage(
@@ -1563,6 +1608,13 @@ const handleSendChatMessage = async () => {
       message,
       uploadedAttachment
     );
+
+    // Do not restore messages after sign-out or classroom cleanup.
+    if (
+      requestVersion !== chatRequestVersionRef.current
+    ) {
+      return;
+    }
 
     if (!result.sent || !result.message) {
       throw new Error(
@@ -1585,23 +1637,35 @@ const handleSendChatMessage = async () => {
     setChatDraft('');
     setChatAttachmentFile(null);
 
-  } catch (error) {
-    console.error(
-      'Unable to send classroom message or attachment:',
-      error
-    );
+    if (chatAttachmentInputRef.current) {
+      chatAttachmentInputRef.current.value = '';
+    }
 
-    setChatError(
-      error instanceof Error
-        ? error.message
-        : classroomLabel(
-            'تعذر إرسال الرسالة أو الملف.',
-            'Impossible d’envoyer le message ou le fichier.',
-            'Unable to send the message or file.'
-          )
-    );
-    } finally {
-    setChatLoading(false);
+  } catch (error) {
+    if (
+      requestVersion === chatRequestVersionRef.current
+    ) {
+      console.error(
+        'Unable to send classroom message or attachment:',
+        error
+      );
+
+      setChatError(
+        error instanceof Error
+          ? error.message
+          : classroomLabel(
+              'تعذر إرسال الرسالة أو الملف.',
+              'Impossible d’envoyer le message ou le fichier.',
+              'Unable to send the message or file.'
+            )
+      );
+    }
+  } finally {
+    if (
+      requestVersion === chatRequestVersionRef.current
+    ) {
+      setChatLoading(false);
+    }
   }
 };
 
@@ -1625,7 +1689,10 @@ const handleClearChatMessages = async () => {
   );
 
   if (!confirmed) return;
-const requestVersion = chatRequestVersionRef.current;
+
+  // Track the request so it cannot update the screen after sign-out.
+  const requestVersion = chatRequestVersionRef.current;
+
   setChatClearing(true);
   setChatError(null);
 
@@ -1635,6 +1702,13 @@ const requestVersion = chatRequestVersionRef.current;
       classroomSessionId,
       chatStudentId
     );
+
+    // Ignore an old response if classroom cleanup has started.
+    if (
+      requestVersion !== chatRequestVersionRef.current
+    ) {
+      return;
+    }
 
     if (!result.cleared) {
       throw new Error(
@@ -1646,23 +1720,35 @@ const requestVersion = chatRequestVersionRef.current;
     setChatDraft('');
     setChatAttachmentFile(null);
 
-  } catch (error) {
-    console.error(
-      'Unable to clear classroom conversation:',
-      error
-    );
+    if (chatAttachmentInputRef.current) {
+      chatAttachmentInputRef.current.value = '';
+    }
 
-    setChatError(
-      error instanceof Error
-        ? error.message
-        : classroomLabel(
-            'تعذر مسح المحادثة.',
-            'Impossible d’effacer la conversation.',
-            'Unable to clear the conversation.'
-          )
-    );
+  } catch (error) {
+    if (
+      requestVersion === chatRequestVersionRef.current
+    ) {
+      console.error(
+        'Unable to clear classroom conversation:',
+        error
+      );
+
+      setChatError(
+        error instanceof Error
+          ? error.message
+          : classroomLabel(
+              'تعذر مسح المحادثة.',
+              'Impossible d’effacer la conversation.',
+              'Unable to clear the conversation.'
+            )
+      );
+    }
   } finally {
-    setChatClearing(false);
+    if (
+      requestVersion === chatRequestVersionRef.current
+    ) {
+      setChatClearing(false);
+    }
   }
 };
 
