@@ -1559,21 +1559,33 @@ async function sendClassroomMessage(request, env) {
   const claims = await authenticate(request, env, null);
 
   if (!claims || !["educator", "student"].includes(claims.role)) {
-    return json({ error: "Classroom authentication required." }, 401);
+    return json(
+      { error: "Classroom authentication required." },
+      401
+    );
   }
 
   const body = await requestJson(request);
 
   const sessionId =
-    typeof body?.sessionId === "string" ? body.sessionId.trim() : "";
+    typeof body?.sessionId === "string"
+      ? body.sessionId.trim()
+      : "";
 
   const studentId =
-    typeof body?.studentId === "string" ? body.studentId.trim() : "";
+    typeof body?.studentId === "string"
+      ? body.studentId.trim()
+      : "";
 
   const message =
-    typeof body?.message === "string" ? body.message.trim() : "";
+    typeof body?.message === "string"
+      ? body.message.trim()
+      : "";
 
-  if (!message || message.length > 2000) {
+  if (
+    !message ||
+    message.length > 2000
+  ) {
     return json({
       error: "Messages must contain between 1 and 2,000 characters."
     }, 400);
@@ -1586,25 +1598,41 @@ async function sendClassroomMessage(request, env) {
     studentId
   );
 
-  if (access.error) return access.error;
+  if (access.error) {
+    return access.error;
+  }
 
-  await env.DB.prepare(
+  const savedMessage = await env.DB.prepare(
     `INSERT INTO classroom_messages (
        session_id,
        educator_id,
        student_id,
        sender_id,
        message
-     ) VALUES (?, ?, ?, ?, ?)`
+     ) VALUES (?, ?, ?, ?, ?)
+     RETURNING
+       id,
+       sender_id AS senderId,
+       message,
+       created_at AS createdAt`
   ).bind(
     sessionId,
     access.educatorId,
     access.studentId,
     access.account.id,
     message
-  ).run();
+  ).first();
 
-  return json({ sent: true }, 201);
+  if (!savedMessage) {
+    throw new Error(
+      "Classroom message INSERT did not return the saved message."
+    );
+  }
+
+  return json({
+    sent: true,
+    message: savedMessage
+  }, 201);
 }
 
 async function handle(request, env) {
