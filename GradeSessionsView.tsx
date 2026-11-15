@@ -532,8 +532,6 @@ const unsubscribeCustom = call.on('custom', (event: any) => {
 });
 
 // Receive permission updates on the student's own account.
-// This listener is required to keep the student's microphone
-// state synchronized after the educator grants or revokes permission.
 const unsubscribePermissions = call.on(
   'call.permissions_updated',
   (event: any) => {
@@ -541,12 +539,26 @@ const unsubscribePermissions = call.on(
       return;
     }
 
-    const allowed = call!.permissionsContext.hasPermission(
-      OwnCapability.SEND_AUDIO
-    );
+    const allowed =
+      Array.isArray(event.own_capabilities) &&
+      event.own_capabilities.includes(
+        OwnCapability.SEND_AUDIO
+      );
 
     setCanSpeak(allowed);
-    setIsMicOn(allowed && call!.microphone.enabled);
+
+    // A student whose permission is revoked must no longer
+    // appear to have an active microphone.
+    if (!allowed) {
+      setIsMicOn(false);
+      return;
+    }
+
+    // Permission being granted does not mean the student
+    // has switched on their own microphone.
+    setIsMicOn(call!.microphone.enabled);
+
+    setCameraError(null);
   }
 );
 
@@ -732,10 +744,11 @@ callEventUnsubs.current = [];
     }
 
   } finally {
-    setCallParticipants([]);
+        setCallParticipants([]);
     setSelectedParticipantId(null);
-setRaisedHandIds([]);
-setCanSpeak(false);
+    setRaisedHandIds([]);
+    setCanSpeak(false);
+    setAllowedStudentIds([]);
     setPermissionRequests([]);
 setChatMessages([]);
 setChatDraft('');
@@ -830,21 +843,32 @@ const clearStudentHand = async (studentId: string) => {
 };
 
 const allowStudentToSpeak = async (studentId: string) => {
-  if (!streamCall || !isEducator || !studentId) return;
+  const call = streamCall;
+
+  if (!call || !isEducator || !studentId) return;
+
+  if (
+    !call.permissionsContext.hasPermission(
+      OwnCapability.UPDATE_CALL_PERMISSIONS
+    )
+  ) {
+    setCameraError(
+      'Your educator account does not have permission to manage student speaking permissions.'
+    );
+    return;
+  }
 
   try {
-    await streamCall.grantPermissions(
+    await call.grantPermissions(
       studentId,
       [OwnCapability.SEND_AUDIO]
     );
 
-    setAllowedStudentIds((current) => {
-      if (current.includes(studentId)) {
-        return current;
-      }
-
-      return [...current, studentId];
-    });
+    setAllowedStudentIds((current) =>
+      current.includes(studentId)
+        ? current
+        : [...current, studentId]
+    );
 
     setPermissionRequests((current) =>
       current.filter(
@@ -866,7 +890,55 @@ const allowStudentToSpeak = async (studentId: string) => {
     );
   }
 };
-  // Video track toggle
+
+const stopStudentSpeaking = async (studentId: string) => {
+  const call = streamCall;
+
+  if (!call || !isEducator || !studentId) return;
+
+  if (
+    !call.permissionsContext.hasPermission(
+      OwnCapability.UPDATE_CALL_PERMISSIONS
+    )
+  ) {
+    setCameraError(
+      'Your educator account does not have permission to manage student speaking permissions.'
+    );
+    return;
+  }
+
+  try {
+    await call.revokePermissions(
+      studentId,
+      [OwnCapability.SEND_AUDIO]
+    );
+
+    setAllowedStudentIds((current) =>
+      current.filter((id) => id !== studentId)
+    );
+
+    setPermissionRequests((current) =>
+      current.filter(
+        (request) => request.user?.id !== studentId
+      )
+    );
+
+    setCameraError(null);
+  } catch (error) {
+    console.error(
+      'Unable to revoke speaking permission:',
+      error
+    );
+
+    setCameraError(
+      error instanceof Error
+        ? `Unable to stop this student from speaking: ${error.message}`
+        : 'Unable to stop this student from speaking.'
+    );
+  }
+};
+
+// Video track toggle
   
 const toggleVideoTrack = async () => {
   if (!streamCall || (!isStudent && !isEducator)) return;
@@ -1693,7 +1765,54 @@ const handleSendChatMessage = async () => {
                           )}
                     </button>
                   )}
-
+                  {isStudent && (
+                    <span
+                      className={`text-[10px] font-bold ${
+                        canSpeak
+                          ? 'text-emerald-300'
+                          : 'text-slate-400'
+                      }`}
+                    >
+                      {canSpeak
+                        ? (
+                            isMicOn
+                              ? (
+                                  currentLang === 'ar'
+                                    ? 'الميكروفون يعمل'
+                                    : 'Microphone on'
+                                )
+                              : (
+                                  currentLang === 'ar'
+                                    ? 'مسموح لك بالكلام — اضغط الميكروفون'
+                                    : 'Allowed — tap the microphone to speak'
+                                )
+                          )
+                        : (
+                            currentLang === 'ar'
+                              ? 'بانتظار إذن الأستاذ'
+                              : 'Waiting for educator permission'
+                          )}
+                    </span>
+                  )}
+                                    {/* Enable incoming classroom audio */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (streamCall) {
+                        streamCall.resumeAudio();
+                      }
+                    }}
+                    className="px-3 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition cursor-pointer"
+                    title={
+                      currentLang === 'ar'
+                        ? 'تفعيل صوت الصف'
+                        : 'Enable incoming classroom audio'
+                    }
+                  >
+                    {currentLang === 'ar'
+                      ? 'تفعيل صوت الصف'
+                      : 'Enable classroom audio'}
+                  </button>
                   {/* Camera control */}
                   <button
                     type="button"
@@ -1710,16 +1829,27 @@ const handleSendChatMessage = async () => {
                       : <VideoOff className="w-4 h-4" />}
                   </button>
 
-                  {/* Microphone control */}
+                                    {/* Microphone control */}
                   <button
                     type="button"
                     onClick={() => void toggleAudioTrack()}
-                    className={`p-2.5 rounded-xl transition cursor-pointer ${
+                    disabled={isStudent && !canSpeak}
+                    className={`p-2.5 rounded-xl transition cursor-pointer disabled:cursor-not-allowed disabled:opacity-40 ${
                       isMicOn
                         ? 'bg-slate-700 text-slate-200'
                         : 'bg-rose-600 text-white'
                     }`}
-                    title={isMicOn ? 'Mute Microphone' : 'Unmute Microphone'}
+                    title={
+                      isStudent && !canSpeak
+                        ? (
+                            currentLang === 'ar'
+                              ? 'بانتظار إذن الأستاذ'
+                              : 'Waiting for educator permission'
+                          )
+                        : isMicOn
+                          ? 'Mute Microphone'
+                          : 'Unmute Microphone'
+                    }
                   >
                     {isMicOn
                       ? <Mic className="w-4 h-4" />
