@@ -1999,7 +1999,75 @@ async function sendClassroomMessage(request, env) {
     }
   }, 201);
 }
+async function clearClassroomMessages(request, env) {
+  const claims = await authenticate(request, env, null);
 
+  if (
+    !claims ||
+    !["educator", "student"].includes(claims.role)
+  ) {
+    return json({
+      error: "Classroom authentication required."
+    }, 401);
+  }
+
+  const body = await requestJson(request);
+
+  const sessionId =
+    typeof body?.sessionId === "string"
+      ? body.sessionId.trim()
+      : "";
+
+  const studentId =
+    typeof body?.studentId === "string"
+      ? body.studentId.trim()
+      : "";
+
+  const access = await classroomChatAccess(
+    request,
+    env,
+    sessionId,
+    studentId
+  );
+
+  if (access.error) return access.error;
+
+  const attachments = await env.DB.prepare(
+    `SELECT attachment_key AS attachmentKey
+     FROM classroom_messages
+     WHERE session_id = ?
+       AND educator_id = ?
+       AND student_id = ?
+       AND attachment_key IS NOT NULL`
+  ).bind(
+    sessionId,
+    access.educatorId,
+    access.studentId
+  ).all();
+
+  await Promise.allSettled(
+    (attachments.results || []).map((row) =>
+      env.SESSION_MEDIA_BUCKET.delete(
+        `classroom-chat/${row.attachmentKey}`
+      )
+    )
+  );
+
+  await env.DB.prepare(
+    `DELETE FROM classroom_messages
+     WHERE session_id = ?
+       AND educator_id = ?
+       AND student_id = ?`
+  ).bind(
+    sessionId,
+    access.educatorId,
+    access.studentId
+  ).run();
+
+  return json({
+    cleared: true
+  });
+}
 async function handle(request, env) {
   const url = new URL(request.url);
   const path = url.pathname.replace(/\/+$/, "") || "/";
