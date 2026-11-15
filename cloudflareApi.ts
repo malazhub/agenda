@@ -105,25 +105,44 @@ export interface ClassroomMessage {
   senderId: string;
   message: string;
   createdAt: string;
+  attachmentUrl?: string | null;
+  attachmentName?: string | null;
+  attachmentType?: string | null;
 }
 const API_BASE_URL = (import.meta.env.VITE_CLOUDFLARE_API_URL || '').replace(/\/+$/, '');
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   if (!API_BASE_URL) {
-    throw new Error('Cloudflare API URL is not configured. Set VITE_CLOUDFLARE_API_URL before using account or session features.');
+    throw new Error(
+      'Cloudflare API URL is not configured. Set VITE_CLOUDFLARE_API_URL before using account or session features.'
+    );
   }
+
+  const isFormData =
+    typeof FormData !== 'undefined' &&
+    init?.body instanceof FormData;
+
   const response = await fetch(`${API_BASE_URL}${path}`, {
     ...init,
     headers: {
-      ...(init?.body ? { 'Content-Type': 'application/json' } : {}),
+      ...(init?.body && !isFormData
+        ? { 'Content-Type': 'application/json' }
+        : {}),
       ...init?.headers,
     },
   });
+
   const body = await response.json().catch(() => null);
+
   if (!response.ok) {
-    const message = typeof body?.error === 'string' ? body.error : 'Cloudflare API request failed';
+    const message =
+      typeof body?.error === 'string'
+        ? body.error
+        : 'Cloudflare API request failed';
+
     throw new Error(`${message} (${response.status})`);
   }
+
   return body as T;
 }
 
@@ -258,25 +277,68 @@ export function getClassroomMessages(
   });
 }
 
+export function uploadClassroomAttachment(
+  token: string,
+  sessionId: string,
+  studentId: string,
+  file: File,
+): Promise<{
+  attachmentKey: string;
+  attachmentName: string;
+  attachmentType: string;
+}> {
+  const formData = new FormData();
+
+  formData.append('sessionId', sessionId);
+  formData.append('studentId', studentId);
+  formData.append('file', file, file.name);
+
+  return request('/api/classroom/attachments', {
+    method: 'POST',
+    headers: authHeaders(token),
+    body: formData,
+  });
+}
+
 export function sendClassroomMessage(
   token: string,
   sessionId: string,
   studentId: string,
   message: string,
+  attachment?: {
+    attachmentKey: string;
+    attachmentName: string;
+    attachmentType: string;
+  },
 ): Promise<{
   sent: boolean;
   message: ClassroomMessage;
 }> {
-  return request<{
-    sent: boolean;
-    message: ClassroomMessage;
-  }>('/api/classroom/messages', {
+  return request('/api/classroom/messages', {
     method: 'POST',
     headers: authHeaders(token),
     body: JSON.stringify({
       sessionId,
       studentId,
-      message
+      message,
+      attachmentKey: attachment?.attachmentKey || null,
+      attachmentName: attachment?.attachmentName || null,
+      attachmentType: attachment?.attachmentType || null,
+    }),
+  });
+}
+
+export function clearClassroomMessages(
+  token: string,
+  sessionId: string,
+  studentId: string,
+): Promise<{ cleared: boolean }> {
+  return request('/api/classroom/messages/clear', {
+    method: 'POST',
+    headers: authHeaders(token),
+    body: JSON.stringify({
+      sessionId,
+      studentId,
     }),
   });
 }
