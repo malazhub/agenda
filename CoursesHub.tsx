@@ -34,9 +34,12 @@ interface CoursesHubProps {
   onStartPractice: (exam: any) => void;
   onEnterLiveClassroom?: (session?: LiveSessionInfo) => void;
   onShowMessage: (message: string) => void;
-  directorLoginRequest: number;
+    directorLoginRequest: number;
   registeredAccount: CloudflareAccount | null;
   sessionToken: string;
+  onRegisterSignOutCleanup?: (
+    cleanup: (() => Promise<void>) | null
+  ) => void;
 }
 
 type DirectorRow = CloudflareAccount;
@@ -48,6 +51,7 @@ export const CoursesHub: React.FC<CoursesHubProps> = ({
   sessionToken,
   onShowMessage,
   onEnterLiveClassroom,
+  onRegisterSignOutCleanup,
 }) => {
   const t = translations[currentLang];
   const isRTL = currentLang === 'ar';
@@ -513,6 +517,7 @@ const updateAccount = async (
         autoOpenLiveClassroom={autoOpenLiveClassroom}
         registeredAccount={registeredAccount}
         sessionToken={sessionToken}
+        onRegisterSignOutCleanup={onRegisterSignOutCleanup}
         onBack={() => {
           setActiveGradeForSessions(null);
           setActiveGradeTab('stored');
