@@ -1794,25 +1794,6 @@ const handleSendChatMessage = async () => {
                           )}
                     </span>
                   )}
-                                    {/* Enable incoming classroom audio */}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (streamCall) {
-                        streamCall.resumeAudio();
-                      }
-                    }}
-                    className="px-3 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition cursor-pointer"
-                    title={
-                      currentLang === 'ar'
-                        ? 'تفعيل صوت الصف'
-                        : 'Enable incoming classroom audio'
-                    }
-                  >
-                    {currentLang === 'ar'
-                      ? 'تفعيل صوت الصف'
-                      : 'Enable classroom audio'}
-                  </button>
                   {/* Camera control */}
                   <button
                     type="button"
