@@ -13,6 +13,7 @@ interface HeaderProps {
   onOpenRegister: () => void;
   signedInName?: string;
   schoolName?: string;
+  schoolId?: string;
   onOpenArchiveSessions?: () => void;
   onSignOut?: () => void;
 }
@@ -24,6 +25,7 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenRegister,
   signedInName,
   schoolName,
+  schoolId = 'default-agenda-school',
   onSignOut,
 }) => {
   const t = translations[currentLang];
@@ -108,7 +110,7 @@ export const Header: React.FC<HeaderProps> = ({
             <button
               type="button"
               onClick={async () => {
-                const shareUrl = 'https://malazhub.github.io/agenda/';
+                const shareUrl = `https://malazhub.github.io/agenda/?schoolId=${encodeURIComponent(schoolId)}`;
                 const shareData = {
                   title: schoolName || 'Agenda',
                   text: currentLang === 'ar' ? `منصة ${schoolName || 'Agenda'} للتعليم والدروس الخصوصية` : `${schoolName || 'Agenda'} Educational Platform`,
@@ -124,8 +126,8 @@ export const Header: React.FC<HeaderProps> = ({
                     currentLang === 'ar'
                       ? 'تم نسخ رابط المنصة: https://malazhub.github.io/agenda/'
                       : currentLang === 'fr'
-                      ? 'Lien copié: https://malazhub.github.io/agenda/'
-                      : 'Link copied: https://malazhub.github.io/agenda/'
+                      ? 'Lien de l’établissement copié.'
+                      : 'School link copied.'
                   );
                 }
               }}
@@ -159,6 +161,16 @@ export const Header: React.FC<HeaderProps> = ({
               }`}
             >
               Français
+            </button>
+
+            {/* Italian */}
+            <button type="button" onClick={() => onLanguageChange('it')} className={`px-3 py-1.5 rounded-xl text-xs font-black transition cursor-pointer border ${currentLang === 'it' ? 'bg-green-700 text-white border-green-700 shadow-sm scale-105' : 'bg-green-50 text-green-800 border-green-200 hover:bg-green-100'}`}>
+              Italiano
+            </button>
+
+            {/* Spanish */}
+            <button type="button" onClick={() => onLanguageChange('es')} className={`px-3 py-1.5 rounded-xl text-xs font-black transition cursor-pointer border ${currentLang === 'es' ? 'bg-red-600 text-white border-red-600 shadow-sm scale-105' : 'bg-red-50 text-red-800 border-red-200 hover:bg-red-100'}`}>
+              Español
             </button>
 
             {/* English: Vibrant Amber / Orange */}
