@@ -103,6 +103,7 @@ export const CoursesHub: React.FC<CoursesHubProps> = ({
         setDirectorSchoolId(profile.schoolId);
         setSettingsSchoolName(profile.schoolName);
         setSettingsUsername(profile.username);
+        onSchoolBrandChange(profile.schoolId, profile.schoolName);
       })
       .catch((profileError) => {
         if (active) setDirectorDataError(profileError instanceof Error ? profileError.message : 'Unable to load Director school profile.');
