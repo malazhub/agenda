@@ -4,6 +4,7 @@ import { translations } from '../translations';
 import { LEBANESE_GRADE_LEVELS } from '../data/mockGradesAndSessions';
 import { GradeSessionsView } from './GradeSessionsView';
 import { DirectorSessionsPanel } from './DirectorSessionsPanel';
+import { LiveVideoPlayer } from './LiveVideoPlayer';
 import { 
   getDirectorAccounts,
   getDirectorProfile,
@@ -11,9 +12,10 @@ import {
   loginAccount,
   updateDirectorProfile,
   updateDirectorAccount,
-  deleteDirectorAccount 
+  deleteDirectorAccount,
+  getDirectorLiveStream,
 } from '../services/cloudflareApi';
-import type { CloudflareAccount, RegistrationSession } from '../services/cloudflareApi';
+import type { CloudflareAccount, RegistrationSession, StoredSessionRecord, LiveStreamStatus } from '../services/cloudflareApi';
 import {
   Clock,
   ShieldCheck,
@@ -78,6 +80,10 @@ export const CoursesHub: React.FC<CoursesHubProps> = ({
   const [directorDataError, setDirectorDataError] = useState('');
   const [directorMessage, setDirectorMessage] = useState('');
   const [directorTab, setDirectorTab] = useState<'accounts' | 'sessions'>('accounts');
+  const [monitorSession, setMonitorSession] = useState<StoredSessionRecord | null>(null);
+  const [monitorStream, setMonitorStream] = useState<LiveStreamStatus | null>(null);
+  const [monitorLoading, setMonitorLoading] = useState(false);
+  const [monitorError, setMonitorError] = useState('');
 
     useEffect(() => {
     if (directorLoginRequest > 0) {
@@ -197,6 +203,22 @@ export const CoursesHub: React.FC<CoursesHubProps> = ({
       setDirectorForm({ username: '', password: '' });
     } catch (error) {
       setDirectorError(error instanceof Error ? error.message : 'Unable to sign in.');
+    }
+  };
+
+  const handleMonitorSession = async (session: StoredSessionRecord) => {
+    if (!directorToken) return;
+    setMonitorLoading(true);
+    setMonitorError('');
+    setMonitorSession(session);
+    setMonitorStream(null);
+    try {
+      const stream = await getDirectorLiveStream(directorToken, session.id);
+      setMonitorStream(stream);
+    } catch (error) {
+      setMonitorError(error instanceof Error ? error.message : 'Unable to open this classroom for monitoring.');
+    } finally {
+      setMonitorLoading(false);
     }
   };
 
@@ -791,7 +813,32 @@ const updateAccount = async (
           </div>
         )}
         {directorTab === 'sessions' && directorToken ? (
-          <DirectorSessionsPanel currentLang={currentLang} token={directorToken} grades={LEBANESE_GRADE_LEVELS} />
+          <>
+            <DirectorSessionsPanel
+              currentLang={currentLang}
+              token={directorToken}
+              grades={LEBANESE_GRADE_LEVELS}
+              onJoinSession={handleMonitorSession}
+            />
+            {monitorSession && (
+              <section className="rounded-2xl border border-emerald-200 bg-white p-4 sm:p-5 space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <h3 className="text-sm font-black text-slate-900">
+                      {currentLang === 'ar' ? 'مراقبة الصف' : currentLang === 'fr' ? 'Surveillance de la classe' : currentLang === 'es' ? 'Supervisión de la clase' : currentLang === 'it' ? 'Monitoraggio della classe' : 'Class monitoring'}
+                    </h3>
+                    <p className="text-xs text-slate-500">{monitorSession.gradeId.toUpperCase()} · {monitorSession.subject} · {monitorSession.title}</p>
+                  </div>
+                  <button type="button" onClick={() => { setMonitorSession(null); setMonitorStream(null); setMonitorError(''); }} className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold text-slate-600">
+                    {currentLang === 'ar' ? 'إغلاق' : currentLang === 'fr' ? 'Fermer' : currentLang === 'es' ? 'Cerrar' : currentLang === 'it' ? 'Chiudi' : 'Close'}
+                  </button>
+                </div>
+                {monitorLoading ? <p className="py-8 text-center text-sm text-slate-500">…</p> : monitorError ? <p role="alert" className="rounded-xl bg-red-50 p-3 text-xs text-red-700">{monitorError}</p> : monitorStream ? (
+                  <LiveVideoPlayer currentLang={currentLang} stream={monitorStream} sessionToken="" gradeId={monitorSession.id} directorToken={directorToken} />
+                ) : null}
+              </section>
+            )}
+          </>
         ) : directorLoading ? (
           <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center text-sm text-slate-500">
             {currentLang === 'ar' ? 'جارٍ تحميل التسجيلات...' : currentLang === 'fr' ? 'Chargement des inscriptions...' : 'Loading registrations...'}
