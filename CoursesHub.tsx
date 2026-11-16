@@ -247,11 +247,11 @@ export const CoursesHub: React.FC<CoursesHubProps> = ({
         currentLang === 'ar'
           ? 'تم حفظ اسم المدرسة وبيانات المدير وتحديث اسم المنصة.'
           : currentLang === 'fr'
-            ? 'Le nom de l’établissement et les identifiants du directeur ont été enregistrés.'
+            ? 'Le nom de l\u2019établissement et les identifiants du directeur ont été enregistrés.'
             : currentLang === 'es'
               ? 'Se guardaron el nombre de la escuela y las credenciales del Director. Se actualizó el encabezado.'
               : currentLang === 'it'
-                ? 'Il nome della scuola e le credenziali del Direttore sono stati salvati. L’intestazione è stata aggiornata.'
+                ? 'Il nome della scuola e le credenziali del Direttore sono stati salvati. L\u2019intestazione è stata aggiornata.'
                 : 'School name and Director credentials saved. The main header is updated.'
       );
     } catch (error) {
@@ -330,7 +330,7 @@ const updateAccount = async (
         : currentLang === 'es'
           ? `¿Seguro que deseas eliminar permanentemente la cuenta de ${account.fullName}? Se borrarán todos sus datos de Cloudflare.`
           : currentLang === 'it'
-            ? `Vuoi eliminare definitivamente l’account di ${account.fullName}? Tutti i suoi dati saranno rimossi da Cloudflare.`
+            ? `Vuoi eliminare definitivamente l\u2019account di ${account.fullName}? Tutti i suoi dati saranno rimossi da Cloudflare.`
             : `Are you sure you want to permanently delete (${account.fullName})? All data will be removed from Cloudflare.`;
 
     if (!window.confirm(confirmMessage)) return;
@@ -352,7 +352,7 @@ const updateAccount = async (
             : currentLang === 'es'
               ? `La cuenta de ${account.fullName} se eliminó permanentemente de Cloudflare.`
               : currentLang === 'it'
-                ? `L’account di ${account.fullName} è stato eliminato definitivamente da Cloudflare.`
+                ? `L\u2019account di ${account.fullName} è stato eliminato definitivamente da Cloudflare.`
                 : `Account (${account.fullName}) was permanently deleted from Cloudflare.`
       );
     } catch (err) {
@@ -739,8 +739,8 @@ const updateAccount = async (
               {currentLang === 'ar'
                 ? 'لكل مدير مدرسته وموظفوه وطلابه ودروسه وأسعاره المستقلة. يظهر اسم المدرسة المحفوظ في رأس المنصة.'
                 : currentLang === 'fr'
-                  ? 'Chaque Directeur possède son établissement, son équipe, ses élèves, ses leçons et ses tarifs. Le nom enregistré apparaît dans l’en-tête.'
-                  : 'Each Director has a separate school, staff, students, lessons, and pricing. The saved school name becomes this school’s platform header.'}
+                  ? 'Chaque Directeur possède son établissement, son équipe, ses élèves, ses leçons et ses tarifs. Le nom enregistré apparaît dans l\u2019en-tête.'
+                  : 'Each Director has a separate school, staff, students, lessons, and pricing. The saved school name becomes this school\u2019s platform header.'}
             </p>
           </div>
           <form className="grid gap-4 md:grid-cols-2" onSubmit={handleSaveDirectorSettings}>
@@ -759,7 +759,7 @@ const updateAccount = async (
             </label>
             <label className="block space-y-1.5">
               <span className="text-xs font-bold text-slate-700">
-                {currentLang === 'ar' ? 'اسم مستخدم المدير' : currentLang === 'fr' ? 'Nom d’utilisateur du directeur' : currentLang === 'es' ? 'Usuario del Director' : currentLang === 'it' ? 'Nome utente del Direttore' : 'Director username'}
+                {currentLang === 'ar' ? 'اسم مستخدم المدير' : currentLang === 'fr' ? 'Nom d\u2019utilisateur du directeur' : currentLang === 'es' ? 'Usuario del Director' : currentLang === 'it' ? 'Nome utente del Direttore' : 'Director username'}
               </span>
               <input
                 required
@@ -782,7 +782,7 @@ const updateAccount = async (
                 autoComplete="new-password"
                 value={settingsPassword}
                 onChange={(event) => setSettingsPassword(event.target.value)}
-                placeholder={currentLang === 'ar' ? 'اتركه فارغاً للإبقاء على الحالية' : currentLang === 'fr' ? 'Laisser vide pour conserver l’actuel' : currentLang === 'es' ? 'Déjalo vacío para mantener la actual' : currentLang === 'it' ? 'Lascia vuoto per mantenere quella attuale' : 'Leave blank to keep current password'}
+                placeholder={currentLang === 'ar' ? 'اتركه فارغاً للإبقاء على الحالية' : currentLang === 'fr' ? 'Laisser vide pour conserver l\u2019actuel' : currentLang === 'es' ? 'Déjalo vacío para mantener la actual' : currentLang === 'it' ? 'Lascia vuoto per mantenere quella attuale' : 'Leave blank to keep current password'}
                 className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-sm text-slate-800"
               />
             </label>
@@ -791,11 +791,11 @@ const updateAccount = async (
                 {currentLang === 'ar'
                   ? 'هذه المدرسة ملك لحساب المدير الحالي فقط. سيظهر اسمها في رابط المدرسة ورأس المنصة.'
                   : currentLang === 'fr'
-                    ? 'Cet établissement appartient uniquement à ce compte Directeur. Son nom apparaît dans le lien et l’en-tête.'
+                    ? 'Cet établissement appartient uniquement à ce compte Directeur. Son nom apparaît dans le lien et l\u2019en-tête.'
                     : currentLang === 'es'
                       ? 'Esta escuela pertenece únicamente a esta cuenta de Director. Su nombre aparece en el enlace y en la cabecera.'
                       : currentLang === 'it'
-                        ? 'Questa scuola appartiene solo a questo account Direttore. Il nome appare nel link e nell’intestazione.'
+                        ? 'Questa scuola appartiene solo a questo account Direttore. Il nome appare nel link e nell\u2019intestazione.'
                         : 'This school belongs only to this Director account. Its name appears in the school link and platform header.'}
               </p>
               <button
