@@ -320,7 +320,13 @@ const updateAccount = async (
   const deleteAccount = async (account: DirectorRow) => {
     const confirmMessage = currentLang === 'ar'
       ? `هل أنت متأكد من حذف حساب (${account.fullName}) نهائياً؟ سيتم مسح بياناته من Cloudflare للأبد.`
-      : `Are you sure you want to permanently delete (${account.fullName})? All data will be removed from Cloudflare.`;
+      : currentLang === 'fr'
+        ? `Voulez-vous vraiment supprimer définitivement le compte de ${account.fullName} ? Toutes ses données seront supprimées de Cloudflare.`
+        : currentLang === 'es'
+          ? `¿Seguro que deseas eliminar permanentemente la cuenta de ${account.fullName}? Se borrarán todos sus datos de Cloudflare.`
+          : currentLang === 'it'
+            ? `Vuoi eliminare definitivamente l’account di ${account.fullName}? Tutti i suoi dati saranno rimossi da Cloudflare.`
+            : `Are you sure you want to permanently delete (${account.fullName})? All data will be removed from Cloudflare.`;
 
     if (!window.confirm(confirmMessage)) return;
 
@@ -606,10 +612,10 @@ const updateAccount = async (
             </div>
             <div>
               <h2 className="text-xl font-black text-slate-900">
-                {currentLang === 'ar' ? 'دخول المدير' : currentLang === 'fr' ? 'Connexion directeur' : 'Director Login'}
+                {currentLang === 'ar' ? 'دخول المدير' : currentLang === 'fr' ? 'Connexion du Directeur' : currentLang === 'es' ? 'Acceso del Director' : currentLang === 'it' ? 'Accesso Direttore' : 'Director Login'}
               </h2>
               <p className="text-xs text-slate-500">
-                {currentLang === 'ar' ? 'لوحة التحكم الداخلية' : currentLang === 'fr' ? 'Panneau de contrôle interne' : 'Internal control panel'}
+                {currentLang === 'ar' ? 'لوحة التحكم الداخلية' : currentLang === 'fr' ? 'Panneau de contrôle interne' : currentLang === 'es' ? 'Panel de control interno' : currentLang === 'it' ? 'Pannello di controllo interno' : 'Internal control panel'}
               </p>
             </div>
           </div>
@@ -631,7 +637,7 @@ const updateAccount = async (
         >
           <div>
             <label className="block text-[11px] font-bold text-slate-700 mb-1">
-              {currentLang === 'ar' ? 'اسم المستخدم' : currentLang === 'fr' ? 'Nom d’utilisateur' : 'Username'}
+              {t.usernameLabel}
             </label>
             <div className="relative">
               <User className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
@@ -648,7 +654,7 @@ const updateAccount = async (
 
           <div>
             <label className="block text-[11px] font-bold text-slate-700 mb-1">
-              {currentLang === 'ar' ? 'كلمة المرور' : currentLang === 'fr' ? 'Mot de passe' : 'Password'}
+              {t.passwordLabel}
             </label>
             <div className="relative">
               <Lock className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
@@ -682,7 +688,7 @@ const updateAccount = async (
             type="submit"
             className="w-full bg-indigo-700 hover:bg-indigo-800 text-white font-black px-4 py-3 rounded-2xl transition cursor-pointer"
           >
-            {currentLang === 'ar' ? 'دخول المدير' : currentLang === 'fr' ? 'Se connecter' : 'Login as Director'}
+            {currentLang === 'ar' ? 'دخول المدير' : currentLang === 'fr' ? 'Connexion Directeur' : currentLang === 'es' ? 'Iniciar sesión como Director' : currentLang === 'it' ? 'Accedi come Direttore' : 'Login as Director'}
           </button>
         </form>
       </div>
@@ -699,7 +705,7 @@ const updateAccount = async (
             </div>
             <div>
               <h2 className="text-xl font-black text-slate-900">
-                {currentLang === 'ar' ? 'لوحة المدير' : currentLang === 'fr' ? 'Tableau directeur' : 'Director Dashboard'}
+                {currentLang === 'ar' ? 'لوحة المدير' : currentLang === 'fr' ? 'Tableau de bord du Directeur' : currentLang === 'es' ? 'Panel del Director' : currentLang === 'it' ? 'Dashboard del Direttore' : 'Director Dashboard'}
               </h2>
             </div>
           </div>
@@ -714,7 +720,7 @@ const updateAccount = async (
 
         <div className="flex flex-wrap gap-2">
           <button type="button" onClick={() => setDirectorTab('accounts')} className={`rounded-xl px-4 py-2 text-xs font-black cursor-pointer ${directorTab === 'accounts' ? 'bg-indigo-700 text-white' : 'bg-white text-slate-700 border border-slate-200'}`}>
-            {currentLang === 'ar' ? 'الحسابات' : currentLang === 'fr' ? 'Comptes' : 'Accounts'}
+            {currentLang === 'ar' ? 'الحسابات' : currentLang === 'fr' ? 'Comptes' : currentLang === 'es' ? 'Cuentas' : currentLang === 'it' ? 'Account' : 'Accounts'}
           </button>
           <button type="button" onClick={() => setDirectorTab('sessions')} className={`rounded-xl px-4 py-2 text-xs font-black cursor-pointer ${directorTab === 'sessions' ? 'bg-indigo-700 text-white' : 'bg-white text-slate-700 border border-slate-200'}`}>
             {t.sessionsTab}
@@ -724,7 +730,7 @@ const updateAccount = async (
         <section className="rounded-2xl border border-indigo-200 bg-white p-5 sm:p-6 space-y-4">
           <div>
             <h3 className="text-base font-black text-slate-900">
-              {currentLang === 'ar' ? 'إعدادات المدرسة والمدير' : currentLang === 'fr' ? 'Établissement et compte directeur' : 'School & Director Settings'}
+              {currentLang === 'ar' ? 'إعدادات المدرسة والمدير' : currentLang === 'fr' ? 'Établissement et compte Directeur' : currentLang === 'es' ? 'Configuración de escuela y Director' : currentLang === 'it' ? 'Impostazioni scuola e Direttore' : 'School & Director Settings'}
             </h3>
             <p className="mt-1 text-xs text-slate-500">
               {currentLang === 'ar'
@@ -841,7 +847,7 @@ const updateAccount = async (
           </>
         ) : directorLoading ? (
           <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center text-sm text-slate-500">
-            {currentLang === 'ar' ? 'جارٍ تحميل التسجيلات...' : currentLang === 'fr' ? 'Chargement des inscriptions...' : 'Loading registrations...'}
+            {currentLang === 'ar' ? 'جارٍ تحميل التسجيلات...' : currentLang === 'fr' ? 'Chargement des inscriptions...' : currentLang === 'es' ? 'Cargando registros...' : currentLang === 'it' ? 'Caricamento delle registrazioni...' : 'Loading registrations...'}
           </div>
         ) : (
           <div className="space-y-6">
@@ -888,7 +894,7 @@ const updateAccount = async (
                     ? 'غرفة البث'
                     : currentLang === 'fr'
                       ? 'Salle de diffusion'
-                      : 'Broadcast Room'}
+                      : currentLang === 'es' ? 'Sala de emisión' : currentLang === 'it' ? 'Sala trasmissione' : 'Broadcast Room'}
                 </span>
 
                 <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
