@@ -21,20 +21,6 @@ interface RegisterModalProps {
   schoolId: string;
   onRegisterSuccess: (account: CloudflareAccount, token: string) => void;
 }
-export async function deleteDirectorAccount(token: string, accountId: string): Promise<void> {
-  const response = await fetch(`${API_BASE_URL}/api/director/accounts/${encodeURIComponent(accountId)}`, {
-    method: 'DELETE',
-    headers: {
-      Authorization: `Bearer ${token}`,
-      'Content-Type': 'application/json',
-    },
-  });
-
-  if (!response.ok) {
-    const errorData = await response.json().catch(() => ({}));
-    throw new Error(errorData.error || `Failed to delete account from Cloudflare (${response.status})`);
-  }
-}
 export const RegisterModal: React.FC<RegisterModalProps> = ({
   isOpen,
   onClose,
@@ -169,7 +155,13 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
         setError(
           currentLang === 'ar'
             ? 'يرجى اختيار أستاذ لديه صف دراسي معين من الإدارة.'
-            : 'Please select an educator who has a classroom assigned by the Director.'
+            : currentLang === 'fr'
+              ? 'Veuillez choisir un éducateur auquel le Directeur a attribué une classe.'
+              : currentLang === 'es'
+                ? 'Selecciona un educador al que el Director haya asignado un aula.'
+                : currentLang === 'it'
+                  ? 'Seleziona un educatore a cui il Direttore ha assegnato una classe.'
+                  : 'Please select an educator who has a classroom assigned by the Director.'
         );
         return;
       }
@@ -265,7 +257,7 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
                   title="Back to Home"
                 >
                   {currentLang === 'ar' ? <ArrowRight className="h-4 w-4" /> : <ArrowLeft className="h-4 w-4" />}
-                  <span>{currentLang === 'ar' ? 'الرئيسية' : 'Home'}</span>
+                  <span>{t.backToMain}</span>
                 </button>
                 <UserPlus className="w-4 h-4 text-emerald-400" />
                 <h2 className="text-base font-bold">{isLogin ? t.signInLabel : t.registerBtn}</h2>
@@ -466,32 +458,22 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
             <div className="space-y-2 pt-1">
               <div className="flex items-center justify-between gap-2">
                 <label className="block text-xs font-bold text-slate-700">
-                  {currentLang === 'ar'
-                    ? 'اختر الأستاذ المسجل:'
-                    : currentLang === 'fr'
-                      ? 'Choisissez votre éducateur:'
-                      : 'Select Your Registered Educator:'}
+                  {currentLang === 'ar' ? 'اختر الأستاذ المسجل:' : currentLang === 'fr' ? 'Choisissez votre éducateur :' : currentLang === 'es' ? 'Elige tu educador registrado:' : currentLang === 'it' ? 'Scegli il tuo educatore registrato:' : 'Select your registered educator:'}
                 </label>
 
                 <span className="text-[10px] text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-full font-bold">
                   {educatorsList.length}{' '}
-                  {currentLang === 'ar'
-                    ? 'أساتذة مسجلون'
-                    : 'Registered Educators'}
+                  {currentLang === 'ar' ? 'أساتذة مسجلون' : currentLang === 'fr' ? 'éducateurs inscrits' : currentLang === 'es' ? 'educadores registrados' : currentLang === 'it' ? 'educatori registrati' : 'registered educators'}
                 </span>
               </div>
 
               {isLoadingEducators ? (
                 <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 text-center text-xs text-slate-500">
-                  {currentLang === 'ar'
-                    ? 'جارٍ تحميل جميع الأساتذة المسجلين...'
-                    : 'Loading all registered educators...'}
+                  {currentLang === 'ar' ? 'جارٍ تحميل جميع الأساتذة المسجلين...' : currentLang === 'fr' ? 'Chargement des éducateurs inscrits...' : currentLang === 'es' ? 'Cargando educadores registrados...' : currentLang === 'it' ? 'Caricamento degli educatori registrati...' : 'Loading registered educators...'}
                 </div>
               ) : educatorsList.length === 0 ? (
                 <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 text-center text-xs text-slate-500">
-                  {currentLang === 'ar'
-                    ? 'لا يوجد أساتذة مسجلون حالياً.'
-                    : 'No registered educators are available yet.'}
+                  {currentLang === 'ar' ? 'لا يوجد أساتذة مسجلون حالياً.' : currentLang === 'fr' ? 'Aucun éducateur inscrit n’est disponible pour le moment.' : currentLang === 'es' ? 'Todavía no hay educadores registrados disponibles.' : currentLang === 'it' ? 'Non ci sono ancora educatori registrati disponibili.' : 'No registered educators are available yet.'}
                 </div>
               ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-72 overflow-y-auto p-1">
@@ -568,10 +550,10 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
                           {canSelect
                             ? currentLang === 'ar'
                               ? 'صف دراسي معين — متاح للاختيار'
-                              : 'Classroom assigned — available'
+                              : currentLang === 'fr' ? 'Classe attribuée — disponible' : currentLang === 'es' ? 'Aula asignada — disponible' : currentLang === 'it' ? 'Aula assegnata — disponibile' : 'Classroom assigned — available'
                             : currentLang === 'ar'
                               ? 'بانتظار تعيين صف من الإدارة'
-                              : 'Waiting for Director classroom assignment'}
+                              : currentLang === 'fr' ? 'En attente de l’attribution d’une classe par le Directeur' : currentLang === 'es' ? 'Esperando la asignación de aula del Director' : currentLang === 'it' ? 'In attesa dell’assegnazione dell’aula da parte del Direttore' : 'Waiting for Director classroom assignment'}
                         </span>
                       </button>
                     );
@@ -581,9 +563,7 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
 
               {selectedEducator && (
                 <p className="text-[11px] font-bold text-emerald-700">
-                  {currentLang === 'ar'
-                    ? `الأستاذ المختار: ${selectedEducator.name}`
-                    : `Selected educator: ${selectedEducator.name}`}
+                  {currentLang === 'ar' ? `الأستاذ المختار: ${selectedEducator.name}` : currentLang === 'fr' ? `Éducateur choisi : ${selectedEducator.name}` : currentLang === 'es' ? `Educador seleccionado: ${selectedEducator.name}` : currentLang === 'it' ? `Educatore selezionato: ${selectedEducator.name}` : `Selected educator: ${selectedEducator.name}`}
                 </p>
               )}
             </div>

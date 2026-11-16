@@ -46,26 +46,26 @@ export const LearningResourcesView: React.FC<LearningResourcesViewProps> = ({
   const [message, setMessage] = useState('');
 
   const text = {
-    title: isArabic ? 'الموارد التعليمية' : isFrench ? 'Ressources pédagogiques' : 'Learning Resources',
-    chooseEducator: isArabic ? 'اختر الأستاذ' : isFrench ? 'Choisir un éducateur' : 'Choose an educator',
-    noEducators: isArabic ? 'لا يوجد أساتذة مسجلون في هذه المدرسة بعد.' : isFrench ? 'Aucun éducateur inscrit dans cette école.' : 'No educators are registered in this school yet.',
-    lesson: isArabic ? 'الدرس' : isFrench ? 'Leçon' : 'Lesson',
-    empty: isArabic ? 'لم ينشر الأستاذ هذا الدرس بعد.' : isFrench ? 'Cet éducateur n’a pas encore publié cette leçon.' : 'This educator has not published this lesson yet.',
-    open: isArabic ? 'فتح الدرس' : isFrench ? 'Ouvrir la leçon' : 'Open lesson',
-    edit: isArabic ? 'تعديل الدرس' : isFrench ? 'Modifier la leçon' : 'Edit lesson',
-    back: isArabic ? 'رجوع إلى الدروس' : isFrench ? 'Retour aux leçons' : 'Back to lessons',
-    lessonTitle: isArabic ? 'عنوان الدرس' : isFrench ? 'Titre de la leçon' : 'Lesson title',
-    subject: isArabic ? 'المادة' : isFrench ? 'Matière' : 'Subject',
-    description: isArabic ? 'وصف الدرس' : isFrench ? 'Description' : 'Lesson description',
-    attachment: isArabic ? 'رفع ملف أو صورة أو فيديو' : isFrench ? 'Ajouter un fichier, une image ou une vidéo' : 'Upload a file, photo or video',
-    currentFile: isArabic ? 'الملف المحفوظ' : isFrench ? 'Fichier enregistré' : 'Saved file',
-    save: isArabic ? 'حفظ الدرس' : isFrench ? 'Enregistrer la leçon' : 'Save lesson',
-    delete: isArabic ? 'حذف محتوى الدرس' : isFrench ? 'Supprimer le contenu' : 'Delete lesson content',
-    published: isArabic ? 'تم حفظ الدرس بنجاح.' : isFrench ? 'Leçon enregistrée.' : 'Lesson saved successfully.',
-    deleted: isArabic ? 'تم حذف محتوى الدرس.' : isFrench ? 'Contenu de la leçon supprimé.' : 'Lesson content deleted.',
-    readOnly: isArabic ? 'وضع القراءة فقط' : isFrench ? 'Lecture seule' : 'Read-only access',
-    noFile: isArabic ? 'لم يتم إرفاق ملف.' : isFrench ? 'Aucun fichier joint.' : 'No file attached.',
-    fileLimit: isArabic ? 'الحد الأقصى لحجم الملف 100 ميغابايت.' : isFrench ? 'La taille maximale du fichier est de 100 Mo.' : 'The maximum file size is 100 MB.',
+    title: currentLang === 'ar' ? 'الموارد التعليمية' : currentLang === 'fr' ? 'Ressources pédagogiques' : currentLang === 'es' ? 'Recursos educativos' : currentLang === 'it' ? 'Risorse didattiche' : 'Learning Resources',
+    chooseEducator: currentLang === 'ar' ? 'اختر الأستاذ' : currentLang === 'fr' ? 'Choisir un éducateur' : currentLang === 'es' ? 'Elegir educador' : currentLang === 'it' ? 'Scegli educatore' : 'Choose an educator',
+    noEducators: currentLang === 'ar' ? 'لا يوجد أساتذة مسجلون في هذه المدرسة بعد.' : currentLang === 'fr' ? 'Aucun éducateur inscrit dans cet établissement.' : currentLang === 'es' ? 'Todavía no hay educadores registrados en esta escuela.' : currentLang === 'it' ? 'Non ci sono ancora educatori registrati in questa scuola.' : 'No educators are registered in this school yet.',
+    lesson: currentLang === 'ar' ? 'الدرس' : currentLang === 'fr' ? 'Leçon' : currentLang === 'es' ? 'Lección' : currentLang === 'it' ? 'Lezione' : 'Lesson',
+    empty: currentLang === 'ar' ? 'لم ينشر الأستاذ هذا الدرس بعد.' : currentLang === 'fr' ? 'Cet éducateur n’a pas encore publié cette leçon.' : currentLang === 'es' ? 'Este educador aún no ha publicado esta lección.' : currentLang === 'it' ? 'Questo educatore non ha ancora pubblicato questa lezione.' : 'This educator has not published this lesson yet.',
+    open: currentLang === 'ar' ? 'فتح الدرس' : currentLang === 'fr' ? 'Ouvrir la leçon' : currentLang === 'es' ? 'Abrir lección' : currentLang === 'it' ? 'Apri lezione' : 'Open lesson',
+    edit: currentLang === 'ar' ? 'تعديل الدرس' : currentLang === 'fr' ? 'Modifier la leçon' : currentLang === 'es' ? 'Editar lección' : currentLang === 'it' ? 'Modifica lezione' : 'Edit lesson',
+    back: currentLang === 'ar' ? 'رجوع إلى الدروس' : currentLang === 'fr' ? 'Retour aux leçons' : currentLang === 'es' ? 'Volver a las lecciones' : currentLang === 'it' ? 'Torna alle lezioni' : 'Back to lessons',
+    lessonTitle: currentLang === 'ar' ? 'عنوان الدرس' : currentLang === 'fr' ? 'Titre de la leçon' : currentLang === 'es' ? 'Título de la lección' : currentLang === 'it' ? 'Titolo della lezione' : 'Lesson title',
+    subject: currentLang === 'ar' ? 'المادة' : currentLang === 'fr' ? 'Matière' : currentLang === 'es' ? 'Materia' : currentLang === 'it' ? 'Materia' : 'Subject',
+    description: currentLang === 'ar' ? 'وصف الدرس' : currentLang === 'fr' ? 'Description de la leçon' : currentLang === 'es' ? 'Descripción de la lección' : currentLang === 'it' ? 'Descrizione della lezione' : 'Lesson description',
+    attachment: currentLang === 'ar' ? 'رفع ملف أو صورة أو فيديو' : currentLang === 'fr' ? 'Ajouter un fichier, une image ou une vidéo' : currentLang === 'es' ? 'Subir archivo, imagen o vídeo' : currentLang === 'it' ? 'Carica file, immagine o video' : 'Upload a file, image or video',
+    currentFile: currentLang === 'ar' ? 'الملف المحفوظ' : currentLang === 'fr' ? 'Fichier enregistré' : currentLang === 'es' ? 'Archivo guardado' : currentLang === 'it' ? 'File salvato' : 'Saved file',
+    save: currentLang === 'ar' ? 'حفظ الدرس' : currentLang === 'fr' ? 'Enregistrer la leçon' : currentLang === 'es' ? 'Guardar lección' : currentLang === 'it' ? 'Salva lezione' : 'Save lesson',
+    delete: currentLang === 'ar' ? 'حذف محتوى الدرس' : currentLang === 'fr' ? 'Supprimer le contenu de la leçon' : currentLang === 'es' ? 'Eliminar contenido de la lección' : currentLang === 'it' ? 'Elimina contenuto della lezione' : 'Delete lesson content',
+    published: currentLang === 'ar' ? 'تم حفظ الدرس بنجاح.' : currentLang === 'fr' ? 'Leçon enregistrée avec succès.' : currentLang === 'es' ? 'Lección guardada correctamente.' : currentLang === 'it' ? 'Lezione salvata correttamente.' : 'Lesson saved successfully.',
+    deleted: currentLang === 'ar' ? 'تم حذف محتوى الدرس.' : currentLang === 'fr' ? 'Contenu de la leçon supprimé.' : currentLang === 'es' ? 'Contenido de la lección eliminado.' : currentLang === 'it' ? 'Contenuto della lezione eliminato.' : 'Lesson content deleted.',
+    readOnly: currentLang === 'ar' ? 'وضع القراءة فقط' : currentLang === 'fr' ? 'Accès en lecture seule' : currentLang === 'es' ? 'Solo lectura' : currentLang === 'it' ? 'Sola lettura' : 'Read-only access',
+    noFile: currentLang === 'ar' ? 'لم يتم إرفاق ملف.' : currentLang === 'fr' ? 'Aucun fichier joint.' : currentLang === 'es' ? 'No se ha adjuntado ningún archivo.' : currentLang === 'it' ? 'Nessun file allegato.' : 'No file attached.',
+    fileLimit: currentLang === 'ar' ? 'الحد الأقصى لحجم الملف 50 ميغابايت.' : currentLang === 'fr' ? 'La taille maximale du fichier est de 50 Mo.' : currentLang === 'es' ? 'El tamaño máximo del archivo es de 50 MB.' : currentLang === 'it' ? 'La dimensione massima del file è di 50 MB.' : 'The maximum file size is 50 MB.',
   };
 
   const canEdit =
@@ -114,7 +114,7 @@ export const LearningResourcesView: React.FC<LearningResourcesViewProps> = ({
           (educator) =>
             Boolean(registeredAccount?.registeredSessionId) &&
             educator.registeredSessionId ===
-              registeredAccount.registeredSessionId
+              registeredAccount?.registeredSessionId
         );
 
         setEducatorId(

@@ -199,7 +199,7 @@ export const TutorMarketplace: React.FC<TutorMarketplaceProps> = ({
                 <div className="space-y-1 pt-1">
                   <span className="text-[11px] font-bold text-slate-400 flex items-center gap-1">
                     <Clock className="w-3 h-3" />
-                    {currentLang === 'ar' ? 'المواعيد القريبة المتاحة:' : 'Next Available Slots:'}
+                    {currentLang === 'ar' ? 'المواعيد القريبة المتاحة:' : currentLang === 'fr' ? 'Prochains créneaux disponibles :' : currentLang === 'es' ? 'Próximos horarios disponibles:' : currentLang === 'it' ? 'Prossimi orari disponibili:' : 'Next Available Slots:'}
                   </span>
                   <div className="flex flex-wrap gap-1.5">
                     {teacher.availableSlots.slice(0, 2).map(slot => (

@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import type { StreamVideoClient } from '@stream-io/video-client';
 import type { Language } from '../types';
 import { translations } from '../translations';
-import { getLiveStreamStatus } from '../services/cloudflareApi';
+import { getLiveStreamStatus, getDirectorLiveStream } from '../services/cloudflareApi';
 import type { LiveStreamStatus } from '../services/cloudflareApi';
 
 interface LiveVideoPlayerProps {
@@ -10,9 +10,10 @@ interface LiveVideoPlayerProps {
   stream: LiveStreamStatus;
   sessionToken: string;
   gradeId: string;
+  directorToken?: string;
 }
 
-export const LiveVideoPlayer: React.FC<LiveVideoPlayerProps> = ({ currentLang, stream, sessionToken, gradeId }) => {
+export const LiveVideoPlayer: React.FC<LiveVideoPlayerProps> = ({ currentLang, stream, sessionToken, gradeId, directorToken }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [playlistUrl, setPlaylistUrl] = useState('');
   const [error, setError] = useState('');
@@ -32,10 +33,10 @@ export const LiveVideoPlayer: React.FC<LiveVideoPlayerProps> = ({ currentLang, s
         client = new VideoClient({
           apiKey: stream.apiKey,
           token: stream.token,
-          tokenProvider: async () => (await getLiveStreamStatus(sessionToken, gradeId)).token,
+          tokenProvider: async () => (await (directorToken ? getDirectorLiveStream(directorToken, gradeId) : getLiveStreamStatus(sessionToken, gradeId))).token,
           user: { id: stream.userId, name: stream.userName },
         });
-        const call = client.call('livestream', stream.callId);
+        const call = client.call(directorToken ? 'default' : 'livestream', stream.callId);
         subscription = call.state.egress$.subscribe((egress) => {
           if (active) {
             setError('');
@@ -53,7 +54,7 @@ export const LiveVideoPlayer: React.FC<LiveVideoPlayerProps> = ({ currentLang, s
       subscription?.unsubscribe();
       if (client) void client.disconnectUser().catch(() => undefined);
     };
-  }, [retryKey, gradeId, sessionToken, stream.apiKey, stream.callId, stream.token, stream.userId, stream.userName, t.liveVideoError]);
+  }, [retryKey, gradeId, sessionToken, directorToken, stream.apiKey, stream.callId, stream.token, stream.userId, stream.userName, t.liveVideoError]);
 
   useEffect(() => {
     const video = videoRef.current;

@@ -278,7 +278,13 @@ export const VirtualClassroom: React.FC<VirtualClassroomProps> = ({
     if (!isSignedForThisEducator) {
       const errorMsg = currentLang === 'ar'
         ? `لا يمكنك الانضمام! أنت غير مسجل مع الأستاذ (${session.educatorName}).`
-        : `Access Denied: You are not registered with ${session.educatorName}.`;
+        : currentLang === 'fr'
+          ? `Accès refusé : vous n’êtes pas inscrit auprès de ${session.educatorName}.`
+          : currentLang === 'es'
+            ? `Acceso denegado: no estás registrado con ${session.educatorName}.`
+            : currentLang === 'it'
+              ? `Accesso negato: non sei registrato con ${session.educatorName}.`
+              : `Access Denied: You are not registered with ${session.educatorName}.`;
 
       setRoomErrorMessage(errorMsg);
       alert(errorMsg);
@@ -288,7 +294,13 @@ export const VirtualClassroom: React.FC<VirtualClassroomProps> = ({
     if (!session.isLive) {
       const notLiveMsg = currentLang === 'ar'
         ? `حصة الأستاذ (${session.educatorName}) لم تبدأ بعد. يرجى انتظار الأستاذ.`
-        : `Teacher ${session.educatorName}'s room is not live yet. Please wait for the educator.`;
+        : currentLang === 'fr'
+          ? `Le cours de ${session.educatorName} n’a pas encore commencé. Veuillez patienter.`
+          : currentLang === 'es'
+            ? `La clase de ${session.educatorName} aún no ha comenzado. Espera al educador.`
+            : currentLang === 'it'
+              ? `La lezione di ${session.educatorName} non è ancora iniziata. Attendi l’educatore.`
+              : `Teacher ${session.educatorName}'s room is not live yet. Please wait for the educator.`;
 
       setRoomErrorMessage(notLiveMsg);
       return;
@@ -546,13 +558,13 @@ export const VirtualClassroom: React.FC<VirtualClassroomProps> = ({
               <div className="flex items-center gap-2">
                 <span className="w-3 h-3 rounded-full bg-rose-500 animate-ping" />
                 <h2 className="text-xl sm:text-2xl font-black text-slate-900">
-                  {currentLang === 'ar' ? 'غرفة البث المباشر — الحصص المباشرة' : 'Live Broadcast Room — Active Sessions'}
+                  {currentLang === 'ar' ? 'غرفة البث المباشر — الحصص المباشرة' : currentLang === 'fr' ? 'Salle de diffusion — Cours actifs' : currentLang === 'es' ? 'Sala de emisión — Sesiones activas' : currentLang === 'it' ? 'Sala trasmissioni — Lezioni attive' : 'Live Broadcast Room — Active Sessions'}
                 </h2>
               </div>
               <p className="text-xs text-slate-500 font-semibold mt-1">
                 {isEducator
-                  ? (currentLang === 'ar' ? 'افتح الحصة المباشرة باسمك لبدء التدريس واستقبال طلابك' : 'Open your live video session in your name to start teaching')
-                  : (currentLang === 'ar' ? 'اختر حصة الأستاذ المسجل معه للانضمام للبث المباشر' : 'Select your registered educator to join the live session')}
+                  ? (currentLang === 'ar' ? 'افتح الحصة المباشرة باسمك لبدء التدريس واستقبال طلابك' : currentLang === 'fr' ? 'Ouvrez votre séance vidéo pour commencer le cours et accueillir vos élèves' : currentLang === 'es' ? 'Abre tu sesión de vídeo para empezar a enseñar y recibir a tus estudiantes' : currentLang === 'it' ? 'Apri la tua sessione video per iniziare a insegnare e accogliere gli studenti' : 'Open your live video session in your name to start teaching')
+                  : (currentLang === 'ar' ? 'اختر حصة الأستاذ المسجل معه للانضمام للبث المباشر' : currentLang === 'fr' ? 'Choisissez le cours de votre éducateur pour rejoindre la séance en direct' : currentLang === 'es' ? 'Selecciona la sesión de tu educador para unirte a la clase en directo' : currentLang === 'it' ? 'Seleziona la lezione del tuo educatore per partecipare alla diretta' : 'Select your registered educator to join the live session')}
               </p>
             </div>
 
@@ -561,7 +573,7 @@ export const VirtualClassroom: React.FC<VirtualClassroomProps> = ({
               onClick={onLeaveClassroom}
               className="bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs px-3.5 py-2 rounded-xl transition cursor-pointer"
             >
-              {currentLang === 'ar' ? '← العودة للرئيسية' : '← Back to Home'}
+              {currentLang === 'ar' ? '← العودة للرئيسية' : currentLang === 'fr' ? '← Retour à l’accueil' : currentLang === 'es' ? '← Volver al inicio' : currentLang === 'it' ? '← Torna alla home' : '← Back to Home'}
             </button>
           </div>
 
@@ -577,17 +589,23 @@ export const VirtualClassroom: React.FC<VirtualClassroomProps> = ({
               <span>
                 {currentLang === 'ar'
                   ? `أنت مسجل رسمياً مع الأستاذ: ${myAssignedEducator} (${myRegisteredGrade || 'صفك الأكاديمي'})`
-                  : `You are officially registered with: ${myAssignedEducator} (${myRegisteredGrade || 'Your Grade'})`}
+                  : currentLang === 'fr'
+                    ? `Vous êtes inscrit auprès de : ${myAssignedEducator} (${myRegisteredGrade || 'Votre classe'})`
+                    : currentLang === 'es'
+                      ? `Estás registrado con: ${myAssignedEducator} (${myRegisteredGrade || 'Tu curso'})`
+                      : currentLang === 'it'
+                        ? `Sei registrato con: ${myAssignedEducator} (${myRegisteredGrade || 'La tua classe'})`
+                        : `You are officially registered with: ${myAssignedEducator} (${myRegisteredGrade || 'Your Grade'})`}
               </span>
               <span className="bg-emerald-200 text-emerald-900 px-2.5 py-0.5 rounded-md text-[10px] uppercase font-black">
-                {currentLang === 'ar' ? 'صفك المعتمد' : 'Your Enrolled Class'}
+                {currentLang === 'ar' ? 'صفك المعتمد' : currentLang === 'fr' ? 'Votre classe inscrite' : currentLang === 'es' ? 'Tu curso asignado' : currentLang === 'it' ? 'La tua classe assegnata' : 'Your Enrolled Class'}
               </span>
             </div>
           )}
 
           {dynamicSessions.length === 0 ? (
             <div className="p-8 text-center bg-slate-50 border border-slate-200 rounded-2xl text-slate-500 text-xs font-semibold">
-              {currentLang === 'ar' ? 'لا توجد حصص مضافة حالياً من الإدارة.' : 'No sessions available currently.'}
+              {currentLang === 'ar' ? 'لا توجد حصص مضافة حالياً من الإدارة.' : currentLang === 'fr' ? 'Aucun cours n’est disponible pour le moment.' : currentLang === 'es' ? 'No hay sesiones disponibles actualmente.' : currentLang === 'it' ? 'Al momento non ci sono lezioni disponibili.' : 'No sessions available currently.'}
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -634,7 +652,7 @@ export const VirtualClassroom: React.FC<VirtualClassroomProps> = ({
 
                       {isMyClass && !isEducator && (
                         <span className="inline-block text-[10px] font-bold text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded">
-                          ✓ {currentLang === 'ar' ? 'صفك الدراسي المسجل معه' : 'Your Registered Classroom'}
+                          ✓ {currentLang === 'ar' ? 'صفك الدراسي المسجل معه' : currentLang === 'fr' ? 'Votre classe attribuée' : currentLang === 'es' ? 'Tu aula asignada' : currentLang === 'it' ? 'La tua aula assegnata' : 'Your Registered Classroom'}
                         </span>
                       )}
                     </div>
@@ -648,11 +666,11 @@ export const VirtualClassroom: React.FC<VirtualClassroomProps> = ({
                             className="w-full py-2.5 rounded-xl font-black text-xs transition cursor-pointer flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm"
                           >
                             <Video className="w-4 h-4" />
-                            <span>{currentLang === 'ar' ? 'افتح الحصة المباشرة (Open Live Session)' : 'Open Live Video Session'}</span>
+                            <span>{currentLang === 'ar' ? 'افتح الحصة المباشرة' : currentLang === 'fr' ? 'Ouvrir la séance en direct' : currentLang === 'es' ? 'Abrir sesión en directo' : currentLang === 'it' ? 'Apri lezione dal vivo' : 'Open Live Video Session'}</span>
                           </button>
                         ) : (
                           <div className="w-full py-2 text-center text-xs font-semibold text-slate-400 bg-slate-100 rounded-xl">
-                            {currentLang === 'ar' ? 'صف أستاذ آخر' : "Another Educator's Room"}
+                            {currentLang === 'ar' ? 'صف أستاذ آخر' : currentLang === 'fr' ? 'Classe d’un autre éducateur' : currentLang === 'es' ? 'Aula de otro educador' : currentLang === 'it' ? 'Aula di un altro educatore' : "Another Educator's Room"}
                           </div>
                         )
                       ) : (
@@ -663,7 +681,7 @@ export const VirtualClassroom: React.FC<VirtualClassroomProps> = ({
                             className="w-full py-2.5 rounded-xl font-black text-xs transition cursor-pointer flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm"
                           >
                             <Video className="w-4 h-4" />
-                            <span>{currentLang === 'ar' ? 'انضمام لحصة أستاذك (Join)' : 'Join Live Session'}</span>
+                            <span>{currentLang === 'ar' ? 'انضمام لحصة أستاذك' : currentLang === 'fr' ? 'Rejoindre le cours en direct' : currentLang === 'es' ? 'Unirse a la sesión en directo' : currentLang === 'it' ? 'Partecipa alla lezione dal vivo' : 'Join Live Session'}</span>
                           </button>
                         ) : (
                           <button
@@ -673,7 +691,7 @@ export const VirtualClassroom: React.FC<VirtualClassroomProps> = ({
                             title="You did not sign for this educator"
                           >
                             <Lock className="w-3.5 h-3.5 text-slate-500" />
-                            <span>{currentLang === 'ar' ? 'غير مسجل مع هذا الأستاذ' : 'Cannot Join (Not Registered)'}</span>
+                            <span>{currentLang === 'ar' ? 'غير مسجل مع هذا الأستاذ' : currentLang === 'fr' ? 'Accès impossible (non inscrit)' : currentLang === 'es' ? 'No puedes entrar (no estás registrado)' : currentLang === 'it' ? 'Accesso non consentito (non registrato)' : 'Cannot Join (Not Registered)'}</span>
                           </button>
                         )
                       )}
@@ -696,7 +714,7 @@ export const VirtualClassroom: React.FC<VirtualClassroomProps> = ({
               }}
               className="bg-slate-200 hover:bg-slate-300 text-slate-800 font-bold text-xs px-3.5 py-1.5 rounded-xl transition cursor-pointer mb-2"
             >
-              {currentLang === 'ar' ? '← العودة لقائمة الحصص' : '← Back to Sessions List'}
+              {currentLang === 'ar' ? '← العودة لقائمة الحصص' : currentLang === 'fr' ? '← Retour à la liste des cours' : currentLang === 'es' ? '← Volver a la lista de sesiones' : currentLang === 'it' ? '← Torna all’elenco delle lezioni' : '← Back to Sessions List'}
             </button>
           </div>
 
@@ -761,7 +779,7 @@ export const VirtualClassroom: React.FC<VirtualClassroomProps> = ({
                   className="bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-xs px-3.5 py-2.5 rounded-2xl transition shadow-lg flex items-center gap-2 cursor-pointer border border-amber-300 animate-pulse"
                 >
                   <Camera className="w-4 h-4 text-slate-950" />
-                  <span>{currentLang === 'ar' ? 'تصوير تمرين بالكاميرا' : 'Submit via Cam'}</span>
+                  <span>{currentLang === 'ar' ? 'تصوير تمرين بالكاميرا' : currentLang === 'fr' ? 'Envoyer une photo' : currentLang === 'es' ? 'Enviar con cámara' : currentLang === 'it' ? 'Invia tramite fotocamera' : 'Submit via Cam'}</span>
                 </button>
 
                                 {!isEducator && (
@@ -831,7 +849,7 @@ export const VirtualClassroom: React.FC<VirtualClassroomProps> = ({
                   <Lock className="w-4 h-4 text-amber-300 shrink-0" />
                   <div className="text-xs">
                     <span className="font-black text-white">
-                      {currentLang === 'ar' ? 'جلسة فردية منفصلة 1-on-1 نشطة الآن:' : 'Private 1-on-1 Breakout Room Active:'}
+                      {currentLang === 'ar' ? 'جلسة فردية منفصلة 1-on-1 نشطة الآن:' : currentLang === 'fr' ? 'Salle privée individuelle active :' : currentLang === 'es' ? 'Sala privada individual activa:' : currentLang === 'it' ? 'Aula privata individuale attiva:' : 'Private 1-on-1 Breakout Room Active:'}
                     </span>
                     <span className="text-amber-200 font-semibold ml-1">
                       الأستاذ في خلوة متابعة خاصة مع الطالب [{breakoutStudent.name}].
@@ -844,7 +862,7 @@ export const VirtualClassroom: React.FC<VirtualClassroomProps> = ({
                   className="bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-xs px-3.5 py-1.5 rounded-xl transition flex items-center gap-1.5 cursor-pointer shadow-xs"
                 >
                   <Unlock className="w-3.5 h-3.5" />
-                  <span>{currentLang === 'ar' ? 'إنهاء الخلوة والعودة للعامة' : 'End Breakout (Return)'}</span>
+                  <span>{currentLang === 'ar' ? 'إنهاء الخلوة والعودة للعامة' : currentLang === 'fr' ? 'Terminer la séance privée' : currentLang === 'es' ? 'Finalizar sala privada' : currentLang === 'it' ? 'Termina sessione privata' : 'End Breakout (Return)'}</span>
                 </button>
               </div>
             )}
@@ -854,7 +872,7 @@ export const VirtualClassroom: React.FC<VirtualClassroomProps> = ({
             <div className="flex items-center gap-2">
               <Users className="w-4 h-4 text-indigo-600" />
               <span className="text-xs font-black text-slate-800">
-                {currentLang === 'ar' ? 'المشاركون في الحصة المباشرة (أونلاين):' : 'Online Participants:'}
+                {currentLang === 'ar' ? 'المشاركون في الحصة المباشرة (أونلاين):' : currentLang === 'fr' ? 'Participants en ligne :' : currentLang === 'es' ? 'Participantes en línea:' : currentLang === 'it' ? 'Partecipanti online:' : 'Online Participants:'}
               </span>
               <span className="text-[11px] font-bold bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded-full border border-emerald-200">
                 {onlineStudents.length} Online
@@ -985,7 +1003,7 @@ export const VirtualClassroom: React.FC<VirtualClassroomProps> = ({
                     <div className="flex items-center gap-2">
                       <Camera className="w-4 h-4 text-amber-500" />
                       <h5 className="text-xs font-black text-slate-900">
-                        {currentLang === 'ar' ? 'تمارين مستلمة بالكاميرا + حل بالذكاء الاصطناعي' : 'Exercise Submissions (AI Solved)'}
+                        {currentLang === 'ar' ? 'تمارين مستلمة بالكاميرا + حل بالذكاء الاصطناعي' : currentLang === 'fr' ? 'Exercices envoyés et corrigés par IA' : currentLang === 'es' ? 'Ejercicios enviados y resueltos con IA' : currentLang === 'it' ? 'Esercizi inviati e risolti con IA' : 'Exercise Submissions (AI Solved)'}
                       </h5>
                     </div>
                     <span className="text-[10px] font-bold bg-amber-50 text-amber-800 px-2 py-0.5 rounded">
@@ -1197,7 +1215,7 @@ export const VirtualClassroom: React.FC<VirtualClassroomProps> = ({
               <div className="flex items-center gap-2">
                 <Camera className="w-5 h-5 text-indigo-600" />
                 <h4 className="font-black text-slate-900 text-base">
-                  {currentLang === 'ar' ? 'تصوير التمرين وإرساله للأستاذ' : 'Capture & Submit Exercise'}
+                  {currentLang === 'ar' ? 'تصوير التمرين وإرساله للأستاذ' : currentLang === 'fr' ? 'Photographier et envoyer l’exercice' : currentLang === 'es' ? 'Fotografiar y enviar el ejercicio' : currentLang === 'it' ? 'Fotografa e invia l’esercizio' : 'Capture & Submit Exercise'}
                 </h4>
               </div>
               <button
@@ -1226,7 +1244,7 @@ export const VirtualClassroom: React.FC<VirtualClassroomProps> = ({
                 <div className="text-center p-4 space-y-2 text-slate-300">
                   <Camera className="w-8 h-8 mx-auto text-slate-400" />
                   <p className="text-xs font-semibold">
-                    {currentLang === 'ar' ? 'وجّه الكاميرا نحو دفتر التمارين' : 'Point camera at your exercise'}
+                    {currentLang === 'ar' ? 'وجّه الكاميرا نحو دفتر التمارين' : currentLang === 'fr' ? 'Dirigez la caméra vers votre exercice' : currentLang === 'es' ? 'Apunta la cámara a tu ejercicio' : currentLang === 'it' ? 'Punta la fotocamera sull’esercizio' : 'Point camera at your exercise'}
                   </p>
                 </div>
               )}
@@ -1245,7 +1263,7 @@ export const VirtualClassroom: React.FC<VirtualClassroomProps> = ({
 
               <label className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs py-2.5 rounded-xl transition cursor-pointer text-center flex items-center justify-center gap-1.5 border border-slate-200">
                 <Upload className="w-3.5 h-3.5" />
-                <span>{currentLang === 'ar' ? 'رفع صورة من الجهاز' : 'Upload Image'}</span>
+                <span>{currentLang === 'ar' ? 'رفع صورة من الجهاز' : currentLang === 'fr' ? 'Importer une image' : currentLang === 'es' ? 'Subir imagen' : currentLang === 'it' ? 'Carica immagine' : 'Upload Image'}</span>
                 <input
                   type="file"
                   accept="image/*"
@@ -1267,12 +1285,12 @@ export const VirtualClassroom: React.FC<VirtualClassroomProps> = ({
 
             <div className="space-y-1">
               <label className="text-xs font-bold text-slate-700 block">
-                {currentLang === 'ar' ? 'ملاحظة حول المسألة (اختياري):' : 'Question / Notes (optional):'}
+                {currentLang === 'ar' ? 'ملاحظة حول المسألة (اختياري):' : currentLang === 'fr' ? 'Question / remarques (facultatif) :' : currentLang === 'es' ? 'Pregunta / notas (opcional):' : currentLang === 'it' ? 'Domanda / note (facoltativo):' : 'Question / Notes (optional):'}
               </label>
               <textarea
                 value={exerciseNotesInput}
                 onChange={(e) => setExerciseNotesInput(e.target.value)}
-                placeholder={currentLang === 'ar' ? 'مثال: أين نقطة الضعف في إثبات المثلث أو التعويض؟' : 'E.g. How to prove equilateral triangle?'}
+                placeholder={currentLang === 'ar' ? 'مثال: أين نقطة الضعف في إثبات المثلث أو التعويض؟' : currentLang === 'fr' ? 'Ex. : comment démontrer qu’un triangle est équilatéral ?' : currentLang === 'es' ? 'Ej.: ¿cómo demostrar que un triángulo es equilátero?' : currentLang === 'it' ? 'Es.: come dimostrare che un triangolo è equilatero?' : 'E.g. How to prove an equilateral triangle?'}
                 rows={2}
                 className="w-full text-xs p-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-indigo-600"
               />
@@ -1285,9 +1303,9 @@ export const VirtualClassroom: React.FC<VirtualClassroomProps> = ({
             >
               <Sparkles className="w-4 h-4 text-amber-300" />
               <span>
-                {isSubmittingExercise 
-                  ? 'جارٍ التحليل بالذكاء الاصطناعي والإرسال للأستاذ...' 
-                  : (currentLang === 'ar' ? 'إرسال للأستاذ وحل بالذكاء الاصطناعي' : 'Submit & Solve with AI')}
+                {isSubmittingExercise
+                  ? currentLang === 'ar' ? 'جارٍ التحليل بالذكاء الاصطناعي والإرسال للأستاذ...' : currentLang === 'fr' ? 'Analyse IA et envoi à l’éducateur...' : currentLang === 'es' ? 'Analizando con IA y enviando al educador...' : currentLang === 'it' ? 'Analisi IA e invio all’educatore...' : 'Analyzing with AI and sending to educator...'
+                  : currentLang === 'ar' ? 'إرسال للأستاذ وحل بالذكاء الاصطناعي' : currentLang === 'fr' ? 'Envoyer et résoudre avec l’IA' : currentLang === 'es' ? 'Enviar y resolver con IA' : currentLang === 'it' ? 'Invia e risolvi con IA' : 'Submit & Solve with AI'}
               </span>
             </button>
           </div>

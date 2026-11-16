@@ -11,16 +11,22 @@ export const OFFICIAL_EXAMS: OfficialExam[] = [
     durationMinutes: 240,
     title: {
       en: "Lebanese Official Baccalaureate - General Sciences (GS) - Mathematics",
+        it: "Baccalaureato ufficiale libanese - Scienze generali (SG) - Matematica",
+        es: "Bachillerato oficial libanés - Ciencias generales (SG) - Matemáticas",
       fr: "Baccalauréat Libanais Officiel - Sciences Générales (SG) - Mathématiques",
       ar: "شهادة الثانوية العامة اللبنانية - فرع العلوم العامة (SG) - مادة الرياضيات"
     },
     overview: {
       en: "Session 1 (June 2026) - Comprehensive official exam covering Complex Numbers, Space Geometry with planes and spheres, Differential Calculus, and Probability Distributions.",
+        it: "Prima sessione (giugno 2026) - Esame ufficiale completo su numeri complessi, geometria dello spazio con piani e sfere, calcolo differenziale e distribuzioni di probabilità.",
+        es: "Primera convocatoria (junio de 2026): examen oficial completo sobre números complejos, geometría espacial con planos y esferas, cálculo diferencial y distribuciones de probabilidad.",
       fr: "1ère Session (Juin 2026) - Épreuve officielle complète comprenant Nombres Complexes, Géométrie dans l'Espace, Étude de Fonction et Probabilités.",
       ar: "الدورة الأولى (حزيران ٢٠٢٦) - مسابقة رسمية كاملة تشمل الأعداد العقدية، الهندسة الفضائية، دراسة الدوال والتفاضل والتكامل، والاحتمالات."
     },
     officialInstructions: {
       en: "Calculators are permitted as per MEHE regulations. The use of non-programmable scientific calculators without graphic screens is allowed. All work must be clearly justified.",
+        it: "Le calcolatrici sono consentite secondo le norme MEHE. Sono ammesse calcolatrici scientifiche non programmabili e senza schermo grafico. Tutti i passaggi devono essere giustificati chiaramente.",
+        es: "Se permiten calculadoras según las normas del MEHE. Se admiten calculadoras científicas no programables y sin pantalla gráfica. Todos los procedimientos deben justificarse claramente.",
       fr: "L'usage de calculatrices scientifiques non programmables est autorisé conformément aux directives du MEHE. Justifier soigneusement tous les résultats.",
       ar: "يسمح باستعمال الآلة الحاسبة العلمية غير القابلة للبرمجة ودون رسم بياني. يرجى تبرير جميع الخطوات الحسابية بدقة."
     },
@@ -150,16 +156,22 @@ export const OFFICIAL_EXAMS: OfficialExam[] = [
     durationMinutes: 120,
     title: {
       en: "Lebanese Official Brevet (Grade 9 / EB9) - Mathematics",
+        it: "Brevet ufficiale libanese (classe 9 / EB9) - Matematica",
+        es: "Brevet oficial libanés (curso 9 / EB9) - Matemáticas",
       fr: "Brevet Officiel Libanais (EB9 / 3ème) - Mathématiques",
       ar: "الشهادة المتوسطة اللبنانية (البريفيه - الصف التاسع) - مادة الرياضيات"
     },
     overview: {
       en: "Session 1 (June 2025) - Official standard Brevet exam containing Numerical Calculations, System of Linear Equations with applied economic word problems, and Circle Geometry.",
+        it: "Prima sessione (giugno 2025) - Esame ufficiale Brevet con calcoli numerici, sistemi di equazioni lineari applicati a problemi economici e geometria del cerchio.",
+        es: "Primera convocatoria (junio de 2025): examen oficial Brevet con cálculos numéricos, sistemas de ecuaciones lineales aplicados a problemas económicos y geometría del círculo.",
       fr: "1ère Session (Juin 2025) - Épreuve officielle de Brevet : calculs avec radicaux, système d'équations avec problème concret et géométrie du cercle.",
       ar: "الدورة الأولى (حزيران ٢٠٢٥) - مسابقة البريفيه الرسمية: الحساب العددي والجذور، جملة معادلتين خطيتين مع مسألة حياتية، وهندسة الدائرة والمماسات."
     },
     officialInstructions: {
       en: "All 4 exercises are mandatory. Answers must be detailed with geometric theorems explicitly quoted.",
+        it: "Tutti e quattro gli esercizi sono obbligatori. Le risposte devono essere dettagliate e citare esplicitamente i teoremi geometrici.",
+        es: "Los cuatro ejercicios son obligatorios. Las respuestas deben ser detalladas y citar explícitamente los teoremas geométricos.",
       fr: "Les 4 exercices sont obligatoires. Les justifications géométriques doivent mentionner explicitement les théorèmes utilisés.",
       ar: "الإجابة عن جميع التمارين الأربعة إجبارية. يجب ذكر النظريات الهندسية المعتمدة بالاسم."
     },
@@ -265,16 +277,22 @@ export const OFFICIAL_EXAMS: OfficialExam[] = [
     durationMinutes: 180,
     title: {
       en: "Lebanese Official Baccalaureate - Life Sciences (LS/SV) - Biology",
+        it: "Baccalaureato ufficiale libanese - Scienze della vita (LS/SV) - Biologia",
+        es: "Bachillerato oficial libanés - Ciencias de la vida (LS/SV) - Biología",
       fr: "Baccalauréat Libanais Officiel - Sciences de la Vie (SV) - Biologie",
       ar: "شهادة الثانوية العامة اللبنانية - فرع علوم الحياة (SV) - مادة علوم الحياة (البيولوجيا)"
     },
     overview: {
       en: "Session 1 (June 2024) - Neurophysiology of the reflex arc and neuromuscular transmission, plus Mendelian Genetics and genetic counseling for rare inherited conditions in Lebanon.",
+        it: "Prima sessione (giugno 2024) - Neurofisiologia dell'arco riflesso e trasmissione neuromuscolare, genetica mendeliana e consulenza genetica per patologie ereditarie rare in Libano.",
+        es: "Primera convocatoria (junio de 2024): neurofisiología del arco reflejo y transmisión neuromuscular, genética mendeliana y asesoramiento genético para enfermedades hereditarias raras en Líbano.",
       fr: "1ère Session (Juin 2024) - Neurophysiologie de l'arc réflexe et transmission neuromusculaire, génétique mendélienne et conseil génétique.",
       ar: "الدورة الأولى (حزيران ٢٠٢٤) - الفيزيولوجيا العصبية والسيالة العصبية والنقل المشبكي، والوراثة المندلية وشجرة النسب الوراثية للأمراض الشائعة في لبنان."
     },
     officialInstructions: {
       en: "Use standard scientific reasoning verbs (Compare, Analyze, Deduce, Explain). Answers lacking proper data extraction will receive partial marks under MEHE guidelines.",
+        it: "Usa i verbi del ragionamento scientifico (confrontare, analizzare, dedurre, spiegare). Le risposte senza una corretta estrazione dei dati riceveranno un punteggio parziale secondo le linee guida MEHE.",
+        es: "Utiliza los verbos del razonamiento científico (comparar, analizar, deducir, explicar). Las respuestas sin una extracción adecuada de datos recibirán puntuación parcial según las directrices del MEHE.",
       fr: "Respecter les verbes d'action méthodologiques officiels (Analyser, Déduire, Interpréter). Extraire précisément les valeurs numériques des graphes.",
       ar: "يرجى الالتزام بالأفعال الإجرائية الرسمية (قارن، حلل، استنتج، فسر) واستخراج القيم الدقيقة من الرسوم البيانية."
     },
@@ -335,16 +353,22 @@ export const OFFICIAL_EXAMS: OfficialExam[] = [
     durationMinutes: 180,
     title: {
       en: "Lebanese Official Baccalaureate - Socio-Economics (SE/ES) - Economics",
+        it: "Baccalaureato ufficiale libanese - Socioeconomia (SE/ES) - Economia",
+        es: "Bachillerato oficial libanés - Socioeconomía (SE/ES) - Economía",
       fr: "Baccalauréat Libanais Officiel - Sociologie & Économie (SE) - Économie",
       ar: "شهادة الثانوية العامة اللبنانية - فرع الاجتماع والاقتصاد (SE) - مادة الاقتصاد"
     },
     overview: {
       en: "Session 1 (June 2023) - Macroeconomic stabilization policies in developing countries, inflation, exchange rate volatility, balance of payments, and economic growth mechanisms.",
+        it: "Prima sessione (giugno 2023) - Politiche di stabilizzazione macroeconomica nei paesi in via di sviluppo, inflazione, volatilità dei tassi di cambio, bilancia dei pagamenti e crescita economica.",
+        es: "Primera convocatoria (junio de 2023): políticas de estabilización macroeconómica en países en desarrollo, inflación, volatilidad del tipo de cambio, balanza de pagos y crecimiento económico.",
       fr: "1ère Session (Juin 2023) - Politiques macroéconomiques de relance et de stabilisation, inflation, taux de change, balance des paiements et croissance économique.",
       ar: "الدورة الأولى (حزيران ٢٠٢٣) - السياسات الاقتصادية والمالية، التضخم المالي، تقلبات أسعار الصرف، ميزان المدفوعات، وديناميكيات النمو الاقتصادي في لبنان."
     },
     officialInstructions: {
       en: "Answer all parts clearly. Syntheses must include proper introduction (hook, definition, problem), 2 balanced parts, and conclusion with an open perspective.",
+        it: "Rispondi chiaramente a tutte le parti. I saggi di sintesi devono includere un'introduzione adeguata, due parti equilibrate e una conclusione con una prospettiva aperta.",
+        es: "Responde claramente a todas las partes. Las síntesis deben incluir una introducción adecuada, dos partes equilibradas y una conclusión con una perspectiva abierta.",
       fr: "Respecter la structure rigoureuse de la synthèse économique : introduction (accroche, définition, problématique, plan), développement en deux parties équilibrées, conclusion avec ouverture.",
       ar: "الالتزام بهيكلية الموضوع الاقتصادي: مقدمة متكاملة (تمهيد، تعريف، إشكالية، إعلان خطة)، عرض من قسمين متوازنين، وخاتمة مع فتح آفاق."
     },
@@ -403,16 +427,22 @@ export const OFFICIAL_EXAMS: OfficialExam[] = [
     durationMinutes: 240,
     title: {
       en: "Lebanese Official Baccalaureate - General Sciences (GS) - Physics",
+        it: "Baccalaureato ufficiale libanese - Scienze generali (SG) - Fisica",
+        es: "Bachillerato oficial libanés - Ciencias generales (SG) - Física",
       fr: "Baccalauréat Libanais Officiel - Sciences Générales (SG) - Physique",
       ar: "شهادة الثانوية العامة اللبنانية - فرع العلوم العامة (SG) - مادة الفيزياء"
     },
     overview: {
       en: "Session 1 (June 2022) - Mechanics of damped and forced harmonic oscillators, Electromagnetic Induction and RLC resonant circuits.",
+        it: "Prima sessione (giugno 2022) - Meccanica degli oscillatori armonici smorzati e forzati, induzione elettromagnetica e circuiti risonanti RLC.",
+        es: "Primera convocatoria (junio de 2022): mecánica de osciladores armónicos amortiguados y forzados, inducción electromagnética y circuitos resonantes RLC.",
       fr: "1ère Session (Juin 2022) - Mécanique des oscillateurs harmoniques et amortis, Induction électromagnétique et circuits RLC résonants.",
       ar: "الدورة الأولى (حزيران ٢٠٢٢) - الميكانيك والتذبذبات التوافقية المخمدة، التحريض الكهرومغناطيسي ودارات RLC في حالة الطنين."
     },
     officialInstructions: {
       en: "Answers must follow official MEHE vector notations and SI units. Scientific calculators allowed.",
+        it: "Le risposte devono seguire le notazioni vettoriali ufficiali MEHE e le unità SI. Sono consentite calcolatrici scientifiche.",
+        es: "Las respuestas deben seguir la notación vectorial oficial del MEHE y las unidades del SI. Se permiten calculadoras científicas.",
       fr: "Respecter scrupuleusement les notations vectorielles et les unités du Système International (SI).",
       ar: "يرجى الالتزام بالترميز الشعاعي الرسمي ووحدات النظام الدولي للقياس (SI)."
     },
@@ -534,3 +564,26 @@ export const ARCHIVE_YEARS: ArchiveYearSummary[] = Array.from({ length: 27 }, (_
     historicalContext: context
   };
 });
+
+
+/**
+ * Official exam source material may be published in its original examination
+ * language. Keep it readable in every UI locale when a translated source is
+ * not available, while all surrounding navigation and instructions use the
+ * selected application language.
+ */
+function fillMissingExamLocales(value: unknown): void {
+  if (Array.isArray(value)) {
+    value.forEach(fillMissingExamLocales);
+    return;
+  }
+  if (!value || typeof value !== 'object') return;
+  const record = value as Record<string, unknown>;
+  if (typeof record.en === 'string') {
+    if (typeof record.es !== 'string') record.es = record.en;
+    if (typeof record.it !== 'string') record.it = record.en;
+  }
+  Object.values(record).forEach(fillMissingExamLocales);
+}
+
+OFFICIAL_EXAMS.forEach(fillMissingExamLocales);

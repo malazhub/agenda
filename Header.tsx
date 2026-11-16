@@ -13,6 +13,7 @@ interface HeaderProps {
   onOpenRegister: () => void;
   signedInName?: string;
   schoolName?: string;
+  schoolId?: string;
   onOpenArchiveSessions?: () => void;
   onSignOut?: () => void;
 }
@@ -24,6 +25,7 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenRegister,
   signedInName,
   schoolName,
+  schoolId = 'default-agenda-school',
   onSignOut,
 }) => {
   const t = translations[currentLang];
@@ -49,10 +51,10 @@ export const Header: React.FC<HeaderProps> = ({
                   type="button"
                   onClick={onSignOut}
                   className="ml-1 flex items-center gap-1 px-2.5 py-1 rounded-lg bg-rose-50 text-rose-600 hover:bg-rose-100 hover:text-rose-700 font-bold text-xs transition cursor-pointer"
-                  title="Sign out and return to guest mode"
+                  title={currentLang === 'ar' ? 'تسجيل الخروج والعودة كضيف' : currentLang === 'fr' ? 'Se déconnecter et revenir en mode invité' : currentLang === 'es' ? 'Cerrar sesión y volver como invitado' : currentLang === 'it' ? 'Esci e torna come ospite' : 'Sign out and return to guest mode'}
                 >
                   <LogOut className="w-3.5 h-3.5" />
-                  <span>{currentLang === 'ar' ? 'خروج' : currentLang === 'fr' ? 'Quitter' : 'Sign Out'}</span>
+                  <span>{currentLang === 'ar' ? 'خروج' : currentLang === 'fr' ? 'Déconnexion' : currentLang === 'es' ? 'Cerrar sesión' : currentLang === 'it' ? 'Esci' : 'Sign Out'}</span>
                 </button>
               </div>
             ) : (
@@ -91,6 +93,18 @@ export const Header: React.FC<HeaderProps> = ({
                     <span className="text-amber-500">et cours </span>
                     <span className="text-blue-600">particuliers</span>
                   </>
+                ) : currentLang === 'es' ? (
+                  <>
+                    <span className="text-rose-600">Educación </span>
+                    <span className="text-amber-500">y clases </span>
+                    <span className="text-blue-600">particulares</span>
+                  </>
+                ) : currentLang === 'it' ? (
+                  <>
+                    <span className="text-rose-600">Istruzione </span>
+                    <span className="text-amber-500">e lezioni </span>
+                    <span className="text-blue-600">private</span>
+                  </>
                 ) : (
                   <>
                     <span className="text-rose-600">Education </span>
@@ -108,10 +122,10 @@ export const Header: React.FC<HeaderProps> = ({
             <button
               type="button"
               onClick={async () => {
-                const shareUrl = 'https://malazhub.github.io/agenda/';
+                const shareUrl = `https://malazhub.github.io/agenda/?schoolId=${encodeURIComponent(schoolId)}`;
                 const shareData = {
                   title: schoolName || 'Agenda',
-                  text: currentLang === 'ar' ? `منصة ${schoolName || 'Agenda'} للتعليم والدروس الخصوصية` : `${schoolName || 'Agenda'} Educational Platform`,
+                  text: currentLang === 'ar' ? `منصة ${schoolName || 'Agenda'} للتعليم والدروس الخصوصية` : currentLang === 'fr' ? `Plateforme éducative ${schoolName || 'Agenda'}` : currentLang === 'es' ? `Plataforma educativa ${schoolName || 'Agenda'}` : currentLang === 'it' ? `Piattaforma educativa ${schoolName || 'Agenda'}` : `${schoolName || 'Agenda'} Educational Platform`,
                   url: shareUrl,
                 };
                 if (navigator.share) {
@@ -122,18 +136,18 @@ export const Header: React.FC<HeaderProps> = ({
                   await navigator.clipboard.writeText(shareUrl);
                   alert(
                     currentLang === 'ar'
-                      ? 'تم نسخ رابط المنصة: https://malazhub.github.io/agenda/'
+                      ? `تم نسخ رابط المدرسة: ${shareUrl}`
                       : currentLang === 'fr'
-                      ? 'Lien copié: https://malazhub.github.io/agenda/'
-                      : 'Link copied: https://malazhub.github.io/agenda/'
+                      ? 'Lien de l’établissement copié.'
+                      : currentLang === 'es' ? 'Enlace de la escuela copiado.' : currentLang === 'it' ? 'Link della scuola copiato.' : 'School link copied.'
                   );
                 }
               }}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-black bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-200 transition cursor-pointer shadow-2xs mr-1"
-              title="Share Agenda"
+              title={currentLang === 'ar' ? 'مشاركة رابط المدرسة' : currentLang === 'fr' ? 'Partager le lien de l’établissement' : currentLang === 'es' ? 'Compartir enlace de la escuela' : currentLang === 'it' ? 'Condividi il link della scuola' : 'Share school link'}
             >
               <Share2 className="w-3.5 h-3.5" />
-              <span>{currentLang === 'ar' ? 'مشاركة' : currentLang === 'fr' ? 'Partager' : 'Share'}</span>
+              <span>{currentLang === 'ar' ? 'مشاركة' : currentLang === 'fr' ? 'Partager' : currentLang === 'es' ? 'Compartir' : currentLang === 'it' ? 'Condividi' : 'Share'}</span>
             </button>
             {/* Arabic: Vibrant Emerald Green */}
             <button
@@ -159,6 +173,16 @@ export const Header: React.FC<HeaderProps> = ({
               }`}
             >
               Français
+            </button>
+
+            {/* Italian */}
+            <button type="button" onClick={() => onLanguageChange('it')} className={`px-3 py-1.5 rounded-xl text-xs font-black transition cursor-pointer border ${currentLang === 'it' ? 'bg-green-700 text-white border-green-700 shadow-sm scale-105' : 'bg-green-50 text-green-800 border-green-200 hover:bg-green-100'}`}>
+              Italiano
+            </button>
+
+            {/* Spanish */}
+            <button type="button" onClick={() => onLanguageChange('es')} className={`px-3 py-1.5 rounded-xl text-xs font-black transition cursor-pointer border ${currentLang === 'es' ? 'bg-red-600 text-white border-red-600 shadow-sm scale-105' : 'bg-red-50 text-red-800 border-red-200 hover:bg-red-100'}`}>
+              Español
             </button>
 
             {/* English: Vibrant Amber / Orange */}

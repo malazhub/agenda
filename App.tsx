@@ -59,7 +59,7 @@ export default function App() {
   const [registeredAccount, setRegisteredAccount] = useState<CloudflareAccount | null>(null);
   const [sessionToken, setSessionToken] = useState('');
   const [schools, setSchools] = useState<SchoolRecord[]>([]);
-  const [activeSchoolId, setActiveSchoolId] = useState('');
+  const [activeSchoolId, setActiveSchoolId] = useState(() => new URLSearchParams(window.location.search).get('schoolId') || 'default-agenda-school');
   const activeSchoolName = schools.find((school) => school.id === activeSchoolId)?.name || '';
   const signOutCleanupRef = useRef<(() => Promise<void>) | null>(null);
 
@@ -92,20 +92,20 @@ const registerSignOutCleanup = useCallback(
 
   useEffect(() => {
     let active = true;
-    void getSchools().then(({ schools: records, activeSchoolId: serverActiveSchoolId }) => {
+    void getSchools(activeSchoolId).then(({ schools: records }) => {
       if (!active) return;
       setSchools(records);
-      setActiveSchoolId(serverActiveSchoolId || records[0]?.id || '');
+      setActiveSchoolId(records[0]?.id || activeSchoolId);
     }).catch((error) => console.error('Unable to load schools.', error));
     return () => { active = false; };
-  }, []);
+  }, [activeSchoolId]);
 
   // Keep the public school title in sync when a Director changes it from another device.
   useEffect(() => {
     const refreshSchoolBrand = () => {
-      void getSchools().then(({ schools: records, activeSchoolId: serverActiveSchoolId }) => {
+      void getSchools(activeSchoolId).then(({ schools: records }) => {
         setSchools(records);
-        setActiveSchoolId(serverActiveSchoolId || records[0]?.id || '');
+        if (records[0]?.id) setActiveSchoolId(records[0].id);
       }).catch((error) => console.error('Unable to refresh school branding.', error));
     };
     const intervalId = window.setInterval(refreshSchoolBrand, 30_000);
@@ -114,7 +114,7 @@ const registerSignOutCleanup = useCallback(
       window.clearInterval(intervalId);
       window.removeEventListener('focus', refreshSchoolBrand);
     };
-  }, []);
+  }, [activeSchoolId]);
 
   useEffect(() => {
     const storedToken = sessionStorage.getItem('agenda-session-token');
@@ -187,7 +187,13 @@ const registerSignOutCleanup = useCallback(
     showToast(
       currentLang === 'ar'
         ? `تم تأكيد حجز الحصة بنجاح مع الأستاذ ${newBooking.teacherName}`
-        : `Session booked successfully with ${newBooking.teacherName}`
+        : currentLang === 'fr'
+          ? `Cours réservé avec succès auprès de ${newBooking.teacherName}`
+          : currentLang === 'es'
+            ? `Sesión reservada correctamente con ${newBooking.teacherName}`
+            : currentLang === 'it'
+              ? `Lezione prenotata correttamente con ${newBooking.teacherName}`
+              : `Session booked successfully with ${newBooking.teacherName}`
     );
 
     // Launch classroom for booked session
@@ -238,7 +244,13 @@ const registerSignOutCleanup = useCallback(
     showToast(
       currentLang === 'ar'
         ? 'تم تسجيل الخروج والعودة للشاشة الرئيسية'
-        : 'Signed out successfully'
+        : currentLang === 'fr'
+          ? 'Déconnexion réussie.'
+          : currentLang === 'es'
+            ? 'Sesión cerrada correctamente.'
+            : currentLang === 'it'
+              ? 'Disconnessione completata.'
+              : 'Signed out successfully'
     );
   };
 
@@ -263,6 +275,7 @@ const registerSignOutCleanup = useCallback(
         onOpenRegister={() => setIsRegisterOpen(true)}
         signedInName={registeredAccount?.fullName}
         schoolName={activeSchoolName}
+        schoolId={activeSchoolId}
         onOpenArchiveSessions={() => setIsArchiveSessionsOpen(true)}
         onSignOut={handleSignOut}
       />
@@ -286,6 +299,9 @@ const registerSignOutCleanup = useCallback(
             sessionToken={sessionToken}
             onSchoolBrandChange={(schoolId, schoolName) => {
               setActiveSchoolId(schoolId);
+              const nextUrl = new URL(window.location.href);
+              nextUrl.searchParams.set('schoolId', schoolId);
+              window.history.replaceState({}, '', nextUrl.toString());
               setSchools((current) => {
                 const exists = current.some((school) => school.id === schoolId);
                 return exists
@@ -385,10 +401,10 @@ const registerSignOutCleanup = useCallback(
                 <ShieldCheck className="h-5 w-5 shrink-0 text-amber-300" />
                 <span>
                   <span className="block text-sm font-black text-white">
-                    {currentLang === 'ar' ? 'المدير' : currentLang === 'fr' ? 'Directeur' : 'Director'}
+                    {currentLang === 'ar' ? 'المدير' : currentLang === 'fr' ? 'Directeur' : currentLang === 'es' ? 'Director' : currentLang === 'it' ? 'Direttore' : 'Director'}
                   </span>
                   <span className="block text-[10px] font-semibold text-slate-300">
-                    {currentLang === 'ar' ? 'تسجيل الدخول وإدارة المحتوى' : currentLang === 'fr' ? 'Connexion et gestion du contenu' : 'Sign in and manage content'}
+                    {currentLang === 'ar' ? 'تسجيل الدخول وإدارة المحتوى' : currentLang === 'fr' ? 'Connexion et gestion du contenu' : currentLang === 'es' ? 'Iniciar sesión y gestionar el contenido' : currentLang === 'it' ? 'Accedi e gestisci i contenuti' : 'Sign in and manage content'}
                   </span>
                 </span>
               </button>
@@ -396,18 +412,18 @@ const registerSignOutCleanup = useCallback(
 
                     <div className="flex flex-wrap items-center justify-between gap-4 text-xs text-slate-400">
             <div className="flex items-center gap-1">
-              <span>Made for students & educators with</span>
+              <span>{currentLang === 'ar' ? 'صُنع للطلاب والمعلمين بكل' : currentLang === 'fr' ? 'Conçu pour les élèves et les éducateurs avec' : currentLang === 'es' ? 'Creado para estudiantes y educadores con' : currentLang === 'it' ? 'Creato per studenti ed educatori con' : 'Made for students & educators with'}</span>
               <Heart className="w-3.5 h-3.5 text-rose-500 fill-rose-500" />
             </div>
             <div>
-              © Education. Certified Tutoring & Official Exam Preparation.
+              © {activeSchoolName || 'Agenda'}. {currentLang === 'ar' ? 'تعليم ودروس معتمدة وتحضير للامتحانات الرسمية.' : currentLang === 'fr' ? 'Éducation, cours certifiés et préparation aux examens officiels.' : currentLang === 'es' ? 'Educación, tutorías certificadas y preparación para exámenes oficiales.' : currentLang === 'it' ? 'Istruzione, lezioni certificate e preparazione agli esami ufficiali.' : 'Education. Certified Tutoring & Official Exam Preparation.'}
             </div>
           </div>
         </div>
       </footer>
 
       {/* AI Assistant Chatbot: Auto responds about pricing, agenda, live sessions, and saved issues */}
-      <AIChatBot currentLang={currentLang} />
+      <AIChatBot currentLang={currentLang} schoolId={activeSchoolId} schoolName={activeSchoolName} />
     </div>
   );
 }

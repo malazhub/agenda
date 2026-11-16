@@ -101,7 +101,7 @@ export const ArchiveSessionsModal: React.FC<ArchiveSessionsModalProps> = ({
                 {t.archiveSessions}
               </h2>
               <p className="text-xs text-indigo-200">
-                {currentLang === 'ar' ? 'سجل الحصص السابقة وملاحظات الأستاذ والتمارين المحلولة' : 'Past completed sessions, tutor notes, and solved exercises'}
+                {currentLang === 'ar' ? 'سجل الحصص السابقة وملاحظات الأستاذ والتمارين المحلولة' : currentLang === 'fr' ? 'Historique des cours, notes de l’éducateur et exercices corrigés' : currentLang === 'es' ? 'Historial de sesiones, notas del educador y ejercicios resueltos' : currentLang === 'it' ? 'Storico delle lezioni, note dell’educatore ed esercizi risolti' : 'Past completed sessions, tutor notes, and solved exercises'}
               </p>
             </div>
           </div>

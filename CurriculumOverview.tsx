@@ -26,7 +26,7 @@ export const CurriculumOverview: React.FC<CurriculumOverviewProps> = ({
       {/* Title */}
       <div className="border-b border-slate-200 pb-4 text-start">
         <h1 className="text-xl sm:text-2xl font-extrabold text-slate-900 tracking-tight">
-          {currentLang === 'ar' ? 'دليل الشهادات والمناهج الرسمية' : currentLang === 'fr' ? 'Guide des Séries & Examens' : 'Official Curriculum & Exam Guide'}
+          {currentLang === 'ar' ? 'دليل الشهادات والمناهج الرسمية' : currentLang === 'fr' ? 'Guide des filières et examens' : currentLang === 'es' ? 'Guía del currículo y exámenes oficiales' : currentLang === 'it' ? 'Guida ai programmi ed esami ufficiali' : 'Official Curriculum & Exam Guide'}
         </h1>
         <p className="text-xs sm:text-sm text-slate-500 mt-1">
           {currentLang === 'ar' 

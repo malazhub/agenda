@@ -25,7 +25,9 @@ export const MOCK_TEACHERS: Teacher[] = [
     bio: {
       en: "Official MEHE mathematics exam corrector with 14 years preparing Bac SG, SV, and Brevet students. Specialized in Complex Numbers, Space Geometry, and function analysis under time pressure.",
       fr: "Correcteur officiel des examens du Baccalauréat MEHE. 14 ans d'expérience à Jamhour et au Grand Lycée. Spécialiste des fonctions exponentielles/logarithmiques et de la rigueur du barème officiel.",
-      ar: "مصحح رسمي لامتحانات الشهادة الثانوية لدى وزارة التربية. خبرة ١٤ عاماً في تدريس البكالوريا (SG و SV) والبريفيه. أركز على طريقة تحصيل النقاط الدقيقة وفق سلّم التصحيح الرسمي."
+      ar: "مصحح رسمي لامتحانات الشهادة الثانوية لدى وزارة التربية. خبرة ١٤ عاماً في تدريس البكالوريا (SG و SV) والبريفيه. أركز على طريقة تحصيل النقاط الدقيقة وفق سلّم التصحيح الرسمي.",
+      it: "Insegnante ufficiale di matematica e correttore degli esami MEHE, con 14 anni di esperienza nella preparazione degli studenti di Bac SG, SV e Brevet. Specializzato in numeri complessi, geometria dello spazio e studio delle funzioni sotto pressione.",
+      es: "Corrector oficial de matemáticas del MEHE con 14 años preparando estudiantes de Bac SG, SV y Brevet. Especialista en números complejos, geometría del espacio y análisis de funciones bajo presión."
     }
   },
   {
@@ -52,7 +54,9 @@ export const MOCK_TEACHERS: Teacher[] = [
     bio: {
       en: "Passionate AUB educator helping students conquer Mechanics, RLC Circuits, and Chemical Equilibrium. I break down difficult past official exam problems into simple repeatable methods.",
       fr: "Enseignante diplômée de l'AUB. Méthode structurée pour maîtriser l'induction électromagnétique, les circuits oscillants et les équilibres chimiques du programme libanais.",
-      ar: "أستاذة متخرجة من الجامعة الأميركية في بيروت (AUB). أساعد الطلاب على تفكيك مسائل الميكانيك والكهرباء والكيمياء العضوية المعقدة في الامتحانات الرسمية بأسلوب سلس ومباشر."
+      ar: "أستاذة متخرجة من الجامعة الأميركية في بيروت (AUB). أساعد الطلاب على تفكيك مسائل الميكانيك والكهرباء والكيمياء العضوية المعقدة في الامتحانات الرسمية بأسلوب سلس ومباشر.",
+      it: "Educatrice AUB appassionata, aiuta gli studenti a comprendere meccanica, circuiti RLC ed equilibrio chimico. Trasforma gli esercizi difficili degli esami ufficiali in metodi semplici e ripetibili.",
+      es: "Educadora de AUB apasionada por ayudar a los estudiantes con mecánica, circuitos RLC y equilibrio químico. Convierte los ejercicios difíciles de exámenes oficiales en métodos sencillos y repetibles."
     }
   },
   {
@@ -79,7 +83,9 @@ export const MOCK_TEACHERS: Teacher[] = [
     bio: {
       en: "Biology specialist for Terminale SV and Brevet. Expert in mastering MEHE action verbs (Analyze, Interpret, Deduce) and genetic pedigree problems to secure full marks on the Barème.",
       fr: "Spécialiste SVT Terminale SV et EB9. Maîtrise parfaite de la démarche scientifique et des verbes d'action du barème officiel (Analyser, Déduire, Comparer).",
-      ar: "متخصص في بيولوجيا علوم الحياة (SV) والبريفيه. تدريب دقيق على الأفعال المنهجية المعتمدة رسمياً وحل مسائل شجرة النسب والوراثة العصبية والمناعية."
+      ar: "متخصص في بيولوجيا علوم الحياة (SV) والبريفيه. تدريب دقيق على الأفعال المنهجية المعتمدة رسمياً وحل مسائل شجرة النسب والوراثة العصبية والمناعية.",
+      it: "Specialista in biologia per Terminale SV e Brevet. Esperto nei verbi operativi del MEHE (analizzare, interpretare, dedurre) e negli esercizi sugli alberi genealogici per ottenere il punteggio massimo.",
+      es: "Especialista en biología para Terminale SV y Brevet. Experto en los verbos del MEHE (analizar, interpretar, deducir) y en problemas de árboles genealógicos para conseguir la máxima puntuación."
     }
   },
   {
@@ -106,7 +112,9 @@ export const MOCK_TEACHERS: Teacher[] = [
     bio: {
       en: "Economics and Sociology specialist for Bac SE. Teaches students how to construct the perfect official synthesis essay with macroeconomic models and real Lebanese case studies.",
       fr: "Spécialiste de la synthèse économique et sociologique pour le Bac SE. Méthode infaillible d'analyse documentaire et d'argumentation structurée selon le barème CRDP.",
-      ar: "متخصصة في مادتي الاقتصاد وعلم الاجتماع لفرع SE. تدريب مكثف على كتابة الموضوع الاقتصادي المتكامل وتحليل المستندات والسياسات المالية والنقدية."
+      ar: "متخصصة في مادتي الاقتصاد وعلم الاجتماع لفرع SE. تدريب مكثف على كتابة الموضوع الاقتصادي المتكامل وتحليل المستندات والسياسات المالية والنقدية.",
+      it: "Specialista in economia e sociologia per Bac SE. Insegna agli studenti a costruire saggi di sintesi ufficiali con modelli macroeconomici e casi di studio libanesi.",
+      es: "Especialista en economía y sociología para Bac SE. Enseña a elaborar ensayos oficiales de síntesis con modelos macroeconómicos y casos reales del Líbano."
     }
   },
   {
@@ -133,7 +141,9 @@ export const MOCK_TEACHERS: Teacher[] = [
     bio: {
       en: "Doctorate in Arabic literature with 16 years coaching students across all Baccalaureate branches (SG, SV, SE, LH) and Brevet. Transforms Arabic from a stressful chore into an easy A.",
       fr: "Docteur en littérature arabe. 16 ans d'accompagnement de tous les bacheliers libanais et candidats au Brevet. Excellente méthode d'analyse de texte et d'expression écrite.",
-      ar: "دكتور في اللغة العربية وآدابها. خبرة ١٦ عاماً في إعداد طلاب الشهادات الرسمية لكافة الفروع. أضمن للطالب اكتساب مهارات التحليل البلاغي والإعراب والتعبير الكتابي بيسر واحترافية."
+      ar: "دكتور في اللغة العربية وآدابها. خبرة ١٦ عاماً في إعداد طلاب الشهادات الرسمية لكافة الفروع. أضمن للطالب اكتساب مهارات التحليل البلاغي والإعراب والتعبير الكتابي بيسر واحترافية.",
+      it: "Dottore in letteratura araba con 16 anni di esperienza nella preparazione degli studenti di tutti gli indirizzi del Baccalaureato e del Brevet. Rende l'arabo una materia accessibile e stimolante.",
+      es: "Doctor en literatura árabe con 16 años preparando estudiantes de todas las ramas del Bachillerato y del Brevet. Convierte el árabe en una materia accesible y motivadora."
     }
   },
   {
@@ -160,7 +170,9 @@ export const MOCK_TEACHERS: Teacher[] = [
     bio: {
       en: "Patient and encouraging mentor specializing in EB8, EB9 (Brevet), and foundational sciences. Helps students eliminate math anxiety and master geometric proofs step-by-step.",
       fr: "Enseignante bienveillante pour les classes complémentaires et le Brevet. Renforcement des bases en algèbre, géométrie et raisonnement logique.",
-      ar: "معلمة متمرسة في تأهيل طلاب المرحلتين المتوسطة والبريفيه في الرياضيات والعلوم. أسلوب تشجيعي يبني الثقة ويزيل رهبة الهندسة والمسائل الجبرية."
+      ar: "معلمة متمرسة في تأهيل طلاب المرحلتين المتوسطة والبريفيه في الرياضيات والعلوم. أسلوب تشجيعي يبني الثقة ويزيل رهبة الهندسة والمسائل الجبرية.",
+      it: "Mentore paziente e incoraggiante, specializzata in EB8, EB9 (Brevet) e scienze di base. Aiuta gli studenti a superare l'ansia per la matematica e a padroneggiare le dimostrazioni geometriche passo dopo passo.",
+      es: "Mentora paciente y motivadora, especializada en EB8, EB9 (Brevet) y ciencias básicas. Ayuda a superar la ansiedad matemática y dominar las demostraciones geométricas paso a paso."
     }
   }
 ];

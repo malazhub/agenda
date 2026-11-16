@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Language, GradeLevelDef } from '../types';
-import { deleteDirectorSession, getDirectorSessions, createDirectorSession, updateDirectorSessionLive } from '../services/cloudflareApi';
+import { deleteDirectorSession, getDirectorSessions, createDirectorSession, updateDirectorSessionLive, getDirectorGradePricing, updateDirectorGradePricing } from '../services/cloudflareApi';
 import type { SessionInput, StoredSessionRecord } from '../services/cloudflareApi';
 import { Plus, RefreshCw, Trash2, Video, Radio, Eye } from 'lucide-react';
 
@@ -19,30 +19,39 @@ export const DirectorSessionsPanel: React.FC<DirectorSessionsPanelProps> = ({
 }) => {
   const isRTL = currentLang === 'ar';
   const t = {
-    grade: currentLang === 'ar' ? 'الصف' : currentLang === 'fr' ? 'Classe' : 'Grade',
-    educatorName: currentLang === 'ar' ? 'اسم الأستاذ' : currentLang === 'fr' ? 'Nom de l\'enseignant' : 'Educator Name',
-    subject: currentLang === 'ar' ? 'المادة' : currentLang === 'fr' ? 'Matière' : 'Subject',
-    maxStudents: currentLang === 'ar' ? 'الحد الأقصى للطلاب' : currentLang === 'fr' ? 'Nombre max d\'élèves' : 'Max Students',
-    save: currentLang === 'ar' ? 'حفظ الحصة' : currentLang === 'fr' ? 'Enregistrer le cours' : 'Save Session',
-    delete: currentLang === 'ar' ? 'حذف' : currentLang === 'fr' ? 'Supprimer' : 'Delete',
-    join: currentLang === 'ar' ? 'انضمام ومراقبة' : currentLang === 'fr' ? 'Rejoindre' : 'Join & Monitor',
-    liveBadge: 'LIVE',
-    offBadge: 'OFF',
-    empty: currentLang === 'ar' ? 'لا توجد حصص لهذا الصف.' : currentLang === 'fr' ? 'Aucun cours pour cette classe.' : 'No sessions for this grade.',
-    confirm: currentLang === 'ar' ? 'هل تريد حذف هذه الحصة نهائياً؟' : currentLang === 'fr' ? 'Supprimer définitivement ce cours ?' : 'Permanently delete this session?',
-    loadError: currentLang === 'ar' ? 'تعذر تحميل الحصص.' : currentLang === 'fr' ? 'Impossible de charger les cours.' : 'Unable to load sessions.',
-    sessionSaved: currentLang === 'ar' ? 'تم حفظ وتعيين الحصة بنجاح.' : currentLang === 'fr' ? 'Cours enregistré avec succès.' : 'Session saved successfully.',
-    sessionDeleted: currentLang === 'ar' ? 'تم حذف الحصة نهائياً.' : currentLang === 'fr' ? 'Cours supprimé définitivement.' : 'Session permanently deleted.',
-    refresh: currentLang === 'ar' ? 'تحديث الحصص' : currentLang === 'fr' ? 'Actualiser les cours' : 'Refresh sessions',
+    grade: currentLang === 'ar' ? 'الصف' : currentLang === 'fr' ? 'Classe' : currentLang === 'es' ? 'Curso' : currentLang === 'it' ? 'Classe' : 'Grade',
+    educatorName: currentLang === 'ar' ? 'اسم الأستاذ' : currentLang === 'fr' ? 'Nom de l’enseignant' : currentLang === 'es' ? 'Nombre del educador' : currentLang === 'it' ? 'Nome dell’educatore' : 'Educator name',
+    subject: currentLang === 'ar' ? 'المادة' : currentLang === 'fr' ? 'Matière' : currentLang === 'es' ? 'Materia' : currentLang === 'it' ? 'Materia' : 'Subject',
+    maxStudents: currentLang === 'ar' ? 'الحد الأقصى للطلاب' : currentLang === 'fr' ? 'Nombre maximum d’élèves' : currentLang === 'es' ? 'Máximo de estudiantes' : currentLang === 'it' ? 'Numero massimo di studenti' : 'Maximum students',
+    save: currentLang === 'ar' ? 'حفظ الحصة' : currentLang === 'fr' ? 'Enregistrer le cours' : currentLang === 'es' ? 'Guardar sesión' : currentLang === 'it' ? 'Salva lezione' : 'Save session',
+    delete: currentLang === 'ar' ? 'حذف' : currentLang === 'fr' ? 'Supprimer' : currentLang === 'es' ? 'Eliminar' : currentLang === 'it' ? 'Elimina' : 'Delete',
+    join: currentLang === 'ar' ? 'انضمام ومراقبة' : currentLang === 'fr' ? 'Rejoindre et surveiller' : currentLang === 'es' ? 'Entrar y supervisar' : currentLang === 'it' ? 'Entra e monitora' : 'Join & monitor',
+    liveBadge: currentLang === 'ar' ? 'مباشر' : currentLang === 'fr' ? 'EN DIRECT' : currentLang === 'es' ? 'EN DIRECTO' : currentLang === 'it' ? 'IN DIRETTA' : 'LIVE',
+    offBadge: currentLang === 'ar' ? 'متوقف' : currentLang === 'fr' ? 'HORS LIGNE' : currentLang === 'es' ? 'INACTIVO' : currentLang === 'it' ? 'NON ATTIVO' : 'OFF',
+    empty: currentLang === 'ar' ? 'لا توجد حصص لهذا الصف.' : currentLang === 'fr' ? 'Aucun cours pour cette classe.' : currentLang === 'es' ? 'No hay sesiones para este curso.' : currentLang === 'it' ? 'Nessuna lezione per questa classe.' : 'No sessions for this grade.',
+    confirm: currentLang === 'ar' ? 'هل تريد حذف هذه الحصة نهائياً؟' : currentLang === 'fr' ? 'Supprimer définitivement ce cours ?' : currentLang === 'es' ? '¿Eliminar esta sesión definitivamente?' : currentLang === 'it' ? 'Eliminare definitivamente questa lezione?' : 'Permanently delete this session?',
+    loadError: currentLang === 'ar' ? 'تعذر تحميل الحصص.' : currentLang === 'fr' ? 'Impossible de charger les cours.' : currentLang === 'es' ? 'No se pudieron cargar las sesiones.' : currentLang === 'it' ? 'Impossibile caricare le lezioni.' : 'Unable to load sessions.',
+    sessionSaved: currentLang === 'ar' ? 'تم حفظ وتعيين الحصة بنجاح.' : currentLang === 'fr' ? 'Cours enregistré avec succès.' : currentLang === 'es' ? 'Sesión guardada correctamente.' : currentLang === 'it' ? 'Lezione salvata correttamente.' : 'Session saved successfully.',
+    sessionDeleted: currentLang === 'ar' ? 'تم حذف الحصة نهائياً.' : currentLang === 'fr' ? 'Cours supprimé définitivement.' : currentLang === 'es' ? 'Sesión eliminada definitivamente.' : currentLang === 'it' ? 'Lezione eliminata definitivamente.' : 'Session permanently deleted.',
+    refresh: currentLang === 'ar' ? 'تحديث الحصص' : currentLang === 'fr' ? 'Actualiser les cours' : currentLang === 'es' ? 'Actualizar sesiones' : currentLang === 'it' ? 'Aggiorna lezioni' : 'Refresh sessions',
+    monthlyRate: currentLang === 'ar' ? 'السعر الشهري (USD)' : currentLang === 'fr' ? 'Tarif mensuel (USD)' : currentLang === 'es' ? 'Tarifa mensual (USD)' : currentLang === 'it' ? 'Tariffa mensile (USD)' : 'Monthly rate (USD)',
+    saveRate: currentLang === 'ar' ? 'حفظ السعر فقط' : currentLang === 'fr' ? 'Enregistrer le tarif seul' : currentLang === 'es' ? 'Guardar solo la tarifa' : currentLang === 'it' ? 'Salva solo la tariffa' : 'Save rate only',
+    rateSaved: currentLang === 'ar' ? 'تم حفظ السعر الشهري لهذا الصف.' : currentLang === 'fr' ? 'Tarif mensuel enregistré pour cette classe.' : currentLang === 'es' ? 'Tarifa mensual guardada para este curso.' : currentLang === 'it' ? 'Tariffa mensile salvata per questa classe.' : 'Monthly rate saved for this grade.',
+    title: currentLang === 'ar' ? 'تعيين وإضافة حصة للأستاذ' : currentLang === 'fr' ? 'Attribuer et ajouter un cours à un éducateur' : currentLang === 'es' ? 'Asignar y añadir una sesión al educador' : currentLang === 'it' ? 'Assegna e aggiungi una lezione all’educatore' : 'Assign & add educator session',
+    subtitle: currentLang === 'ar' ? 'حدد الصف واسم الأستاذ والمادة والحد الأقصى للطلاب والسعر الشهري.' : currentLang === 'fr' ? 'Définissez la classe, l’éducateur, la matière, le nombre maximum d’élèves et le tarif mensuel.' : currentLang === 'es' ? 'Define el curso, el educador, la materia, el máximo de estudiantes y la tarifa mensual.' : currentLang === 'it' ? 'Imposta la classe, l’educatore, la materia, il numero massimo di studenti e la tariffa mensile.' : 'Set the grade, educator, subject, maximum students, and monthly rate.',
+    educatorPrefix: currentLang === 'ar' ? 'الأستاذ: ' : currentLang === 'fr' ? 'Éducateur : ' : currentLang === 'es' ? 'Educador: ' : currentLang === 'it' ? 'Educatore: ' : 'Educator: ',
+    month: currentLang === 'ar' ? 'شهرياً' : currentLang === 'fr' ? 'par mois' : currentLang === 'es' ? 'al mes' : currentLang === 'it' ? 'al mese' : 'per month',
   };
 
   const [gradeId, setGradeId] = useState<string>(grades[0]?.id || 'g12_lh');
   const [sessions, setSessions] = useState<StoredSessionRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [savingRate, setSavingRate] = useState(false);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
-  const [isLive, setIsLive] = useState(true);
+  const [monthlyRateUsd, setMonthlyRateUsd] = useState(125);
+  const [pricesByGrade, setPricesByGrade] = useState<Record<string, number>>({});
 
   // Form with ONLY: Grade, Educator Name, Subject, Maximum Students
   const [form, setForm] = useState({
@@ -55,8 +64,14 @@ export const DirectorSessionsPanel: React.FC<DirectorSessionsPanelProps> = ({
     setLoading(true);
     setError('');
     try {
-      const { sessions: loadedSessions } = await getDirectorSessions(token);
+      const [{ sessions: loadedSessions }, { prices }] = await Promise.all([
+        getDirectorSessions(token),
+        getDirectorGradePricing(token),
+      ]);
       setSessions(loadedSessions);
+      const nextPrices = Object.fromEntries(prices.map((price) => [price.gradeId, price.monthlyRateUsd]));
+      setPricesByGrade(nextPrices);
+      setMonthlyRateUsd(nextPrices[gradeId] ?? 125);
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : 'Unable to load sessions.');
     } finally {
@@ -66,9 +81,24 @@ export const DirectorSessionsPanel: React.FC<DirectorSessionsPanelProps> = ({
 
   useEffect(() => {
     void loadSessions();
-  }, [token]);
+  }, [token, gradeId]);
 
   const gradeSessions = useMemo(() => sessions.filter((session) => session.gradeId === gradeId), [sessions, gradeId]);
+
+  const saveMonthlyRate = async () => {
+    setSavingRate(true);
+    setError('');
+    setMessage('');
+    try {
+      await updateDirectorGradePricing(token, gradeId, monthlyRateUsd);
+      setPricesByGrade((current) => ({ ...current, [gradeId]: monthlyRateUsd }));
+      setMessage(t.rateSaved);
+    } catch (rateError) {
+      setError(rateError instanceof Error ? rateError.message : 'Unable to save monthly rate.');
+    } finally {
+      setSavingRate(false);
+    }
+  };
 
   // Save session assigned by Grade, Educator Name, Subject, Max Students
   const saveSession = async (event: React.FormEvent) => {
@@ -86,11 +116,13 @@ export const DirectorSessionsPanel: React.FC<DirectorSessionsPanelProps> = ({
       sourceName: form.educatorName.trim(),
       sourceUrl: `https://agenda.live/room/${gradeId}`,
       playbackUrl: '',
-      isLive,
+      isLive: false,
     };
 
     try {
+      await updateDirectorGradePricing(token, gradeId, monthlyRateUsd);
       await createDirectorSession(token, newSessionInput);
+      setPricesByGrade((current) => ({ ...current, [gradeId]: monthlyRateUsd }));
       await loadSessions();
       setMessage(t.sessionSaved);
     } catch (saveError) {
@@ -135,18 +167,18 @@ export const DirectorSessionsPanel: React.FC<DirectorSessionsPanelProps> = ({
       <form onSubmit={saveSession} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs space-y-4">
         <div className="border-b border-slate-100 pb-3">
           <h3 className="text-sm font-black text-slate-900">
-            {currentLang === 'ar' ? 'تعيين وإضافة حصة جديدة للأستاذ' : 'Assign & Add Educator Session'}
+            {t.title}
           </h3>
           <p className="text-xs text-slate-500 mt-0.5">
-            {currentLang === 'ar' ? 'حدد الصف، اسم الأستاذ، المادة والحد الأقصى للطلاب' : 'Set Grade, Educator Name, Subject, and Max Students'}
+            {t.subtitle}
           </p>
         </div>
 
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
           {/* Grade selection */}
           <label className="space-y-1 text-xs font-bold text-slate-700">
             {t.grade}
-            <select className={fieldClass} value={gradeId} onChange={(e) => setGradeId(e.target.value)} required>
+            <select className={fieldClass} value={gradeId} onChange={(e) => { setGradeId(e.target.value); setMonthlyRateUsd(pricesByGrade[e.target.value] ?? 125); }} required>
               {grades.map((grade) => (
                 <option key={grade.id} value={grade.id}>
                   {grade.name[currentLang]}
@@ -196,21 +228,33 @@ export const DirectorSessionsPanel: React.FC<DirectorSessionsPanelProps> = ({
           </label>
         </div>
 
-        <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
-          {/* Live / Off Initial Checkbox */}
-          <label className="flex items-center gap-2 text-xs font-bold text-slate-700 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={isLive}
-              onChange={(e) => setIsLive(e.target.checked)}
-              className="accent-rose-600 h-4 w-4"
-            />
-            <span className="flex items-center gap-1.5">
-              <Radio className={`h-4 w-4 ${isLive ? 'text-rose-600 animate-pulse' : 'text-slate-400'}`} />
-              <span>{isLive ? t.liveBadge : t.offBadge}</span>
-            </span>
-          </label>
-
+        <label className="space-y-1 text-xs font-bold text-slate-700">
+          {t.monthlyRate}
+          <input
+            className={fieldClass}
+            type="number"
+            min={0}
+            max={1000000}
+            step="0.01"
+            required
+            value={monthlyRateUsd}
+            onChange={(event) => setMonthlyRateUsd(Number(event.target.value))}
+          />
+          <span className="block text-[10px] font-medium text-slate-500">
+            {currentLang === 'ar' ? 'السعر الافتراضي 125 دولاراً شهرياً لكل طالب في هذا الصف.' : currentLang === 'fr' ? 'Valeur par défaut : 125 USD par mois et par élève pour cette classe.' : currentLang === 'es' ? 'Predeterminado: 125 USD al mes por estudiante en este curso.' : currentLang === 'it' ? 'Predefinito: 125 USD al mese per studente in questa classe.' : 'Default: 125 USD per month per student in this grade.'}
+          </span>
+        </label>
+        <div className="flex justify-start">
+          <button
+            type="button"
+            onClick={() => void saveMonthlyRate()}
+            disabled={savingRate}
+            className="rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-2 text-xs font-black text-indigo-700 hover:bg-indigo-100 disabled:opacity-60"
+          >
+            {savingRate ? '…' : t.saveRate}
+          </button>
+        </div>
+        <div className="flex flex-wrap items-center justify-end gap-3 pt-2">
           {/* Save Session Card Button */}
           <button
             type="submit"
@@ -231,7 +275,7 @@ export const DirectorSessionsPanel: React.FC<DirectorSessionsPanelProps> = ({
         <h3 className="text-sm font-black text-slate-900 flex items-center gap-2">
           <span>{grades.find((g) => g.id === gradeId)?.name[currentLang]}</span>
           <span className="text-xs font-bold bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full">
-            {gradeSessions.length} {currentLang === 'ar' ? 'حصص مسجلة' : 'Sessions'}
+            {gradeSessions.length} {currentLang === 'ar' ? 'حصص مسجلة' : currentLang === 'fr' ? 'cours' : currentLang === 'es' ? 'sesiones' : currentLang === 'it' ? 'lezioni' : 'sessions'}
           </span>
         </h3>
         <button
@@ -271,9 +315,12 @@ export const DirectorSessionsPanel: React.FC<DirectorSessionsPanelProps> = ({
                   </div>
 
                   <h4 className="text-sm font-black text-slate-900">
-                    {currentLang === 'ar' ? 'الأستاذ: ' : 'Educator: '}
+                    {t.educatorPrefix}
                     {session.title}
                   </h4>
+                  <span className="text-[10px] text-indigo-700 font-bold block">
+                    {(pricesByGrade[session.gradeId] ?? 125).toLocaleString(currentLang, { maximumFractionDigits: 2 })} USD / {t.month}
+                  </span>
 
                   <span className="text-[10px] text-slate-500 font-semibold block">
                     {currentLang === 'ar' ? `الحد الأقصى للطلاب: ${maxStudents}` : `Max Capacity: ${maxStudents} students`}
@@ -291,7 +338,7 @@ export const DirectorSessionsPanel: React.FC<DirectorSessionsPanelProps> = ({
                         ? 'bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100'
                         : 'bg-slate-100 text-slate-600 border border-slate-200 hover:bg-slate-200'
                     }`}
-                    title="Toggle Live / Off"
+                    title={currentLang === 'ar' ? 'تغيير حالة البث' : currentLang === 'fr' ? 'Changer l’état du direct' : currentLang === 'es' ? 'Cambiar estado de directo' : currentLang === 'it' ? 'Cambia stato della diretta' : 'Toggle live status'}
                   >
                     <span className={`w-2 h-2 rounded-full ${session.isLive ? 'bg-rose-600 animate-ping' : 'bg-slate-400'}`} />
                     <span>{session.isLive ? t.liveBadge : t.offBadge}</span>
@@ -309,7 +356,7 @@ export const DirectorSessionsPanel: React.FC<DirectorSessionsPanelProps> = ({
                       }
                     }}
                     className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 px-3 py-2 text-xs font-black text-white transition cursor-pointer shadow-xs"
-                    title="Join to monitor"
+                    title={t.join}
                   >
                     <Eye className="h-3.5 w-3.5" />
                     <span>{t.join}</span>
@@ -320,7 +367,7 @@ export const DirectorSessionsPanel: React.FC<DirectorSessionsPanelProps> = ({
                     type="button"
                     onClick={() => void removeSession(session)}
                     className="inline-flex items-center gap-1 rounded-xl bg-red-50 px-3 py-2 text-xs font-bold text-red-700 hover:bg-red-100 transition cursor-pointer"
-                    title="Delete session"
+                    title={t.delete}
                   >
                     <Trash2 className="h-3.5 w-3.5" />
                     <span>{t.delete}</span>

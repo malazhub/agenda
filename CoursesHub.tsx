@@ -4,17 +4,18 @@ import { translations } from '../translations';
 import { LEBANESE_GRADE_LEVELS } from '../data/mockGradesAndSessions';
 import { GradeSessionsView } from './GradeSessionsView';
 import { DirectorSessionsPanel } from './DirectorSessionsPanel';
+import { LiveVideoPlayer } from './LiveVideoPlayer';
 import { 
   getDirectorAccounts,
   getDirectorProfile,
   getRegistrationSessions,
-  getSchools,
   loginAccount,
   updateDirectorProfile,
   updateDirectorAccount,
-  deleteDirectorAccount 
+  deleteDirectorAccount,
+  getDirectorLiveStream,
 } from '../services/cloudflareApi';
-import type { CloudflareAccount, RegistrationSession, SchoolRecord } from '../services/cloudflareApi';
+import type { CloudflareAccount, RegistrationSession, StoredSessionRecord, LiveStreamStatus } from '../services/cloudflareApi';
 import {
   Clock,
   ShieldCheck,
@@ -68,8 +69,6 @@ export const CoursesHub: React.FC<CoursesHubProps> = ({
     typeof window === 'undefined' ? '' : window.sessionStorage.getItem('agenda-director-token') || ''
   );
   const [directorSchoolId, setDirectorSchoolId] = useState('');
-  const [directorSchools, setDirectorSchools] = useState<SchoolRecord[]>([]);
-  const [settingsSchoolId, setSettingsSchoolId] = useState('');
   const [settingsSchoolName, setSettingsSchoolName] = useState('');
   const [settingsUsername, setSettingsUsername] = useState('');
   const [settingsPassword, setSettingsPassword] = useState('');
@@ -81,6 +80,10 @@ export const CoursesHub: React.FC<CoursesHubProps> = ({
   const [directorDataError, setDirectorDataError] = useState('');
   const [directorMessage, setDirectorMessage] = useState('');
   const [directorTab, setDirectorTab] = useState<'accounts' | 'sessions'>('accounts');
+  const [monitorSession, setMonitorSession] = useState<StoredSessionRecord | null>(null);
+  const [monitorStream, setMonitorStream] = useState<LiveStreamStatus | null>(null);
+  const [monitorLoading, setMonitorLoading] = useState(false);
+  const [monitorError, setMonitorError] = useState('');
 
     useEffect(() => {
     if (directorLoginRequest > 0) {
@@ -94,14 +97,13 @@ export const CoursesHub: React.FC<CoursesHubProps> = ({
       return;
     }
     let active = true;
-    Promise.all([getDirectorProfile(directorToken), getSchools()])
-      .then(([{ profile }, { schools }]) => {
+    getDirectorProfile(directorToken)
+      .then(({ profile }) => {
         if (!active) return;
         setDirectorSchoolId(profile.schoolId);
-        setSettingsSchoolId(profile.schoolId);
         setSettingsSchoolName(profile.schoolName);
         setSettingsUsername(profile.username);
-        setDirectorSchools(schools);
+        onSchoolBrandChange(profile.schoolId, profile.schoolName);
       })
       .catch((profileError) => {
         if (active) setDirectorDataError(profileError instanceof Error ? profileError.message : 'Unable to load Director school profile.');
@@ -135,7 +137,7 @@ export const CoursesHub: React.FC<CoursesHubProps> = ({
         Boolean(accountGrade) &&
         (
           gradeId === accountGrade ||
-          gradeName.includes(accountGrade)
+          gradeName.includes(accountGrade ?? '')
         )
       );
     });
@@ -205,15 +207,30 @@ export const CoursesHub: React.FC<CoursesHubProps> = ({
     }
   };
 
+  const handleMonitorSession = async (session: StoredSessionRecord) => {
+    if (!directorToken) return;
+    setMonitorLoading(true);
+    setMonitorError('');
+    setMonitorSession(session);
+    setMonitorStream(null);
+    try {
+      const stream = await getDirectorLiveStream(directorToken, session.id);
+      setMonitorStream(stream);
+    } catch (error) {
+      setMonitorError(error instanceof Error ? error.message : 'Unable to open this classroom for monitoring.');
+    } finally {
+      setMonitorLoading(false);
+    }
+  };
+
   const handleSaveDirectorSettings = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!directorToken || !settingsSchoolId) return;
+    if (!directorToken) return;
     setSettingsSaving(true);
     setDirectorDataError('');
     setDirectorMessage('');
     try {
       const input = {
-        schoolId: settingsSchoolId,
         schoolName: settingsSchoolName.trim(),
         username: settingsUsername.trim(),
         ...(settingsPassword ? { password: settingsPassword } : {}),
@@ -222,19 +239,20 @@ export const CoursesHub: React.FC<CoursesHubProps> = ({
       sessionStorage.setItem('agenda-director-token', token);
       setDirectorToken(token);
       setDirectorSchoolId(profile.schoolId);
-      setSettingsSchoolId(profile.schoolId);
       setSettingsSchoolName(profile.schoolName);
       setSettingsUsername(profile.username);
       setSettingsPassword('');
-      const { schools } = await getSchools();
-      setDirectorSchools(schools);
       onSchoolBrandChange(profile.schoolId, profile.schoolName);
       setDirectorMessage(
         currentLang === 'ar'
           ? 'تم حفظ اسم المدرسة وبيانات المدير وتحديث اسم المنصة.'
           : currentLang === 'fr'
-            ? 'Le nom de l’établissement et les identifiants du directeur ont été enregistrés.'
-            : 'School name and Director credentials saved. The main header is updated.'
+            ? 'Le nom de l\u2019établissement et les identifiants du directeur ont été enregistrés.'
+            : currentLang === 'es'
+              ? 'Se guardaron el nombre de la escuela y las credenciales del Director. Se actualizó el encabezado.'
+              : currentLang === 'it'
+                ? 'Il nome della scuola e le credenziali del Direttore sono stati salvati. L\u2019intestazione è stata aggiornata.'
+                : 'School name and Director credentials saved. The main header is updated.'
       );
     } catch (error) {
       setDirectorDataError(error instanceof Error ? error.message : 'Unable to save Director settings.');
@@ -307,7 +325,13 @@ const updateAccount = async (
   const deleteAccount = async (account: DirectorRow) => {
     const confirmMessage = currentLang === 'ar'
       ? `هل أنت متأكد من حذف حساب (${account.fullName}) نهائياً؟ سيتم مسح بياناته من Cloudflare للأبد.`
-      : `Are you sure you want to permanently delete (${account.fullName})? All data will be removed from Cloudflare.`;
+      : currentLang === 'fr'
+        ? `Voulez-vous vraiment supprimer définitivement le compte de ${account.fullName} ? Toutes ses données seront supprimées de Cloudflare.`
+        : currentLang === 'es'
+          ? `¿Seguro que deseas eliminar permanentemente la cuenta de ${account.fullName}? Se borrarán todos sus datos de Cloudflare.`
+          : currentLang === 'it'
+            ? `Vuoi eliminare definitivamente l\u2019account di ${account.fullName}? Tutti i suoi dati saranno rimossi da Cloudflare.`
+            : `Are you sure you want to permanently delete (${account.fullName})? All data will be removed from Cloudflare.`;
 
     if (!window.confirm(confirmMessage)) return;
 
@@ -323,7 +347,13 @@ const updateAccount = async (
       setDirectorMessage(
         currentLang === 'ar'
           ? `تم حذف حساب (${account.fullName}) من Cloudflare نهائياً.`
-          : `Account (${account.fullName}) was permanently deleted from Cloudflare.`
+          : currentLang === 'fr'
+            ? `Le compte de ${account.fullName} a été définitivement supprimé de Cloudflare.`
+            : currentLang === 'es'
+              ? `La cuenta de ${account.fullName} se eliminó permanentemente de Cloudflare.`
+              : currentLang === 'it'
+                ? `L\u2019account di ${account.fullName} è stato eliminato definitivamente da Cloudflare.`
+                : `Account (${account.fullName}) was permanently deleted from Cloudflare.`
       );
     } catch (err) {
       setDirectorDataError(err instanceof Error ? err.message : 'Failed to delete account from Cloudflare.');
@@ -344,7 +374,7 @@ const updateAccount = async (
   const openSharedLiveRoom = () => {
     const accountGrade = registeredAccount?.gradeId
       ?.toLowerCase()
-      .replace(/[^a-z0-9]/g, '');
+      .replace(/[^a-z0-9]/g, '') || '';
 
     const targetGrade =
       LEBANESE_GRADE_LEVELS.find((grade) => {
@@ -360,7 +390,7 @@ const updateAccount = async (
           Boolean(accountGrade) &&
           (
             gradeId === accountGrade ||
-            gradeName.includes(accountGrade)
+            gradeName.includes(accountGrade ?? '')
           )
         );
       }) || LEBANESE_GRADE_LEVELS[0];
@@ -388,24 +418,20 @@ const updateAccount = async (
             <th className="px-3 py-3 text-left font-black text-slate-700">{t.fullNameLabel}</th>
                         {showEducatorColumn && (
               <th className="px-3 py-3 text-left font-black text-slate-700">
-                {currentLang === 'ar'
-                  ? 'المعلّم'
-                  : currentLang === 'fr'
-                    ? 'Éducateur'
-                    : 'Educator'}
+                {currentLang === 'ar' ? 'المعلّم' : currentLang === 'fr' ? 'Éducateur' : currentLang === 'es' ? 'Educador' : currentLang === 'it' ? 'Educatore' : 'Educator'}
               </th>
             )}
             <th className="px-3 py-3 text-left font-black text-slate-700">{t.usernameLabel}</th>
             <th className="px-3 py-3 text-left font-black text-slate-700">{t.passwordLabel}</th>
             <th className="px-3 py-3 text-left font-black text-slate-700">{t.emailLabel}</th>
             <th className="px-3 py-3 text-left font-black text-slate-700">{t.phoneNumber}</th>
-            <th className="px-3 py-3 text-left font-black text-slate-700">{currentLang === 'ar' ? 'المدرسة / المادة' : currentLang === 'fr' ? 'École / matière' : 'School / subject'}</th>
+            <th className="px-3 py-3 text-left font-black text-slate-700">{currentLang === 'ar' ? 'المدرسة / المادة' : currentLang === 'fr' ? 'Établissement / matière' : currentLang === 'es' ? 'Escuela / materia' : currentLang === 'it' ? 'Scuola / materia' : 'School / subject'}</th>
             <th className="px-3 py-3 text-left font-black text-slate-700">{t.registeredSessionLabel}</th>
             <th className="px-3 py-3 text-left font-black text-slate-700">{t.joiningDate}</th>
             <th className="px-3 py-3 text-left font-black text-slate-700">{t.expiryDate}</th>
-            <th className="px-3 py-3 text-left font-black text-slate-700">{currentLang === 'ar' ? 'مفعّل' : currentLang === 'fr' ? 'Activé' : 'Activated'}</th>
-            <th className="px-3 py-3 text-left font-black text-slate-700">{currentLang === 'ar' ? 'مدفوع' : currentLang === 'fr' ? 'Payé' : 'Paid'}</th>
-            <th className="px-3 py-3 text-center font-black text-rose-700">{t.delete}</th>
+            <th className="px-3 py-3 text-left font-black text-slate-700">{currentLang === 'ar' ? 'مفعّل' : currentLang === 'fr' ? 'Activé' : currentLang === 'es' ? 'Activado' : currentLang === 'it' ? 'Attivato' : 'Activated'}</th>
+            <th className="px-3 py-3 text-left font-black text-slate-700">{currentLang === 'ar' ? 'مدفوع' : currentLang === 'fr' ? 'Payé' : currentLang === 'es' ? 'Pagado' : currentLang === 'it' ? 'Pagato' : 'Paid'}</th>
+            <th className="px-3 py-3 text-center font-black text-rose-700">{currentLang === 'ar' ? 'حذف' : currentLang === 'fr' ? 'Supprimer' : currentLang === 'es' ? 'Eliminar' : currentLang === 'it' ? 'Elimina' : 'Delete'}</th>
           </tr>
         </thead>
         <tbody>
@@ -436,11 +462,7 @@ const updateAccount = async (
       Boolean(educator.registeredSessionId)
   ) && (
     <option value="__assignment_not_found__" disabled>
-      {currentLang === 'ar'
-        ? 'لم يتم العثور على المعلّم المسجّل'
-        : currentLang === 'fr'
-          ? 'Éducateur inscrit introuvable'
-          : 'Registered educator not found'}
+      {currentLang === 'ar' ? 'لم يتم العثور على المعلّم المسجّل' : currentLang === 'fr' ? 'Éducateur inscrit introuvable' : currentLang === 'es' ? 'No se encontró el educador registrado' : currentLang === 'it' ? 'Educatore registrato non trovato' : 'Registered educator not found'}
     </option>
   )}
 
@@ -507,7 +529,7 @@ const updateAccount = async (
         }
         className="text-[10px] font-bold text-indigo-700 underline"
       >
-        {currentLang === 'ar' ? 'فصل الصف' : 'Separate classroom'}
+        {currentLang === 'ar' ? 'فصل الصف' : currentLang === 'fr' ? 'Dissocier la classe' : currentLang === 'es' ? 'Desvincular aula' : currentLang === 'it' ? 'Scollega aula' : 'Separate classroom'}
       </button>
     )}
   </div>
@@ -541,10 +563,10 @@ const updateAccount = async (
                   type="button"
                   onClick={() => void deleteAccount(row)}
                   className="inline-flex items-center gap-1 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 px-2.5 py-1.5 text-[11px] font-black transition cursor-pointer border border-rose-200 shadow-2xs"
-                  title={t.delete}
+                  title={currentLang === 'ar' ? 'حذف' : currentLang === 'fr' ? 'Supprimer' : currentLang === 'es' ? 'Eliminar' : currentLang === 'it' ? 'Elimina' : 'Delete'}
                 >
                   <Trash2 className="w-3.5 h-3.5" />
-                  <span>{t.delete}</span>
+                  <span>{currentLang === 'ar' ? 'حذف' : currentLang === 'fr' ? 'Supprimer' : currentLang === 'es' ? 'Eliminar' : currentLang === 'it' ? 'Elimina' : 'Delete'}</span>
                 </button>
               </td>
             </tr>
@@ -552,7 +574,7 @@ const updateAccount = async (
           {rows.length === 0 && (
             <tr>
                             <td                 colSpan={showEducatorColumn ? 13 : 12}                 className="px-4 py-8 text-center text-slate-500"               >
-                {currentLang === 'ar' ? 'لا توجد تسجيلات بعد.' : currentLang === 'fr' ? 'Aucune inscription pour le moment.' : 'No registrations yet.'}
+                {currentLang === 'ar' ? 'لا توجد تسجيلات بعد.' : currentLang === 'fr' ? 'Aucune inscription pour le moment.' : currentLang === 'es' ? 'Todavía no hay registros.' : currentLang === 'it' ? 'Non ci sono ancora registrazioni.' : 'No registrations yet.'}
               </td>
             </tr>
           )}
@@ -593,10 +615,10 @@ const updateAccount = async (
             </div>
             <div>
               <h2 className="text-xl font-black text-slate-900">
-                {currentLang === 'ar' ? 'دخول المدير' : currentLang === 'fr' ? 'Connexion directeur' : 'Director Login'}
+                {currentLang === 'ar' ? 'دخول المدير' : currentLang === 'fr' ? 'Connexion du Directeur' : currentLang === 'es' ? 'Acceso del Director' : currentLang === 'it' ? 'Accesso Direttore' : 'Director Login'}
               </h2>
               <p className="text-xs text-slate-500">
-                {currentLang === 'ar' ? 'لوحة التحكم الداخلية' : currentLang === 'fr' ? 'Panneau de contrôle interne' : 'Internal control panel'}
+                {currentLang === 'ar' ? 'لوحة التحكم الداخلية' : currentLang === 'fr' ? 'Panneau de contrôle interne' : currentLang === 'es' ? 'Panel de control interno' : currentLang === 'it' ? 'Pannello di controllo interno' : 'Internal control panel'}
               </p>
             </div>
           </div>
@@ -618,7 +640,7 @@ const updateAccount = async (
         >
           <div>
             <label className="block text-[11px] font-bold text-slate-700 mb-1">
-              {currentLang === 'ar' ? 'اسم المستخدم' : currentLang === 'fr' ? 'Nom d’utilisateur' : 'Username'}
+              {t.usernameLabel}
             </label>
             <div className="relative">
               <User className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
@@ -635,7 +657,7 @@ const updateAccount = async (
 
           <div>
             <label className="block text-[11px] font-bold text-slate-700 mb-1">
-              {currentLang === 'ar' ? 'كلمة المرور' : currentLang === 'fr' ? 'Mot de passe' : 'Password'}
+              {t.passwordLabel}
             </label>
             <div className="relative">
               <Lock className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
@@ -669,7 +691,7 @@ const updateAccount = async (
             type="submit"
             className="w-full bg-indigo-700 hover:bg-indigo-800 text-white font-black px-4 py-3 rounded-2xl transition cursor-pointer"
           >
-            {currentLang === 'ar' ? 'دخول المدير' : currentLang === 'fr' ? 'Se connecter' : 'Login as Director'}
+            {currentLang === 'ar' ? 'دخول المدير' : currentLang === 'fr' ? 'Connexion Directeur' : currentLang === 'es' ? 'Iniciar sesión como Director' : currentLang === 'it' ? 'Accedi come Direttore' : 'Login as Director'}
           </button>
         </form>
       </div>
@@ -686,7 +708,7 @@ const updateAccount = async (
             </div>
             <div>
               <h2 className="text-xl font-black text-slate-900">
-                {currentLang === 'ar' ? 'لوحة المدير' : currentLang === 'fr' ? 'Tableau directeur' : 'Director Dashboard'}
+                {currentLang === 'ar' ? 'لوحة المدير' : currentLang === 'fr' ? 'Tableau de bord du Directeur' : currentLang === 'es' ? 'Panel del Director' : currentLang === 'it' ? 'Dashboard del Direttore' : 'Director Dashboard'}
               </h2>
             </div>
           </div>
@@ -701,7 +723,7 @@ const updateAccount = async (
 
         <div className="flex flex-wrap gap-2">
           <button type="button" onClick={() => setDirectorTab('accounts')} className={`rounded-xl px-4 py-2 text-xs font-black cursor-pointer ${directorTab === 'accounts' ? 'bg-indigo-700 text-white' : 'bg-white text-slate-700 border border-slate-200'}`}>
-            {currentLang === 'ar' ? 'الحسابات' : currentLang === 'fr' ? 'Comptes' : 'Accounts'}
+            {currentLang === 'ar' ? 'الحسابات' : currentLang === 'fr' ? 'Comptes' : currentLang === 'es' ? 'Cuentas' : currentLang === 'it' ? 'Account' : 'Accounts'}
           </button>
           <button type="button" onClick={() => setDirectorTab('sessions')} className={`rounded-xl px-4 py-2 text-xs font-black cursor-pointer ${directorTab === 'sessions' ? 'bg-indigo-700 text-white' : 'bg-white text-slate-700 border border-slate-200'}`}>
             {t.sessionsTab}
@@ -711,45 +733,20 @@ const updateAccount = async (
         <section className="rounded-2xl border border-indigo-200 bg-white p-5 sm:p-6 space-y-4">
           <div>
             <h3 className="text-base font-black text-slate-900">
-              {currentLang === 'ar' ? 'إعدادات المدرسة والمدير' : currentLang === 'fr' ? 'Établissement et compte directeur' : 'School & Director Settings'}
+              {currentLang === 'ar' ? 'إعدادات المدرسة والمدير' : currentLang === 'fr' ? 'Établissement et compte Directeur' : currentLang === 'es' ? 'Configuración de escuela y Director' : currentLang === 'it' ? 'Impostazioni scuola e Direttore' : 'School & Director Settings'}
             </h3>
             <p className="mt-1 text-xs text-slate-500">
               {currentLang === 'ar'
-                ? 'اختر مدرسة موجودة أو أنشئ مدرسة جديدة. سيظهر اسم المدرسة المحفوظ في عنوان المنصة.'
+                ? 'لكل مدير مدرسته وموظفوه وطلابه ودروسه وأسعاره المستقلة. يظهر اسم المدرسة المحفوظ في رأس المنصة.'
                 : currentLang === 'fr'
-                  ? 'Choisissez un établissement ou créez-en un. Son nom sera affiché dans l’en-tête de la plateforme.'
-                  : 'Select an existing school or create a new one. The saved school name becomes the platform header.'}
+                  ? 'Chaque Directeur possède son établissement, son équipe, ses élèves, ses leçons et ses tarifs. Le nom enregistré apparaît dans l\u2019en-tête.'
+                  : 'Each Director has a separate school, staff, students, lessons, and pricing. The saved school name becomes this school\u2019s platform header.'}
             </p>
           </div>
           <form className="grid gap-4 md:grid-cols-2" onSubmit={handleSaveDirectorSettings}>
             <label className="block space-y-1.5">
               <span className="text-xs font-bold text-slate-700">
-                {currentLang === 'ar' ? 'المدرسة' : currentLang === 'fr' ? 'Établissement' : 'School'}
-              </span>
-              <select
-                required
-                value={settingsSchoolId}
-                onChange={(event) => {
-                  const nextId = event.target.value;
-                  setSettingsSchoolId(nextId);
-                  const selected = directorSchools.find((school) => school.id === nextId);
-                  setSettingsSchoolName(selected?.name || '');
-                }}
-                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-sm text-slate-800"
-              >
-                {directorSchools.map((school) => (
-                  <option key={school.id} value={school.id}>{school.name}</option>
-                ))}
-                <option value="__new__">
-                  {currentLang === 'ar' ? '+ إضافة مدرسة جديدة' : currentLang === 'fr' ? '+ Ajouter un établissement' : '+ Add a new school'}
-                </option>
-              </select>
-            </label>
-            <label className="block space-y-1.5">
-              <span className="text-xs font-bold text-slate-700">
-                {settingsSchoolId === '__new__'
-                  ? (currentLang === 'ar' ? 'اسم المدرسة الجديدة' : currentLang === 'fr' ? 'Nom du nouvel établissement' : 'New school name')
-                  : (currentLang === 'ar' ? 'اسم المدرسة / اسم المنصة' : currentLang === 'fr' ? 'Nom de l’établissement / plateforme' : 'School name / platform title')}
+                {currentLang === 'ar' ? 'اسم مدرستك' : currentLang === 'fr' ? 'Nom de votre établissement' : currentLang === 'es' ? 'Nombre de tu escuela' : currentLang === 'it' ? 'Nome della tua scuola' : 'Your school name'}
               </span>
               <input
                 required
@@ -762,7 +759,7 @@ const updateAccount = async (
             </label>
             <label className="block space-y-1.5">
               <span className="text-xs font-bold text-slate-700">
-                {currentLang === 'ar' ? 'اسم مستخدم المدير' : currentLang === 'fr' ? 'Nom d’utilisateur du directeur' : 'Director username'}
+                {currentLang === 'ar' ? 'اسم مستخدم المدير' : currentLang === 'fr' ? 'Nom d\u2019utilisateur du directeur' : currentLang === 'es' ? 'Usuario del Director' : currentLang === 'it' ? 'Nome utente del Direttore' : 'Director username'}
               </span>
               <input
                 required
@@ -777,24 +774,29 @@ const updateAccount = async (
             </label>
             <label className="block space-y-1.5">
               <span className="text-xs font-bold text-slate-700">
-                {currentLang === 'ar' ? 'كلمة مرور جديدة (اختياري)' : currentLang === 'fr' ? 'Nouveau mot de passe (facultatif)' : 'New password (optional)'}
+                {currentLang === 'ar' ? 'كلمة مرور جديدة (اختياري)' : currentLang === 'fr' ? 'Nouveau mot de passe (facultatif)' : currentLang === 'es' ? 'Nueva contraseña (opcional)' : currentLang === 'it' ? 'Nuova password (facoltativa)' : 'New password (optional)'}
               </span>
               <input
                 type="password"
-                minLength={1}
                 maxLength={1024}
                 autoComplete="new-password"
                 value={settingsPassword}
                 onChange={(event) => setSettingsPassword(event.target.value)}
-                placeholder={currentLang === 'ar' ? 'اتركه فارغاً للإبقاء على الحالية' : 'Leave blank to keep current password'}
+                placeholder={currentLang === 'ar' ? 'اتركه فارغاً للإبقاء على الحالية' : currentLang === 'fr' ? 'Laisser vide pour conserver l\u2019actuel' : currentLang === 'es' ? 'Déjalo vacío para mantener la actual' : currentLang === 'it' ? 'Lascia vuoto per mantenere quella attuale' : 'Leave blank to keep current password'}
                 className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-sm text-slate-800"
               />
             </label>
             <div className="md:col-span-2 flex flex-wrap items-center justify-between gap-3">
               <p className="text-[11px] text-slate-500">
                 {currentLang === 'ar'
-                  ? 'سيتم حفظ الإعدادات على الخادم وتطبيقها على رأس الصفحة للزوار والمستخدمين.'
-                  : 'Settings are saved on the server and applied to the public header for guests and signed-in users.'}
+                  ? 'هذه المدرسة ملك لحساب المدير الحالي فقط. سيظهر اسمها في رابط المدرسة ورأس المنصة.'
+                  : currentLang === 'fr'
+                    ? 'Cet établissement appartient uniquement à ce compte Directeur. Son nom apparaît dans le lien et l\u2019en-tête.'
+                    : currentLang === 'es'
+                      ? 'Esta escuela pertenece únicamente a esta cuenta de Director. Su nombre aparece en el enlace y en la cabecera.'
+                      : currentLang === 'it'
+                        ? 'Questa scuola appartiene solo a questo account Direttore. Il nome appare nel link e nell\u2019intestazione.'
+                        : 'This school belongs only to this Director account. Its name appears in the school link and platform header.'}
               </p>
               <button
                 type="submit"
@@ -803,7 +805,7 @@ const updateAccount = async (
               >
                 {settingsSaving
                   ? '…'
-                  : currentLang === 'ar' ? 'حفظ الإعدادات' : currentLang === 'fr' ? 'Enregistrer' : 'Save school & Director settings'}
+                  : currentLang === 'ar' ? 'حفظ الإعدادات' : currentLang === 'fr' ? 'Enregistrer' : currentLang === 'es' ? 'Guardar configuración' : currentLang === 'it' ? 'Salva impostazioni' : 'Save school & Director settings'}
               </button>
             </div>
           </form>
@@ -820,10 +822,35 @@ const updateAccount = async (
           </div>
         )}
         {directorTab === 'sessions' && directorToken ? (
-          <DirectorSessionsPanel currentLang={currentLang} token={directorToken} grades={LEBANESE_GRADE_LEVELS} />
+          <>
+            <DirectorSessionsPanel
+              currentLang={currentLang}
+              token={directorToken}
+              grades={LEBANESE_GRADE_LEVELS}
+              onJoinSession={handleMonitorSession}
+            />
+            {monitorSession && (
+              <section className="rounded-2xl border border-emerald-200 bg-white p-4 sm:p-5 space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <h3 className="text-sm font-black text-slate-900">
+                      {currentLang === 'ar' ? 'مراقبة الصف' : currentLang === 'fr' ? 'Surveillance de la classe' : currentLang === 'es' ? 'Supervisión de la clase' : currentLang === 'it' ? 'Monitoraggio della classe' : 'Class monitoring'}
+                    </h3>
+                    <p className="text-xs text-slate-500">{monitorSession.gradeId.toUpperCase()} · {monitorSession.subject} · {monitorSession.title}</p>
+                  </div>
+                  <button type="button" onClick={() => { setMonitorSession(null); setMonitorStream(null); setMonitorError(''); }} className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold text-slate-600">
+                    {currentLang === 'ar' ? 'إغلاق' : currentLang === 'fr' ? 'Fermer' : currentLang === 'es' ? 'Cerrar' : currentLang === 'it' ? 'Chiudi' : 'Close'}
+                  </button>
+                </div>
+                {monitorLoading ? <p className="py-8 text-center text-sm text-slate-500">…</p> : monitorError ? <p role="alert" className="rounded-xl bg-red-50 p-3 text-xs text-red-700">{monitorError}</p> : monitorStream ? (
+                  <LiveVideoPlayer currentLang={currentLang} stream={monitorStream} sessionToken="" gradeId={monitorSession.id} directorToken={directorToken} />
+                ) : null}
+              </section>
+            )}
+          </>
         ) : directorLoading ? (
           <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center text-sm text-slate-500">
-            {currentLang === 'ar' ? 'جارٍ تحميل التسجيلات...' : currentLang === 'fr' ? 'Chargement des inscriptions...' : 'Loading registrations...'}
+            {currentLang === 'ar' ? 'جارٍ تحميل التسجيلات...' : currentLang === 'fr' ? 'Chargement des inscriptions...' : currentLang === 'es' ? 'Cargando registros...' : currentLang === 'it' ? 'Caricamento delle registrazioni...' : 'Loading registrations...'}
           </div>
         ) : (
           <div className="space-y-6">
@@ -870,7 +897,7 @@ const updateAccount = async (
                     ? 'غرفة البث'
                     : currentLang === 'fr'
                       ? 'Salle de diffusion'
-                      : 'Broadcast Room'}
+                      : currentLang === 'es' ? 'Sala de emisión' : currentLang === 'it' ? 'Sala trasmissione' : 'Broadcast Room'}
                 </span>
 
                 <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
