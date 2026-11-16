@@ -26,6 +26,7 @@ export const LearningResourcesView: React.FC<LearningResourcesViewProps> = ({
   sessionToken,
 }) => {
   const isArabic = currentLang === 'ar';
+  const isFrench = currentLang === 'fr';
   const isEducator = registeredAccount?.role === 'educator';
 
   const [educators, setEducators] = useState<SchoolEducator[]>([]);
@@ -113,7 +114,7 @@ export const LearningResourcesView: React.FC<LearningResourcesViewProps> = ({
           (educator) =>
             Boolean(registeredAccount?.registeredSessionId) &&
             educator.registeredSessionId ===
-              registeredAccount.registeredSessionId
+              registeredAccount?.registeredSessionId
         );
 
         setEducatorId(
