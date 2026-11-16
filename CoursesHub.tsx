@@ -419,12 +419,12 @@ const updateAccount = async (
             <th className="px-3 py-3 text-left font-black text-slate-700">{t.passwordLabel}</th>
             <th className="px-3 py-3 text-left font-black text-slate-700">{t.emailLabel}</th>
             <th className="px-3 py-3 text-left font-black text-slate-700">{t.phoneNumber}</th>
-            <th className="px-3 py-3 text-left font-black text-slate-700">{currentLang === 'ar' ? 'المدرسة / المادة' : currentLang === 'fr' ? 'École / matière' : 'School / subject'}</th>
+            <th className="px-3 py-3 text-left font-black text-slate-700">{currentLang === 'ar' ? 'المدرسة / المادة' : currentLang === 'fr' ? 'Établissement / matière' : currentLang === 'es' ? 'Escuela / materia' : currentLang === 'it' ? 'Scuola / materia' : 'School / subject'}</th>
             <th className="px-3 py-3 text-left font-black text-slate-700">{t.registeredSessionLabel}</th>
             <th className="px-3 py-3 text-left font-black text-slate-700">{t.joiningDate}</th>
             <th className="px-3 py-3 text-left font-black text-slate-700">{t.expiryDate}</th>
-            <th className="px-3 py-3 text-left font-black text-slate-700">{currentLang === 'ar' ? 'مفعّل' : currentLang === 'fr' ? 'Activé' : 'Activated'}</th>
-            <th className="px-3 py-3 text-left font-black text-slate-700">{currentLang === 'ar' ? 'مدفوع' : currentLang === 'fr' ? 'Payé' : 'Paid'}</th>
+            <th className="px-3 py-3 text-left font-black text-slate-700">{currentLang === 'ar' ? 'مفعّل' : currentLang === 'fr' ? 'Activé' : currentLang === 'es' ? 'Activado' : currentLang === 'it' ? 'Attivato' : 'Activated'}</th>
+            <th className="px-3 py-3 text-left font-black text-slate-700">{currentLang === 'ar' ? 'مدفوع' : currentLang === 'fr' ? 'Payé' : currentLang === 'es' ? 'Pagado' : currentLang === 'it' ? 'Pagato' : 'Paid'}</th>
             <th className="px-3 py-3 text-center font-black text-rose-700">{t.delete}</th>
           </tr>
         </thead>
@@ -527,7 +527,7 @@ const updateAccount = async (
         }
         className="text-[10px] font-bold text-indigo-700 underline"
       >
-        {currentLang === 'ar' ? 'فصل الصف' : 'Separate classroom'}
+        {currentLang === 'ar' ? 'فصل الصف' : currentLang === 'fr' ? 'Dissocier la classe' : currentLang === 'es' ? 'Desvincular aula' : currentLang === 'it' ? 'Scollega aula' : 'Separate classroom'}
       </button>
     )}
   </div>
@@ -572,7 +572,7 @@ const updateAccount = async (
           {rows.length === 0 && (
             <tr>
                             <td                 colSpan={showEducatorColumn ? 13 : 12}                 className="px-4 py-8 text-center text-slate-500"               >
-                {currentLang === 'ar' ? 'لا توجد تسجيلات بعد.' : currentLang === 'fr' ? 'Aucune inscription pour le moment.' : 'No registrations yet.'}
+                {currentLang === 'ar' ? 'لا توجد تسجيلات بعد.' : currentLang === 'fr' ? 'Aucune inscription pour le moment.' : currentLang === 'es' ? 'Todavía no hay registros.' : currentLang === 'it' ? 'Non ci sono ancora registrazioni.' : 'No registrations yet.'}
               </td>
             </tr>
           )}
