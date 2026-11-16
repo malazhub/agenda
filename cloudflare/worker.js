@@ -1541,6 +1541,115 @@ async function createSessions(request, env) {
   return json({ saved: statements.length }, 201);
 }
 
+
+function publicEducatorLesson(row) {
+  return {
+    id: row.id,
+    schoolId: row.school_id,
+    educatorId: row.educator_id,
+    slot: row.slot,
+    title: row.title || "",
+    subject: row.subject || "",
+    description: row.description || "",
+    mediaUrl: row.media_key ? `/api/media/${encodeURIComponent(row.media_key)}` : null,
+    mediaName: row.media_name || null,
+    mediaType: row.media_type || null,
+    mediaSize: Number(row.media_size || 0),
+    updatedAt: row.updated_at,
+  };
+}
+
+async function schoolEducators(env, schoolId) {
+  const school = await env.DB.prepare("SELECT id FROM schools WHERE id = ?").bind(schoolId).first();
+  if (!school) return json({ error: "School not found." }, 404);
+  const result = await env.DB.prepare(
+    `SELECT id, full_name, school_or_subject, grade_id, registered_session_id
+     FROM accounts
+     WHERE school_id = ? AND role = 'educator'
+     ORDER BY full_name COLLATE NOCASE`
+  ).bind(schoolId).all();
+  return json({ educators: (result.results || []).map((row) => ({
+    id: row.id,
+    fullName: row.full_name,
+    subject: row.school_or_subject || "",
+    gradeId: row.grade_id,
+    registeredSessionId: row.registered_session_id || null,
+  })) });
+}
+
+async function educatorLessons(env, schoolId, educatorId) {
+  const educator = await env.DB.prepare(
+    "SELECT id FROM accounts WHERE id = ? AND school_id = ? AND role = 'educator'"
+  ).bind(educatorId, schoolId).first();
+  if (!educator) return json({ error: "Educator not found in this school." }, 404);
+  const result = await env.DB.prepare(
+    "SELECT * FROM educator_lessons WHERE school_id = ? AND educator_id = ? ORDER BY slot"
+  ).bind(schoolId, educatorId).all();
+  return json({ lessons: (result.results || []).map(publicEducatorLesson) });
+}
+
+async function updateEducatorLesson(request, env, lessonId, clearOnly = false) {
+  const claims = await authenticate(request, env, "educator");
+  if (!claims) return json({ error: "Educator authentication required." }, 401);
+  const educator = await env.DB.prepare(
+    "SELECT id, school_id FROM accounts WHERE id = ? AND role = 'educator'"
+  ).bind(claims.sub).first();
+  if (!educator) return json({ error: "Educator account not found." }, 404);
+  const lesson = await env.DB.prepare(
+    "SELECT * FROM educator_lessons WHERE id = ? AND educator_id = ? AND school_id = ?"
+  ).bind(lessonId, educator.id, educator.school_id).first();
+  if (!lesson) return json({ error: "Lesson slot not found." }, 404);
+
+  if (clearOnly) {
+    if (lesson.media_key) await env.SESSION_MEDIA_BUCKET.delete(lesson.media_key);
+    await env.DB.prepare(
+      `UPDATE educator_lessons
+       SET title = '', subject = '', description = '', media_key = NULL,
+           media_name = NULL, media_type = NULL, media_size = 0, updated_at = datetime('now')
+       WHERE id = ? AND educator_id = ? AND school_id = ?`
+    ).bind(lessonId, educator.id, educator.school_id).run();
+  } else {
+    const form = await request.formData();
+    const title = String(form.get("title") || "").trim();
+    const subject = String(form.get("subject") || "").trim();
+    const description = String(form.get("description") || "").trim();
+    if (title.length > 200 || subject.length > 100 || description.length > 5000) {
+      return json({ error: "Lesson text exceeds the allowed length." }, 400);
+    }
+    const file = form.get("file");
+    let mediaKey = lesson.media_key;
+    let mediaName = lesson.media_name;
+    let mediaType = lesson.media_type;
+    let mediaSize = Number(lesson.media_size || 0);
+    if (file && typeof file.arrayBuffer === "function" && file.size > 0) {
+      if (file.size > 50 * 1024 * 1024) return json({ error: "Lesson files must be 50 MB or smaller." }, 413);
+      const contentType = String(file.type || "").toLowerCase();
+      if (!/^(application\/pdf|image\/(jpeg|png|webp)|video\/(mp4|webm|quicktime))$/.test(contentType)) {
+        return json({ error: "Supported lesson files are PDF, JPG, PNG, WebP, MP4, WebM and MOV." }, 415);
+      }
+      const nextKey = `learning/${educator.school_id}/${educator.id}/${lessonId}/${randomId()}`;
+      await env.SESSION_MEDIA_BUCKET.put(nextKey, await file.arrayBuffer(), {
+        httpMetadata: { contentType },
+      });
+      if (lesson.media_key) await env.SESSION_MEDIA_BUCKET.delete(lesson.media_key);
+      mediaKey = nextKey;
+      mediaName = String(file.name || "lesson-file").slice(0, 255);
+      mediaType = contentType;
+      mediaSize = file.size;
+    }
+    await env.DB.prepare(
+      `UPDATE educator_lessons
+       SET title = ?, subject = ?, description = ?, media_key = ?, media_name = ?,
+           media_type = ?, media_size = ?, updated_at = datetime('now')
+       WHERE id = ? AND educator_id = ? AND school_id = ?`
+    ).bind(title, subject, description, mediaKey, mediaName, mediaType, mediaSize,
+      lessonId, educator.id, educator.school_id).run();
+  }
+
+  const saved = await env.DB.prepare("SELECT * FROM educator_lessons WHERE id = ?").bind(lessonId).first();
+  return json({ saved: !clearOnly, deleted: clearOnly, lesson: publicEducatorLesson(saved) });
+}
+
 async function uploadMedia(request, env, objectKey) {
   const director = await authenticate(request, env, "director");
   if (!director) return json({ error: "Director authentication required." }, 401);
@@ -2243,7 +2352,19 @@ async function handle(request, env) {
   if (request.method === "POST" && path === "/api/auth/register") return handleRegister(request, env);
   if (request.method === "POST" && path === "/api/auth/login") return handleLogin(request, env);
   if (request.method === "GET" && path === "/api/auth/me") return getCurrentAccount(request, env);
-    if (request.method === "GET" && path === "/api/schools") {
+    const schoolEducatorsMatch = path.match(/^\\/api\\/schools\\/([^/]+)\\/educators$/);
+  if (request.method === "GET" && schoolEducatorsMatch) {
+    return schoolEducators(env, decodeURIComponent(schoolEducatorsMatch[1]));
+  }
+  const lessonReadMatch = path.match(/^\\/api\\/learning\\/educators\\/([^/]+)\\/lessons$/);
+  if (request.method === "GET" && lessonReadMatch) {
+    const requestedSchoolId = url.searchParams.get("schoolId") || "";
+    return educatorLessons(env, requestedSchoolId, decodeURIComponent(lessonReadMatch[1]));
+  }
+  const lessonWriteMatch = path.match(/^\\/api\\/learning\\/lessons\\/([a-zA-Z0-9_-]{1,100})$/);
+  if (lessonWriteMatch && request.method === "PUT") return updateEducatorLesson(request, env, lessonWriteMatch[1]);
+  if (lessonWriteMatch && request.method === "DELETE") return updateEducatorLesson(request, env, lessonWriteMatch[1], true);
+  if (request.method === "GET" && path === "/api/schools") {
     const result = await env.DB.prepare("SELECT id, name FROM schools ORDER BY name COLLATE NOCASE").all();
     return json({ schools: result.results || [] });
   }
