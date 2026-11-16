@@ -317,8 +317,7 @@ export const AIChatBot: React.FC<AIChatBotProps> = ({ currentLang, schoolId, sch
     if (!selectedLanguageQuestion) {
       try {
         const translation = await generateGeminiContent([{
-          text: `
-            text: `Translate the user question below into ${languageNames[currentLang]}.
+          text: `Translate the user question below into ${languageNames[currentLang]}.
 Return ONLY the translation: no explanation, no answer, no quotes, and no language label.
 Preserve proper names, school names, usernames, numbers, prices, grade identifiers, and technical product names exactly.
 If the question is already in ${languageNames[currentLang]}, return it unchanged.
