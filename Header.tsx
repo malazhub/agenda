@@ -1,6 +1,7 @@
 import React from 'react';
 import { Language, UserProfile } from '../types';
 import { translations } from '../translations';
+import type { SchoolRecord } from '../services/cloudflareApi';
 import { UserPlus, LogOut, Share2 } from 'lucide-react';
 
 interface HeaderProps {
@@ -12,6 +13,10 @@ interface HeaderProps {
   onRoleChange: (role: 'student' | 'teacher') => void;
   onOpenRegister: () => void;
   signedInName?: string;
+  schoolName?: string;
+  schools?: SchoolRecord[];
+  selectedSchoolId?: string;
+  onSchoolChange?: (schoolId: string) => void;
   onOpenArchiveSessions?: () => void;
   onSignOut?: () => void;
 }
@@ -22,6 +27,10 @@ export const Header: React.FC<HeaderProps> = ({
   onTabChange,
   onOpenRegister,
   signedInName,
+  schoolName,
+  schools = [],
+  selectedSchoolId = '',
+  onSchoolChange,
   onSignOut,
 }) => {
   const t = translations[currentLang];
@@ -32,6 +41,20 @@ export const Header: React.FC<HeaderProps> = ({
         <div className="grid grid-cols-1 md:grid-cols-3 items-center gap-3">
           {/* Left Side: Register OR Sign Out action */}
           <div className="flex flex-wrap items-center gap-2 justify-start order-2 md:order-1">
+            {signedInName ? (
+              <span className="max-w-48 truncate rounded-xl bg-indigo-50 px-3 py-2 text-xs font-bold text-indigo-700" title={schoolName}>
+                {schoolName || 'School'}
+              </span>
+            ) : schools.length > 0 ? (
+              <select
+                aria-label="Select school"
+                value={selectedSchoolId}
+                onChange={(event) => onSchoolChange?.(event.target.value)}
+                className="max-w-56 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700"
+              >
+                {schools.map((school) => <option key={school.id} value={school.id}>{school.name}</option>)}
+              </select>
+            ) : null}
             {signedInName ? (
               /* Sign Out Card (Displayed when user is signed in) */
               <div className="flex items-center gap-2 bg-slate-100 border border-slate-200 rounded-xl px-3 py-1.5 shadow-xs">
