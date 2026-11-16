@@ -9,6 +9,7 @@ import {
 } from '@stream-io/video-client';
 import {
   getLiveEducators,
+  getSchoolEducators,
   createGuestLiveStream,
   setEducatorLiveSession,
   getLiveStreamStatus,
@@ -22,6 +23,7 @@ import type {
   CloudflareAccount,
   ClassroomMessage,
   StoredSessionRecord,
+  SchoolEducator,
 } from '../services/cloudflareApi';
 
 import {
@@ -290,61 +292,71 @@ const callEventUnsubs = useRef<Array<() => void>>([]);
 const containerRef = useRef<HTMLDivElement>(null);
 
   
-    // Directory of ALL currently broadcasting educators.
+  // Directory of every educator in this school, enriched with live status.
   const [liveSessionsList, setLiveSessionsList] = useState<Array<{
     id: string;
+    educatorId: string;
+    sessionId: string | null;
     grade: string;
     educatorName: string;
     subject: string;
     isLive: boolean;
   }>>([]);
 
-      // The live educator directory is visible to guests and signed-in users.
+  // Students and guests can see the full school educator directory.
+  // Only the educator's exact assigned session can be joined by a student.
   useEffect(() => {
     let active = true;
-
-    const loadLiveSessions = async () => {
+    const loadEducatorDirectory = async () => {
+      const currentSchoolId = schoolId || registeredAccount?.schoolId || '';
+      if (!currentSchoolId) {
+        setLiveSessionsList([]);
+        return;
+      }
       try {
-                const { educators } = await getLiveEducators(
-          schoolId || registeredAccount?.schoolId || ''
-        );
-
+        const [{ educators: schoolEducators }, { educators: liveEducators }] = await Promise.all([
+          getSchoolEducators(currentSchoolId),
+          getLiveEducators(currentSchoolId),
+        ]);
         if (!active) return;
 
-        const liveSessions = (educators || [])
-          .filter((educator) => educator.isLive)
-          .map((educator) => ({
-            id: educator.sessionId,
-            grade: educator.gradeId.toUpperCase(),
-            educatorName: educator.educatorName,
-            subject: educator.subject || 'Subject',
-            isLive: true,
-          }));
-
-        setLiveSessionsList(liveSessions);
-      } catch (error) {
-        console.error(
-          'Failed to load all live educators:',
-          error
+        const liveBySessionId = new Map(
+          (liveEducators || [])
+            .filter((educator) => educator.isLive)
+            .map((educator) => [String(educator.sessionId), educator])
         );
 
-        if (active) {
-          setLiveSessionsList([]);
-        }
+        const directory = (schoolEducators || []).map((educator: SchoolEducator) => {
+          const sessionId = educator.registeredSessionId || null;
+          const liveSession = sessionId ? liveBySessionId.get(String(sessionId)) : undefined;
+          return {
+            id: sessionId || `educator-${educator.id}`,
+            educatorId: educator.id,
+            sessionId,
+            grade: (liveSession?.gradeId || educator.gradeId || '').toUpperCase(),
+            educatorName: educator.fullName,
+            subject: liveSession?.subject || educator.subject || 'Subject',
+            isLive: Boolean(liveSession?.isLive),
+          };
+        });
+
+        setLiveSessionsList(directory);
+      } catch (error) {
+        console.error('Failed to load the school educator directory:', error);
+        if (active) setLiveSessionsList([]);
       }
     };
 
-    void loadLiveSessions();
-
+    void loadEducatorDirectory();
     const refreshInterval = window.setInterval(() => {
-      void loadLiveSessions();
+      void loadEducatorDirectory();
     }, 10000);
 
     return () => {
       active = false;
       window.clearInterval(refreshInterval);
     };
-    }, [schoolId, registeredAccount?.schoolId, reloadKey]);
+  }, [schoolId, registeredAccount?.schoolId, reloadKey]);
     // 45-minute countdown timer
   useEffect(() => {
     let interval: any = null;
@@ -1396,7 +1408,8 @@ const isStudentSessionMatch = (session: any): boolean => {
     return false;
   }
 
-  return String(session.id) === String(assignedSessionId);
+  return Boolean(session.isLive) &&
+    String(session.sessionId || session.id) === String(assignedSessionId);
 };
 
   // Show every educator who is currently broadcasting.
@@ -1405,7 +1418,9 @@ const visibleLiveSessions = isEducator ? [] : liveSessionsList;
 // Keep the student's own assigned classroom identified separately.
 const studentPrimarySession =
   visibleLiveSessions.find(
-    (session) => String(session.id) === String(assignedSessionId)
+    (session) =>
+      session.isLive &&
+      String(session.sessionId || session.id) === String(assignedSessionId)
   ) || null;
 
     // Student join validation
@@ -2743,33 +2758,6 @@ const handleClearChatMessages = async () => {
                   {currentLang === 'ar' ? 'انقر للانضمام كضيف' : currentLang === 'fr' ? 'Cliquez pour rejoindre en tant qu’invité' : currentLang === 'es' ? 'Haz clic para entrar como invitado' : currentLang === 'it' ? 'Clicca per entrare come ospite' : 'Click to join as a guest'}
                 </button>
               )}       
-              {/* STUDENT JOIN CARD */}
-              {!isEducator && studentPrimarySession && (
-                <div className="bg-linear-to-r from-emerald-950 via-slate-900 to-indigo-950 border-2 border-emerald-400 p-5 rounded-3xl shadow-xl flex flex-wrap items-center justify-between gap-4 text-white">
-                  <div className="space-y-1">
-                    <span className="text-[11px] font-black uppercase tracking-wider text-emerald-400 flex items-center gap-2">
-                      <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping" />
-                      {currentLang === 'ar' ? 'حصتك المباشرة المعتمدة جاهزة للانضمام' : currentLang === 'fr' ? 'Votre classe en direct est prête' : currentLang === 'es' ? 'Tu aula en directo está lista' : currentLang === 'it' ? 'La tua aula dal vivo è pronta' : 'Your Enrolled Live Classroom is Ready'}
-                    </span>
-                    <h3 className="text-xl font-black text-white">
-                      {currentLang === 'ar' ? 'الأستاذ: ' : currentLang === 'fr' ? 'Éducateur : ' : currentLang === 'es' ? 'Educador: ' : currentLang === 'it' ? 'Educatore: ' : 'Educator: '}{studentPrimarySession.educatorName}
-                    </h3>
-                    <p className="text-xs text-slate-300 font-semibold">
-                      {selectedGrade.name[currentLang]} • {studentPrimarySession.subject}
-                    </p>
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={() => handleStudentJoinRoom(studentPrimarySession)}
-                    className="bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black px-6 py-3.5 rounded-2xl transition cursor-pointer text-sm shadow-xl flex items-center gap-2 transform hover:scale-105 active:scale-95"
-                  >
-                    <Video className="w-5 h-5 text-slate-950" />
-                    <span>{currentLang === 'ar' ? 'اضغط هنا للدخول إلى الصف' : currentLang === 'fr' ? 'Cliquez pour rejoindre le cours' : currentLang === 'es' ? 'Haz clic para entrar en clase' : currentLang === 'it' ? 'Clicca per entrare in classe' : 'Click to Join Class Now'}</span>
-                  </button>
-                </div>
-              )}
-
                                           {/* CLICKABLE EDUCATOR START LIVE SESSION */}
               {isEducator && (
                 <button
@@ -2862,7 +2850,7 @@ const handleClearChatMessages = async () => {
                 <div className="grid gap-4 md:grid-cols-2">
                   {visibleLiveSessions.map((session) => {
                     const isMyAssignedRoom =
-                      isStudentSessionMatch(session);
+                      isStudentSessionMatch(session) && session.isLive;
 
                     const isEducatorOwnRoom =
                       isEducator &&
@@ -2884,9 +2872,11 @@ const handleClearChatMessages = async () => {
                               {session.subject}
                             </span>
 
-                            <span className="flex items-center gap-1 text-[10px] font-black text-rose-600 bg-rose-50 px-2 py-0.5 rounded-md border border-rose-200">
-                              <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-ping" />
-                              LIVE
+                            <span className={`flex items-center gap-1 text-[10px] font-black px-2 py-0.5 rounded-md border ${session.isLive ? 'text-rose-600 bg-rose-50 border-rose-200' : 'text-slate-500 bg-slate-100 border-slate-200'}`}>
+                              <span className={`w-1.5 h-1.5 rounded-full ${session.isLive ? 'bg-rose-500 animate-ping' : 'bg-slate-400'}`} />
+                              {session.isLive
+                                ? (currentLang === 'ar' ? 'مباشر' : currentLang === 'fr' ? 'EN DIRECT' : currentLang === 'es' ? 'EN DIRECTO' : currentLang === 'it' ? 'IN DIRETTA' : 'LIVE')
+                                : (currentLang === 'ar' ? 'غير متصل' : currentLang === 'fr' ? 'HORS LIGNE' : currentLang === 'es' ? 'DESCONECTADO' : currentLang === 'it' ? 'NON IN LINEA' : 'OFFLINE')}
                             </span>
                           </div>
 
@@ -2903,8 +2893,14 @@ const handleClearChatMessages = async () => {
                               <CheckCircle2 className="w-3 h-3 text-emerald-600" />
                               <span>
                                 {currentLang === 'ar'
-                                  ? 'صفك الدراسي المعتمد'
-                                  : 'Your Enrolled Class'}
+                                  ? 'أستاذك المسجّل يبث الآن'
+                                  : currentLang === 'fr'
+                                    ? 'Votre éducateur inscrit est en direct'
+                                    : currentLang === 'es'
+                                      ? 'Tu educador asignado está en directo'
+                                      : currentLang === 'it'
+                                        ? 'Il tuo educatore assegnato è in diretta'
+                                        : 'Your assigned educator is live'}
                               </span>
                             </span>
                           )}
@@ -2949,7 +2945,9 @@ const handleClearChatMessages = async () => {
                             </button>
                           ) : (
                             <div className="w-full py-2.5 text-center text-xs font-bold text-slate-400 bg-slate-100 rounded-xl">
-                              {currentLang === 'ar' ? 'غير مسجل في هذه الحصة' : currentLang === 'fr' ? 'Non inscrit à ce cours' : currentLang === 'es' ? 'No estás asignado a esta sesión' : currentLang === 'it' ? 'Non sei assegnato a questa lezione' : 'Not assigned to this session'}
+                              {isStudent && String(session.sessionId || '') === String(assignedSessionId) && !session.isLive
+                                ? (currentLang === 'ar' ? 'الأستاذ المسجّل غير متصل حالياً' : currentLang === 'fr' ? 'Votre éducateur inscrit est actuellement hors ligne' : currentLang === 'es' ? 'Tu educador asignado está desconectado' : currentLang === 'it' ? 'Il tuo educatore assegnato è offline' : 'Your assigned educator is currently offline')
+                                : (currentLang === 'ar' ? 'غير مسجل في هذه الحصة' : currentLang === 'fr' ? 'Non inscrit à ce cours' : currentLang === 'es' ? 'No estás asignado a esta sesión' : currentLang === 'it' ? 'Non sei assegnato a questa lezione' : 'Not assigned to this session')}
                             </div>
                           )}
                         </div>
