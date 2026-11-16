@@ -93,6 +93,18 @@ export const Header: React.FC<HeaderProps> = ({
                     <span className="text-amber-500">et cours </span>
                     <span className="text-blue-600">particuliers</span>
                   </>
+                ) : currentLang === 'es' ? (
+                  <>
+                    <span className="text-rose-600">Educación </span>
+                    <span className="text-amber-500">y clases </span>
+                    <span className="text-blue-600">particulares</span>
+                  </>
+                ) : currentLang === 'it' ? (
+                  <>
+                    <span className="text-rose-600">Istruzione </span>
+                    <span className="text-amber-500">e lezioni </span>
+                    <span className="text-blue-600">private</span>
+                  </>
                 ) : (
                   <>
                     <span className="text-rose-600">Education </span>
@@ -113,7 +125,7 @@ export const Header: React.FC<HeaderProps> = ({
                 const shareUrl = `https://malazhub.github.io/agenda/?schoolId=${encodeURIComponent(schoolId)}`;
                 const shareData = {
                   title: schoolName || 'Agenda',
-                  text: currentLang === 'ar' ? `منصة ${schoolName || 'Agenda'} للتعليم والدروس الخصوصية` : `${schoolName || 'Agenda'} Educational Platform`,
+                  text: currentLang === 'ar' ? `منصة ${schoolName || 'Agenda'} للتعليم والدروس الخصوصية` : currentLang === 'fr' ? `Plateforme éducative ${schoolName || 'Agenda'}` : currentLang === 'es' ? `Plataforma educativa ${schoolName || 'Agenda'}` : currentLang === 'it' ? `Piattaforma educativa ${schoolName || 'Agenda'}` : `${schoolName || 'Agenda'} Educational Platform`,
                   url: shareUrl,
                 };
                 if (navigator.share) {
