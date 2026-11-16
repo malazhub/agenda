@@ -1,4 +1,4 @@
-export type Language = 'ar' | 'en' | 'fr';
+export type Language = 'ar' | 'en' | 'fr' | 'it' | 'es';
 
 export type AcademicTrack = 
   | 'BREVET' // Grade 9 / EB9
@@ -107,6 +107,9 @@ export interface Teacher {
     en: string;
     fr: string;
     ar: string;
+    it?: string;
+    es?: string;
+    [key: string]: string | undefined;
   };
   availableSlots: string[]; // e.g. ["Today 4:00 PM", "Today 5:30 PM", "Tomorrow 3:00 PM"]
   acceptsTrials: boolean; // all certified teachers accept the 3 free trials
@@ -189,9 +192,9 @@ export type GradeLevelId =
 
 export interface GradeLevelDef {
   id: GradeLevelId;
-  name: { ar: string; fr: string; en: string };
+  name: { ar: string; fr: string; en: string; it?: string; es?: string; [key: string]: string | undefined };
   badge: string;
-  cycle: { ar: string; fr: string; en: string };
+  cycle: { ar: string; fr: string; en: string; it?: string; es?: string; [key: string]: string | undefined };
   color: string;
   iconBg: string;
 }
