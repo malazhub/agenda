@@ -58,6 +58,67 @@ export const AIChatBot: React.FC<AIChatBotProps> = ({ currentLang, schoolId, sch
   // Deterministic answers use the selected school's live configuration.
   const getSavedResponse = (query: string, context = schoolContext): string | null => {
     const q = query.toLowerCase();
+
+    const applicationOverviewQuestion = [
+      'what is agenda', 'about agenda', 'agenda application', 'agenda app', 'about the app',
+      'how to use agenda', 'how do i use', 'how to navigate', 'how do i navigate',
+      'navigate the app', 'application overview', 'brief about', 'brief of the app',
+      'rename my school', 'rename school', 'change school name', 'school name',
+      'own copy', 'my own copy', 'get my own copy', 'get a copy', 'buy a copy',
+      'purchase a copy', '150 usd', '150 dollars', '150 usd', 'my own school',
+      'présentation', 'présentez', 'à propos', 'comment naviguer', 'changer le nom de l’école',
+      'renommer mon école', 'ma propre copie', 'ma propre version', 'acheter une copie',
+      'presentación', 'sobre agenda', 'cómo navegar', 'como navegar', 'cambiar el nombre de la escuela',
+      'mi propia copia', 'obtener una copia', 'comprar una copia',
+      'presentazione', 'informazioni su agenda', 'come navigare', 'cambiare il nome della scuola',
+      'la mia copia', 'ottenere una copia', 'acquistare una copia',
+      'شرح التطبيق', 'نبذة عن التطبيق', 'ما هو أجندة', 'كيف أتنقل', 'كيفية التنقل',
+      'تغيير اسم المدرسة', 'تغيير اسم مدرستي', 'نسختي الخاصة', 'نسخة خاصة', 'شراء نسخة',
+      '150 دولار', 'مئة وخمسون دولار'
+    ].some((keyword) => q.includes(keyword));
+
+    if (applicationOverviewQuestion) {
+      if (currentLang === 'ar') return [
+        'نبذة عن Agenda:',
+        'Agenda منصة تعليمية وإدارية للمدارس. تتيح للطلاب الوصول إلى الصفوف المباشرة والدروس والموارد التعليمية المحفوظة، وللمعلمين تقديم الحصص وإدارة موادهم، وللمدير إدارة المدرسة ومراقبة الصفوف.',
+        'تغيير اسم المدرسة: سجّل الدخول من بطاقة «دخول المدير» في الشاشة الرئيسية، ثم افتح «لوحة المدير» ← «الحسابات». غيّر حقل «اسم المدرسة» واضغط «حفظ». سيظهر الاسم الجديد في رأس المنصة وفي هوية رابط المدرسة.',
+        'التنقل: يستخدم الطلاب «غرفة البث» للدخول إلى الحصة المباشرة المخصصة لهم عندما يبدأ الأستاذ البث، ثم يفتحون «الموارد التعليمية» لاسترجاع الدروس والملفات المحفوظة. يفتح المعلم غرفته من «غرفة البث» ويبدأ الحصة. ومن «لوحة المدير» ← «الحسابات» يدير المدير الطلاب والمعلمين، ومن «إدارة الحصص» يضيف الحصص ويحدد السعر الشهري لكل صف ويراقب الصفوف.',
+        'نسختك الخاصة: يمكن لأي مستخدم الحصول على نسخة مستقلة من Agenda مقابل 150 دولاراً أمريكياً. يصبح صاحب النسخة مديرها، ويمكنه إدارة مدرسته واسمها ومعلميها وطلابها وحصصها ودروسها المحفوظة وأسعارها الشهرية، ومراقبة الحصص وتقديمها. وتبقى مدرسته وبياناتها مستقلة عن مدارس المديرين الآخرين.',
+        'لطلب نسخة مستقلة، تواصل مع إدارة Agenda؛ هذه المحادثة لا تعالج المدفوعات.'
+      ].join('\n\n');
+      if (currentLang === 'fr') return [
+        'Présentation d’Agenda :',
+        'Agenda est une plateforme éducative et de gestion scolaire. Les élèves y accèdent aux cours en direct et aux ressources enregistrées, les éducateurs donnent leurs cours et gèrent leurs supports, et le Directeur administre son établissement et surveille les classes.',
+        'Renommer votre établissement : connectez-vous avec la carte « Connexion Directeur » sur l’écran principal, puis ouvrez « Tableau de bord » → « Comptes ». Modifiez le champ « Nom de l’établissement » et cliquez sur « Enregistrer ». Le nouvel intitulé apparaît dans l’en-tête de la plateforme et l’identité du lien de l’établissement.',
+        'Navigation : les élèves ouvrent « Salle de diffusion » pour rejoindre leur cours attribué lorsque l’éducateur démarre la diffusion, puis « Ressources pédagogiques » pour retrouver les leçons et fichiers enregistrés. Les éducateurs ouvrent leur salle depuis « Salle de diffusion » et démarrent le cours. Dans « Tableau de bord » → « Comptes », le Directeur gère les élèves et les éducateurs ; dans « Gestion des cours », il ajoute des cours, fixe le tarif mensuel de chaque classe et surveille les salles.',
+        'Votre propre copie : tout utilisateur peut obtenir une copie indépendante d’Agenda au prix de 150 USD. L’acheteur en devient le Directeur et peut gérer son établissement, son nom, ses éducateurs, ses élèves, ses cours, ses leçons enregistrées et ses tarifs mensuels, ainsi que surveiller et animer les cours. Son établissement et ses données restent séparés de ceux des autres Directeurs.',
+        'Pour demander votre copie indépendante, contactez l’administration d’Agenda ; cette conversation ne traite pas les paiements.'
+      ].join('\n\n');
+      if (currentLang === 'es') return [
+        'Presentación de Agenda:',
+        'Agenda es una plataforma educativa y de gestión escolar. Los estudiantes acceden a clases en directo y recursos guardados; los educadores imparten clases y gestionan sus materiales; y el Director administra su escuela y supervisa las aulas.',
+        'Cambiar el nombre de la escuela: inicia sesión desde la tarjeta «Acceso del Director» en la pantalla principal y abre «Panel del Director» → «Cuentas». Cambia el campo «Nombre de la escuela» y pulsa «Guardar». El nuevo nombre aparecerá en el encabezado de la plataforma y en la identidad del enlace escolar.',
+        'Navegación: los estudiantes abren «Sala de emisión» para entrar en la sesión que tienen asignada cuando el educador inicia la emisión y después seleccionan «Recursos educativos» para recuperar lecciones y archivos guardados. Los educadores abren su aula desde «Sala de emisión» e inician la clase. En «Panel del Director» → «Cuentas», el Director gestiona estudiantes y educadores; en «Gestionar sesiones» añade clases, establece la tarifa mensual de cada curso y supervisa las aulas.',
+        'Tu propia copia: cualquier usuario puede obtener una copia independiente de Agenda por 150 USD. El comprador se convierte en el Director de esa copia y puede gestionar su escuela, el nombre, los educadores, los estudiantes, las clases, las lecciones guardadas y las tarifas mensuales, además de supervisar e impartir las clases. Su escuela y sus datos permanecen separados de los de otros Directores.',
+        'Para solicitar tu copia independiente, contacta con la administración de Agenda; este chat no procesa pagos.'
+      ].join('\n\n');
+      if (currentLang === 'it') return [
+        'Presentazione di Agenda:',
+        'Agenda è una piattaforma educativa e di gestione scolastica. Gli studenti accedono alle lezioni in diretta e alle risorse salvate; gli educatori tengono le lezioni e gestiscono i propri materiali; il Direttore amministra la scuola e monitora le classi.',
+        'Rinominare la scuola: accedi dalla scheda «Accesso Direttore» nella schermata principale, quindi apri «Dashboard del Direttore» → «Account». Modifica il campo «Nome della scuola» e premi «Salva». Il nuovo nome apparirà nell’intestazione della piattaforma e nell’identità del link della scuola.',
+        'Navigazione: gli studenti aprono «Sala trasmissione» per entrare nella lezione loro assegnata quando l’educatore avvia la diretta, poi scelgono «Risorse didattiche» per recuperare lezioni e file salvati. Gli educatori aprono la propria aula da «Sala trasmissione» e avviano la lezione. In «Dashboard del Direttore» → «Account», il Direttore gestisce studenti ed educatori; in «Gestione lezioni» aggiunge lezioni, imposta la tariffa mensile per ogni classe e monitora le aule.',
+        'La tua copia: qualsiasi utente può ottenere una copia indipendente di Agenda al prezzo di 150 USD. L’acquirente diventa il Direttore di quella copia e può gestire la propria scuola, il nome, gli educatori, gli studenti, le lezioni, i contenuti salvati e le tariffe mensili, oltre a monitorare e tenere le lezioni. La scuola e i relativi dati restano separati da quelli degli altri Direttori.',
+        'Per richiedere la tua copia indipendente, contatta l’amministrazione di Agenda; questa chat non gestisce pagamenti.'
+      ].join('\n\n');
+      return [
+        'About Agenda:',
+        'Agenda is an education and school-management platform. Students can join live classes and retrieve saved learning resources; educators deliver classes and manage their materials; and the Director manages the school and monitors classrooms.',
+        'Rename your school: sign in using the «Director Login» card on the main screen, then open «Director Dashboard» → «Accounts». Edit the «School name» field and select «Save». The new name appears in the platform header and in your school link identity.',
+        'Navigation: students open «Broadcast Room» to join their assigned class after the educator starts broadcasting, then choose «Learning Resources» to retrieve saved lessons and files. Educators open their classroom from «Broadcast Room» and start the class. In «Director Dashboard» → «Accounts», the Director manages students and educators; in «Manage Sessions», the Director adds classes, sets each grade’s monthly rate, and monitors classrooms.',
+        'Your own copy: any user can obtain an independent copy of Agenda for USD 150. The purchaser becomes the Director of that copy and can manage the school and its name, educators, students, classes, saved lessons, and monthly pricing, as well as monitor and deliver classes. Their school and data remain separate from those of other Directors.',
+        'To request an independent copy, contact the Agenda administration team; this chat does not process payments.'
+      ].join('\n\n');
+    }
     const prices = context?.prices || [];
     const monthlyPriceQuestion = [
       'price', 'pricing', 'rate', 'rates', 'cost', 'fee', 'fees', 'usd', 'dollar', 'payment',
