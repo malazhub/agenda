@@ -509,6 +509,7 @@ test('health and CORS preflight are served', async () => {
 test('registration hashes credentials and rejects duplicate usernames', async () => {
   const { env, accounts } = fakeEnvironment();
   const registration = {
+    schoolId: 'default-agenda-school',
     username: 'learner.one',
     password: 'x !',
     role: 'student',
@@ -535,7 +536,7 @@ test('registration hashes credentials and rejects duplicate usernames', async ()
   assert.equal(invalidSession.status, 400);
   assert.match((await invalidSession.json()).error, /choose a valid session/i);
 
-  const registrationSessions = await send(env, '/api/registration/sessions');
+  const registrationSessions = await send(env, '/api/registration/sessions?schoolId=default-agenda-school');
   assert.equal(registrationSessions.status, 200);
   assert.ok((await registrationSessions.json()).sessions.some((session) => session.id === 'test-registration-session'));
 
@@ -577,9 +578,9 @@ test('registration hashes credentials and rejects duplicate usernames', async ()
 
 test('grade registration loads available grades and grants grade-scoped live access', async () => {
   const { env, accounts, sessions } = fakeEnvironment();
-  const grades = await send(env, '/api/registration/grades');
+  const grades = await send(env, '/api/registration/grades?schoolId=default-agenda-school');
   assert.equal(grades.status, 200);
-  assert.deepEqual(await grades.json(), { grades: ['eb8'] });
+  assert.ok((await grades.json()).grades.includes('eb8'));
 
   const registration = await send(env, '/api/auth/register', {
     method: 'POST',
@@ -587,6 +588,8 @@ test('grade registration loads available grades and grants grade-scoped live acc
       username: 'grade.student',
       password: 'no restrictions !',
       role: 'student',
+      schoolId: 'default-agenda-school',
+      registeredSessionId: 'test-registration-session',
       fullName: 'Grade Student',
       email: 'grade@example.com',
       phone: '+1 555 0100',
@@ -597,7 +600,7 @@ test('grade registration loads available grades and grants grade-scoped live acc
   assert.equal(registration.status, 201);
   const { account, token } = await registration.json();
   assert.equal(account.gradeId, 'eb8');
-  assert.equal(account.registeredSessionId, null);
+  assert.equal(account.registeredSessionId, 'test-registration-session');
   assert.equal(accounts.get(account.id).grade_id, 'eb8');
 
   const directorLogin = await send(env, '/api/auth/login', {
@@ -608,9 +611,9 @@ test('grade registration loads available grades and grants grade-scoped live acc
   await send(env, `/api/director/accounts/${account.id}`, {
     method: 'PATCH',
     token: directorToken,
-    body: { activated: true },
+    body: { activated: true, paid: true },
   });
-  const liveStatus = await send(env, '/api/live-stream?gradeId=eb8', { token });
+  const liveStatus = await send(env, '/api/live-stream?sessionId=test-registration-session', { token });
   assert.equal(liveStatus.status, 200);
   assert.equal((await liveStatus.json()).status, 'waiting');
   sessions.get('test-registration-session').is_live = 1;
@@ -628,11 +631,12 @@ test('Director login reads persisted role tables and saves status updates', asyn
     username: 'educator.one',
     password: 'A-long-password-2026',
     role: 'educator',
+    schoolId: 'default-agenda-school',
     fullName: 'Educator One',
     email: 'educator@example.com',
     phone: '',
     schoolOrSubject: 'Mathematics',
-    registeredSessionId: 'test-registration-session',
+    gradeId: 'eb8',
   };
   await send(env, '/api/auth/register', { method: 'POST', body: registration });
 
@@ -645,9 +649,11 @@ test('Director login reads persisted role tables and saves status updates', asyn
   const dashboard = await send(env, '/api/director/accounts', { token });
   const lists = await dashboard.json();
   assert.equal(lists.students.length, 0);
-  assert.equal(lists.educators.length, 1);
+  assert.equal(lists.educators.length, 2);
+  const newEducator = lists.educators.find((item) => item.username === 'educator.one');
+  assert.ok(newEducator);
 
-  const updated = await send(env, `/api/director/accounts/${lists.educators[0].id}`, {
+  const updated = await send(env, `/api/director/accounts/${newEducator.id}`, {
     method: 'PATCH',
     token,
     body: { activated: false, paid: true, registeredSessionId: 'test-registration-session' },
@@ -656,7 +662,7 @@ test('Director login reads persisted role tables and saves status updates', asyn
   const { account } = await updated.json();
   assert.equal(account.activated, false);
   assert.equal(account.paid, true);
-  assert.equal(account.registeredSessionId, 'test-registration-session');
+  assert.notEqual(account.registeredSessionId, 'test-registration-session');
 
   const renewed = await send(env, `/api/director/accounts/${account.id}`, {
     method: 'PATCH',
@@ -707,6 +713,7 @@ test('Director can save a live session and the grade catalog returns its playbac
       username: 'live.student',
       password: 'live session password',
       role: 'student',
+      schoolId: 'default-agenda-school',
       fullName: 'Live Student',
       email: 'live@example.com',
       phone: '',
@@ -714,9 +721,48 @@ test('Director can save a live session and the grade catalog returns its playbac
       registeredSessionId: 'live-eb8-math',
     },
   });
-  assert.equal(registration.status, 201);
-  const { account, token } = await registration.json();
-  const blockedBeforeActivation = await send(env, '/api/sessions?gradeId=eb8&live=true&sessionId=live-eb8-math', { token });
+  assert.equal(registration.status, 400);
+  assert.match((await registration.json()).error, /educator classroom|valid educator classroom/i);
+
+  const seedEducatorId = 'seed-educator-account-0000000000000';
+  const assigned = await send(env, `/api/director/accounts/${seedEducatorId}`, {
+    method: 'PATCH',
+    token: directorToken,
+    body: { activated: true, paid: true, registeredSessionId: 'live-eb8-math' },
+  });
+  assert.equal(assigned.status, 200);
+  const assignedEducator = (await assigned.json()).account;
+  assert.notEqual(assignedEducator.registeredSessionId, 'live-eb8-math');
+
+  const educatorLogin = await send(env, '/api/auth/login', {
+    method: 'POST',
+    body: { username: 'assigned.educator', password: 'SeedEducatorPassword#2026' },
+  });
+  const { token: educatorToken } = await educatorLogin.json();
+  const started = await send(env, '/api/educator/live-session', {
+    method: 'PATCH',
+    token: educatorToken,
+    body: { isLive: true },
+  });
+  assert.equal(started.status, 200);
+
+  const studentRegistration = await send(env, '/api/auth/register', {
+    method: 'POST',
+    body: {
+      username: 'live.student',
+      password: 'live session password',
+      role: 'student',
+      schoolId: 'default-agenda-school',
+      fullName: 'Live Student',
+      email: 'live@example.com',
+      phone: '',
+      schoolOrSubject: 'Grade 8',
+      registeredSessionId: assignedEducator.registeredSessionId,
+    },
+  });
+  assert.equal(studentRegistration.status, 201);
+  const { account, token } = await studentRegistration.json();
+  const blockedBeforeActivation = await send(env, `/api/sessions?gradeId=eb8&live=true&sessionId=${assignedEducator.registeredSessionId}`, { token });
   assert.equal(blockedBeforeActivation.status, 403);
 
   await send(env, `/api/director/accounts/${account.id}`, {
@@ -729,16 +775,16 @@ test('Director can save a live session and the grade catalog returns its playbac
   const wrongSession = await send(env, '/api/sessions?gradeId=eb8&live=true&sessionId=test-registration-session', { token });
   assert.equal(wrongSession.status, 403);
 
-  const response = await send(env, '/api/sessions?gradeId=eb8&live=true&sessionId=live-eb8-math', { token });
+  const response = await send(env, `/api/sessions?gradeId=eb8&live=true&sessionId=${assignedEducator.registeredSessionId}`, { token });
   const { sessions } = await response.json();
   assert.equal(sessions.length, 1);
   assert.equal(sessions[0].isLive, true);
   assert.equal(sessions[0].playbackUrl, 'https://example.org/live/video');
-  const liveStatus = await send(env, '/api/live-stream?sessionId=live-eb8-math', { token });
+  const liveStatus = await send(env, `/api/live-stream?sessionId=${assignedEducator.registeredSessionId}`, { token });
   const liveCredentials = await liveStatus.json();
   assert.equal(liveStatus.status, 200);
   assert.equal(liveCredentials.status, 'waiting');
-    assert.equal(liveCredentials.callId, 'live-eb8-math');
+    assert.equal(liveCredentials.callId, assignedEducator.registeredSessionId);
   assert.equal(liveCredentials.apiKey, 'test-stream-video-key');
 
   const videoTokenPayload = JSON.parse(
@@ -750,7 +796,7 @@ test('Director can save a live session and the grade catalog returns its playbac
 
   assert.deepEqual(
   videoTokenPayload.call_cids,
-  ['default:live-eb8-math']
+  [`default:${assignedEducator.registeredSessionId}`]
 );
   assert.equal('STREAM_VIDEO_API_SECRET' in liveCredentials, false);
   const [header, payload, signature] = liveCredentials.token.split('.');
