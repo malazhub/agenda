@@ -1,4 +1,4 @@
-import { GoogleGenAI } from '@google/genai';
+import { generateGeminiContent } from './cloudflareApi';
 
 export interface AISolutionResult {
   transcription: string;
@@ -12,12 +12,7 @@ export async function solveStudentExercise(
   userNotes?: string,
   subject?: string
 ): Promise<AISolutionResult> {
-  const apiKey = (typeof process !== 'undefined' && process.env?.GEMINI_API_KEY) || 
-    (typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_GEMINI_API_KEY) || '';
-
-  if (apiKey) {
-    try {
-      const ai = new GoogleGenAI({ apiKey });
+  try {
       const prompt = `You are a Lebanese official exam corrector (CRDP / MEHE).
 A K-12 student has submitted a photo of their homework / exam exercise via their camera.
 Student's notes: "${userNotes || 'Solve this exercise and provide the official Lebanese Barème'}".
@@ -51,10 +46,7 @@ Return your response in clean JSON matching this format:
       }
       contents.push(prompt);
 
-      const response = await ai.models.generateContent({
-        model: 'gemini-3.8-flash',
-        contents
-      });
+      const response = await generateGeminiContent(contents);
 
       const text = response.text || '';
       const jsonMatch = text.match(/\{[\s\S]*\}/);
@@ -71,7 +63,6 @@ Return your response in clean JSON matching this format:
       }
     } catch (err) {
       console.warn('Gemini live solve failed or key unavailable, using verified Lebanese curriculum heuristics:', err);
-    }
   }
 
   // High-fidelity fallback compliant with official Lebanese MEHE / CRDP standards
