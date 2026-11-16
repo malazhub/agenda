@@ -575,6 +575,66 @@ async function getCurrentAccount(request, env) {
   return json({ account: publicAccount(account) });
 }
 
+async function directorProfile(request, env) {
+  const director = await authenticate(request, env, "director");
+  if (!director) return json({ error: "Director authentication required." }, 401);
+  const profile = await env.DB.prepare(
+    `SELECT a.school_id, a.username, schools.name AS school_name
+     FROM accounts a
+     INNER JOIN schools ON schools.id = a.school_id
+     WHERE a.id = ? AND a.role = 'director'`
+  ).bind(director.sub).first();
+  if (!profile) return json({ error: "Director school profile not found." }, 404);
+  return json({ profile: {
+    schoolId: profile.school_id,
+    schoolName: profile.school_name,
+    username: profile.username,
+  } });
+}
+
+async function updateDirectorProfile(request, env) {
+  const director = await authenticate(request, env, "director");
+  if (!director) return json({ error: "Director authentication required." }, 401);
+  const body = await requestJson(request);
+  const schoolName = typeof body?.schoolName === "string" ? body.schoolName.trim() : "";
+  const username = typeof body?.username === "string" ? body.username.trim().toLowerCase() : "";
+  const password = typeof body?.password === "string" ? body.password : "";
+  if (!schoolName || schoolName.length > 160 || !/^[a-z0-9._-]{3,32}$/.test(username)) {
+    return json({ error: "Provide a valid school name and 3–32 character username." }, 400);
+  }
+  if (body.password !== undefined && (!password || password.length > MAX_PASSWORD_LENGTH)) {
+    return json({ error: "A password must contain 1–1,024 characters." }, 400);
+  }
+  const account = await env.DB.prepare(
+    "SELECT id, school_id FROM accounts WHERE id = ? AND role = 'director'"
+  ).bind(director.sub).first();
+  if (!account?.school_id) return json({ error: "Director school profile not found." }, 404);
+  const duplicate = await env.DB.prepare(
+    "SELECT id FROM accounts WHERE username = ? COLLATE NOCASE AND id != ?"
+  ).bind(username, director.sub).first();
+  if (duplicate) return json({ error: "That username is already in use." }, 409);
+  try {
+    await env.DB.prepare("UPDATE schools SET name = ? WHERE id = ?")
+      .bind(schoolName, account.school_id).run();
+  } catch {
+    return json({ error: "That school name is already in use." }, 409);
+  }
+  if (password) {
+    await env.DB.prepare(
+      "UPDATE accounts SET username = ?, password_hash = ? WHERE id = ? AND role = 'director'"
+    ).bind(username, await hashPassword(password), director.sub).run();
+  } else {
+    await env.DB.prepare(
+      "UPDATE accounts SET username = ? WHERE id = ? AND role = 'director'"
+    ).bind(username, director.sub).run();
+  }
+  const token = await signToken(
+    { sub: director.sub, role: "director", username, exp: Math.floor(Date.now() / 1000) + SESSION_TTL_SECONDS },
+    env.SESSION_SIGNING_KEY,
+  );
+  return json({ profile: { schoolId: account.school_id, schoolName, username }, token });
+}
+
 async function directorAccounts(request, env) {
   const director = await authenticate(request, env, "director");
   if (!director) return json({ error: "Director authentication required." }, 401);
@@ -2431,6 +2491,8 @@ async function handle(request, env) {
   ) {
     return createGuestLiveStream(request, env);
   }
+  if (request.method === "GET" && path === "/api/director/profile") return directorProfile(request, env);
+  if (request.method === "PATCH" && path === "/api/director/profile") return updateDirectorProfile(request, env);
   if (request.method === "GET" && path === "/api/director/accounts") return directorAccounts(request, env);
   if (request.method === "GET" && path === "/api/director/sessions") return directorSessions(request, env);
   if (request.method === "POST" && path === "/api/director/sessions") return createSessions(request, env);
