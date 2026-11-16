@@ -51,10 +51,10 @@ export const Header: React.FC<HeaderProps> = ({
                   type="button"
                   onClick={onSignOut}
                   className="ml-1 flex items-center gap-1 px-2.5 py-1 rounded-lg bg-rose-50 text-rose-600 hover:bg-rose-100 hover:text-rose-700 font-bold text-xs transition cursor-pointer"
-                  title="Sign out and return to guest mode"
+                  title={currentLang === 'ar' ? 'تسجيل الخروج والعودة كضيف' : currentLang === 'fr' ? 'Se déconnecter et revenir en mode invité' : currentLang === 'es' ? 'Cerrar sesión y volver como invitado' : currentLang === 'it' ? 'Esci e torna come ospite' : 'Sign out and return to guest mode'}
                 >
                   <LogOut className="w-3.5 h-3.5" />
-                  <span>{currentLang === 'ar' ? 'خروج' : currentLang === 'fr' ? 'Quitter' : 'Sign Out'}</span>
+                  <span>{currentLang === 'ar' ? 'خروج' : currentLang === 'fr' ? 'Déconnexion' : currentLang === 'es' ? 'Cerrar sesión' : currentLang === 'it' ? 'Esci' : 'Sign Out'}</span>
                 </button>
               </div>
             ) : (
@@ -139,15 +139,15 @@ export const Header: React.FC<HeaderProps> = ({
                       ? 'تم نسخ رابط المنصة: https://malazhub.github.io/agenda/'
                       : currentLang === 'fr'
                       ? 'Lien de l’établissement copié.'
-                      : 'School link copied.'
+                      : currentLang === 'es' ? 'Enlace de la escuela copiado.' : currentLang === 'it' ? 'Link della scuola copiato.' : 'School link copied.'
                   );
                 }
               }}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-black bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-200 transition cursor-pointer shadow-2xs mr-1"
-              title="Share Agenda"
+              title={currentLang === 'ar' ? 'مشاركة رابط المدرسة' : currentLang === 'fr' ? 'Partager le lien de l’établissement' : currentLang === 'es' ? 'Compartir enlace de la escuela' : currentLang === 'it' ? 'Condividi il link della scuola' : 'Share school link'}
             >
               <Share2 className="w-3.5 h-3.5" />
-              <span>{currentLang === 'ar' ? 'مشاركة' : currentLang === 'fr' ? 'Partager' : 'Share'}</span>
+              <span>{currentLang === 'ar' ? 'مشاركة' : currentLang === 'fr' ? 'Partager' : currentLang === 'es' ? 'Compartir' : currentLang === 'it' ? 'Condividi' : 'Share'}</span>
             </button>
             {/* Arabic: Vibrant Emerald Green */}
             <button
