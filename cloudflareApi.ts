@@ -16,7 +16,7 @@ export interface CloudflareAccount {
 }
 
 export interface AuthResponse {
-  account: ;
+  account: CloudflareAccount;
   token: string;
 }
 
