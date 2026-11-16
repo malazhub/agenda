@@ -55,9 +55,9 @@ export const AIChatBot: React.FC<AIChatBotProps> = ({ currentLang, schoolId, sch
   }, [messages, isOpen]);
 
   // Deterministic answers use the selected school's live configuration.
-  const getSavedResponse = (query: string): string | null => {
+  const getSavedResponse = (query: string, context = schoolContext): string | null => {
     const q = query.toLowerCase();
-    const prices = schoolContext?.prices || [];
+    const prices = context?.prices || [];
     const monthlyPriceQuestion = [
       'price', 'pricing', 'cost', 'fee', 'fees', 'usd', 'dollar', 'payment',
       'tarif', 'prix', 'coût', 'cout', 'payer', 'mensuel', 'mensual', 'mensile',
@@ -67,8 +67,8 @@ export const AIChatBot: React.FC<AIChatBotProps> = ({ currentLang, schoolId, sch
     if (monthlyPriceQuestion) {
       const rateLines = prices.length
         ? prices.map((price) => `${price.gradeId.toUpperCase()}: ${price.monthlyRateUsd} USD`).join('\n')
-        : `${schoolContext?.defaultMonthlyRateUsd ?? 125} USD per month (default rate)`;
-      if (currentLang === 'ar') return `المدرسة: ${schoolContext?.schoolName || schoolName || 'Agenda'}\nالأسعار الشهرية المعتمدة حسب الصف:\n${rateLines}\nالسعر الافتراضي للصف الذي لم يحدد المدير سعره هو 125 دولاراً شهرياً. هذه الأسعار خاصة بمدرستك.`;
+        : `${context?.defaultMonthlyRateUsd ?? 125} USD per month (default rate)`;
+      if (currentLang === 'ar') return `المدرسة: ${context?.schoolName || schoolName || 'Agenda'}\nالأسعار الشهرية المعتمدة حسب الصف:\n${rateLines}\nالسعر الافتراضي للصف الذي لم يحدد المدير سعره هو 125 دولاراً شهرياً. هذه الأسعار خاصة بمدرستك.`;
       if (currentLang === 'fr') return `Établissement : ${schoolContext?.schoolName || schoolName || 'Agenda'}\nTarifs mensuels par classe :\n${rateLines}\nLe tarif par défaut d'une classe sans prix personnalisé est de 125 USD par mois. Ces tarifs sont propres à votre établissement.`;
       if (currentLang === 'es') return `Escuela: ${schoolContext?.schoolName || schoolName || 'Agenda'}\nTarifas mensuales por curso:\n${rateLines}\nEl precio predeterminado para un curso sin tarifa personalizada es de 125 USD al mes. Estas tarifas pertenecen a tu escuela.`;
       if (currentLang === 'it') return `Scuola: ${schoolContext?.schoolName || schoolName || 'Agenda'}\nTariffe mensili per classe:\n${rateLines}\nLa tariffa predefinita per una classe senza prezzo personalizzato è di 125 USD al mese. Queste tariffe appartengono alla tua scuola.`;
@@ -139,7 +139,16 @@ export const AIChatBot: React.FC<AIChatBotProps> = ({ currentLang, schoolId, sch
     setIsTyping(true);
 
     // 1. Check if user is asking about price or timing (strictly return saved facts)
-    const savedAnswer = getSavedResponse(text);
+    let currentSchoolContext = schoolContext;
+    if (!currentSchoolContext && schoolId) {
+      try {
+        currentSchoolContext = await getSchoolPublicContext(schoolId);
+        setSchoolContext(currentSchoolContext);
+      } catch {
+        currentSchoolContext = null;
+      }
+    }
+    const savedAnswer = getSavedResponse(text, currentSchoolContext);
     if (savedAnswer) {
       await new Promise(r => setTimeout(r, 350));
       setMessages(prev => [
@@ -172,7 +181,18 @@ Platform constraints:
 - Saved Price: 7 USD flat rate per 1-on-1 session with 3 free trials upon registration (Whish Money, OMT Cash, Fresh USD).
 - Saved Timing: Live sessions operate daily strictly from 4:00 PM to 8:00 PM (Beirut Time).
 - You can explain academic concepts, exercises, homework problems, official Lebanese curriculum (Brevet, Bac SG, SE, LH), camera exercise submissions with AI Barèmes, and educator breakout rooms.
-Language to answer: ${currentLang === 'ar' ? 'Arabic' : currentLang === 'fr' ? 'French' : 'English'}.
+Language to answer: ${({ ar: 'Arabic', en: 'English', fr: 'French', it: 'Italian', es: 'Spanish' } as Record<Language, string>)[currentLang]}.
+Authoritative school configuration (use current values, never invent a rate):
+${JSON.stringify(currentSchoolContext || { schoolName: schoolName || 'Agenda', defaultMonthlyRateUsd: 125, prices: [], sessions: [], educators: [] })}
+Platform architecture and navigation:
+- Each Director owns one separate school tenant. Students, educators, classes, saved educator lessons, and grade-specific monthly prices are isolated by that school's owner and school ID.
+- The correct school is selected by its dedicated share link. There is no public school dropdown.
+- Registration: open the school's link, choose Student or Educator, enter the required details, create a username and password, and choose an available grade and educator/session. The Director activates the account.
+- Sign-in: use the username and password created at registration. Ask the Director to reset a forgotten password.
+- Live class: an activated and paid student joins only their assigned educator session after the educator starts it. Educators enter their own assigned classroom. Directors can monitor every class belonging to their school from Director Dashboard > Manage Sessions, even if no educator account is registered for that class.
+- Saved lessons: sign in, open the classroom, select Learning Resources, and choose an educator. Educators can upload and edit only their own lesson slots.
+- Monthly prices are set by the Director for each grade. The default is 125 USD/month unless the school has saved a different rate. Clearly distinguish these monthly school fees from any separate booking or tutoring fee.
+- Explain the current school's prices, educators, grades and sessions using the supplied school configuration. Do not expose private account data, passwords, or other schools' information.
 User question: "${text}"`
             }
           ]
@@ -184,15 +204,19 @@ User question: "${text}"`
       }
     }
 
-    // Fallback if API key missing or network fails
+    // Fallback if API key is missing or the network is unavailable.
     if (!reply) {
-      await new Promise(r => setTimeout(r, 400));
+      await new Promise(r => setTimeout(r, 250));
       if (currentLang === 'ar') {
-        reply = `تم استلام استفسارك بخصوص "${text}". يتميز نظام الأجندة بمتابعة الفروض اليومية، وتصحيح التمارين عبر الكاميرا مع سلالم التصحيح الرسمية، وتوفير حصص فردية مباشرة مع نخبة من الأساتذة.`;
+        reply = `يمكنني مساعدتك بشأن مدرسة ${currentSchoolContext?.schoolName || schoolName || 'Agenda'}: التسجيل، الدخول، الصفوف المباشرة، الموارد التعليمية والأسعار الشهرية. اكتب سؤالك بتفصيل أكبر لأرشدك خطوة بخطوة.`;
       } else if (currentLang === 'fr') {
-        reply = `Votre demande concernant "${text}" a été reçue. La plateforme Agenda vous offre le suivi quotidien des devoirs, la résolution d'exercices par caméra avec le barème officiel, et des cours interactifs en direct.`;
+        reply = `Je peux vous aider pour l’établissement ${currentSchoolContext?.schoolName || schoolName || 'Agenda'} : inscription, connexion, cours en direct, ressources pédagogiques et tarifs mensuels. Précisez votre question pour obtenir des étapes détaillées.`;
+      } else if (currentLang === 'es') {
+        reply = `Puedo ayudarte con la escuela ${currentSchoolContext?.schoolName || schoolName || 'Agenda'}: registro, inicio de sesión, clases en directo, recursos educativos y tarifas mensuales. Especifica tu pregunta para recibir instrucciones paso a paso.`;
+      } else if (currentLang === 'it') {
+        reply = `Posso aiutarti con la scuola ${currentSchoolContext?.schoolName || schoolName || 'Agenda'}: registrazione, accesso, lezioni dal vivo, risorse didattiche e tariffe mensili. Specifica la domanda per ricevere istruzioni dettagliate.`;
       } else {
-        reply = `We have received your question regarding "${text}". Agenda provides complete daily homework tracking, camera-based exercise solving with official Lebanese Barèmes, and interactive live mentoring.`;
+        reply = `I can help with ${currentSchoolContext?.schoolName || schoolName || 'Agenda'}: registration, sign-in, live classes, learning resources, and monthly prices. Please add a little detail so I can guide you step by step.`;
       }
     }
 
