@@ -1529,7 +1529,7 @@ async function getLiveStream(request, env) {
       }, 502);
     }
 
-    if (!createCallResponse.ok) {
+    if (!createCallResponse.ok && createCallResponse.status !== 409) {
       const details = await createCallResponse.text();
 
       console.error(
