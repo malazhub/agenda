@@ -76,6 +76,7 @@ export interface StoredSessionRecord {
 }
 
 export interface SessionInput {
+  id?: string;
   gradeId: string;
   subject: string;
   title: string;
