@@ -1939,7 +1939,7 @@ const handleClearChatMessages = async () => {
                 {isRTL
                   ? <ArrowRight className="w-4 h-4" />
                   : <ArrowLeft className="w-4 h-4" />}
-                <span>{currentLang === 'ar' ? 'الرئيسية' : 'Main'}</span>
+                <span>{currentLang === 'ar' ? 'الرئيسية' : currentLang === 'fr' ? 'Accueil' : currentLang === 'es' ? 'Inicio' : currentLang === 'it' ? 'Home' : 'Main'}</span>
               </button>
 
               <span className="flex h-3 w-3 relative">
@@ -1958,7 +1958,7 @@ const handleClearChatMessages = async () => {
                       {selectedGrade.name[currentLang]}
                     </h3>
                     <p className="text-xs text-slate-300">
-                      {currentLang === 'ar' ? 'الأستاذ: ' : 'Educator: '}
+                      {currentLang === 'ar' ? 'الأستاذ: ' : currentLang === 'fr' ? 'Éducateur : ' : currentLang === 'es' ? 'Educador: ' : currentLang === 'it' ? 'Educatore: ' : 'Educator: '}
                       {activeCallSession.educatorName}
                     </p>
                     <p className="text-xs text-slate-400">
@@ -2020,7 +2020,7 @@ const handleClearChatMessages = async () => {
   <div className="flex items-center justify-between gap-3 mb-4">
     <div>
       <h3 className="text-sm font-black text-white">
-        {currentLang === 'ar' ? 'البث المباشر للصف' : 'Live Classroom'}
+        {currentLang === 'ar' ? 'البث المباشر للصف' : currentLang === 'fr' ? 'Classe en direct' : currentLang === 'es' ? 'Aula en directo' : currentLang === 'it' ? 'Aula dal vivo' : 'Live Classroom'}
       </h3>
       <p className="text-xs text-slate-400 mt-1">
         {currentLang === 'ar'
@@ -2032,7 +2032,7 @@ const handleClearChatMessages = async () => {
     <span className="text-xs font-bold bg-emerald-500/20 text-emerald-400 px-3 py-1.5 rounded-full border border-emerald-500/30">
       {callParticipants.length}
       {' '}
-      {currentLang === 'ar' ? 'مشاركون' : 'Connected'}
+      {currentLang === 'ar' ? 'مشاركون' : currentLang === 'fr' ? 'connectés' : currentLang === 'es' ? 'conectados' : currentLang === 'it' ? 'connessi' : 'Connected'}
     </span>
   </div>
 
@@ -2656,7 +2656,7 @@ const handleClearChatMessages = async () => {
                 className="flex items-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold px-4 py-2.5 rounded-2xl transition cursor-pointer text-xs sm:text-sm shadow-2xs"
               >
                 {isRTL ? <ArrowRight className="w-4 h-4" /> : <ArrowLeft className="w-4 h-4" />}
-                <span>{currentLang === 'ar' ? 'رجوع' : 'Back'}</span>
+                <span>{currentLang === 'ar' ? 'رجوع' : currentLang === 'fr' ? 'Retour' : currentLang === 'es' ? 'Volver' : currentLang === 'it' ? 'Indietro' : 'Back'}</span>
               </button>
 
                  <div className="space-y-1">
@@ -2753,7 +2753,7 @@ const handleClearChatMessages = async () => {
                   <div className="space-y-1">
                     <span className="text-[11px] font-black uppercase tracking-wider text-emerald-400 flex items-center gap-2">
                       <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping" />
-                      {currentLang === 'ar' ? 'حصتك المباشرة المعتمدة جاهزة للانضمام' : 'Your Enrolled Live Classroom is Ready'}
+                      {currentLang === 'ar' ? 'حصتك المباشرة المعتمدة جاهزة للانضمام' : currentLang === 'fr' ? 'Votre classe en direct est prête' : currentLang === 'es' ? 'Tu aula en directo está lista' : currentLang === 'it' ? 'La tua aula dal vivo è pronta' : 'Your Enrolled Live Classroom is Ready'}
                     </span>
                     <h3 className="text-xl font-black text-white">
                       {currentLang === 'ar' ? 'الأستاذ: ' : 'Educator: '}{studentPrimarySession.educatorName}
