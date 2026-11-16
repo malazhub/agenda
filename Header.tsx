@@ -70,11 +70,27 @@ export const Header: React.FC<HeaderProps> = ({
               <span className="text-2xl font-black tracking-tight text-slate-900 block leading-tight">
                 Agenda
               </span>
-              {/* Text colored in Red, Yellow, Blue */}
+                            {/* Subtitle follows the selected language; keep the original colors. */}
               <span className="text-xs sm:text-sm font-black tracking-wide inline-block leading-snug">
-                <span className="text-rose-600">التعليم </span>
-                <span className="text-amber-500">والدروس </span>
-                <span className="text-blue-600">الخصوصية</span>
+                {currentLang === 'ar' ? (
+                  <>
+                    <span className="text-rose-600">التعليم </span>
+                    <span className="text-amber-500">والدروس </span>
+                    <span className="text-blue-600">الخصوصية</span>
+                  </>
+                ) : currentLang === 'fr' ? (
+                  <>
+                    <span className="text-rose-600">Éducation </span>
+                    <span className="text-amber-500">et cours </span>
+                    <span className="text-blue-600">particuliers</span>
+                  </>
+                ) : (
+                  <>
+                    <span className="text-rose-600">Education </span>
+                    <span className="text-amber-500">& Private </span>
+                    <span className="text-blue-600">Tutoring</span>
+                  </>
+                )}
               </span>
             </div>
           </div>
