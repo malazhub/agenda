@@ -27,7 +27,6 @@ export const LearningResourcesView: React.FC<LearningResourcesViewProps> = ({
 }) => {
   const isArabic = currentLang === 'ar';
   const isFrench = currentLang === 'fr';
-  const isFrench = currentLang === 'fr';
   const isEducator = registeredAccount?.role === 'educator';
 
   const [educators, setEducators] = useState<SchoolEducator[]>([]);
