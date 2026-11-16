@@ -36,11 +36,6 @@ export const Header: React.FC<HeaderProps> = ({
         <div className="grid grid-cols-1 md:grid-cols-3 items-center gap-3">
           {/* Left Side: Register OR Sign Out action */}
           <div className="flex flex-wrap items-center gap-2 justify-start order-2 md:order-1">
-            {signedInName && (
-              <span className="max-w-48 truncate rounded-xl bg-indigo-50 px-3 py-2 text-xs font-bold text-indigo-700" title={schoolName}>
-                {schoolName || 'School'}
-              </span>
-            )}
             {signedInName ? (
               /* Sign Out Card (Displayed when user is signed in) */
               <div className="flex items-center gap-2 bg-slate-100 border border-slate-200 rounded-xl px-3 py-1.5 shadow-xs">
