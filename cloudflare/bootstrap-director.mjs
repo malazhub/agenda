@@ -97,11 +97,16 @@ const digest = pbkdf2Sync(password, salt, iterations, 32, 'sha256');
 const encode = (buffer) => buffer.toString('base64url');
 const passwordHash = `pbkdf2_sha256$${iterations}$${encode(salt)}$${encode(digest)}`;
 const escapeSql = (value) => `'${value.replace(/'/g, "''")}'`;
+const schoolName = (process.env.DIRECTOR_SCHOOL_NAME || 'Agenda').trim();
+if (!schoolName || schoolName.length > 160) {
+  console.error('DIRECTOR_SCHOOL_NAME must contain 1–160 characters.');
+  process.exit(1);
+}
 const command = [
-  'INSERT INTO accounts (id, username, password_hash, role, full_name, email, activated, paid)',
-  `VALUES (lower(hex(randomblob(16))), ${escapeSql(username)}, ${escapeSql(passwordHash)}, 'director', 'Director', '', 1, 1)`,
-  'ON CONFLICT(username) DO UPDATE SET password_hash = excluded.password_hash WHERE accounts.role = \'director\'',
-  ';',
+  `INSERT OR IGNORE INTO schools (id, name) VALUES ('school-' || lower(hex(randomblob(8))), ${escapeSql(schoolName)});`,
+  'INSERT INTO accounts (id, username, password_hash, role, school_id, full_name, email, activated, paid)',
+  `SELECT lower(hex(randomblob(16))), ${escapeSql(username)}, ${escapeSql(passwordHash)}, 'director', id, 'Director', '', 1, 1 FROM schools WHERE name = ${escapeSql(schoolName)}`,
+  'ON CONFLICT(username) DO UPDATE SET password_hash = excluded.password_hash, school_id = excluded.school_id WHERE accounts.role = \'director\' AND (accounts.school_id IS NULL OR accounts.school_id = excluded.school_id);',
 ].join(' ');
 
 const tempDir = await mkdtemp(join(tmpdir(), 'agenda-director-bootstrap-'));

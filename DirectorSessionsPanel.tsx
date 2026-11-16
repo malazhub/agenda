@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Language, GradeLevelDef } from '../types';
-import { deleteDirectorSession, getDirectorSessions, createDirectorSession } from '../services/cloudflareApi';
+import { deleteDirectorSession, getDirectorSessions, createDirectorSession, updateDirectorSessionLive } from '../services/cloudflareApi';
 import type { SessionInput, StoredSessionRecord } from '../services/cloudflareApi';
 import { Plus, RefreshCw, Trash2, Video, Radio, Eye } from 'lucide-react';
 
@@ -57,13 +57,8 @@ export const DirectorSessionsPanel: React.FC<DirectorSessionsPanelProps> = ({
     try {
       const { sessions: loadedSessions } = await getDirectorSessions(token);
       setSessions(loadedSessions);
-      localStorage.setItem('director_saved_sessions', JSON.stringify(loadedSessions));
-    } catch {
-      // Fallback to local storage if API is offline
-      const cached = localStorage.getItem('director_saved_sessions');
-      if (cached) {
-        setSessions(JSON.parse(cached));
-      }
+    } catch (loadError) {
+      setError(loadError instanceof Error ? loadError.message : 'Unable to load sessions.');
     } finally {
       setLoading(false);
     }
@@ -98,25 +93,8 @@ export const DirectorSessionsPanel: React.FC<DirectorSessionsPanelProps> = ({
       await createDirectorSession(token, newSessionInput);
       await loadSessions();
       setMessage(t.sessionSaved);
-    } catch {
-      // Local fallback creation
-      const localId = `sess_${Date.now()}`;
-      const localRecord: StoredSessionRecord = {
-        id: localId,
-        gradeId,
-        title: form.educatorName.trim(),
-        subject: form.subject.trim(),
-        sourceName: form.educatorName.trim(),
-        sourceUrl: `https://agenda.live/room/${gradeId}`,
-        playbackUrl: '',
-        isLive,
-        createdAt: new Date().toISOString(),
-      };
-      const updated = [localRecord, ...sessions];
-      setSessions(updated);
-      localStorage.setItem('director_saved_sessions', JSON.stringify(updated));
-      localStorage.setItem(`max_students_${localId}`, String(form.maxStudents));
-      setMessage(t.sessionSaved);
+    } catch (saveError) {
+      setError(saveError instanceof Error ? saveError.message : 'Unable to save session.');
     } finally {
       setForm({ educatorName: '', subject: '', maxStudents: 25 });
       setSaving(false);
@@ -128,31 +106,25 @@ export const DirectorSessionsPanel: React.FC<DirectorSessionsPanelProps> = ({
     if (!window.confirm(t.confirm)) return;
     setError('');
     setMessage('');
-
-    // Remove immediately from UI & localStorage so it is never stuck
-    const updated = sessions.filter((item) => item.id !== session.id);
-    setSessions(updated);
-    localStorage.setItem('director_saved_sessions', JSON.stringify(updated));
-    localStorage.removeItem(`max_students_${session.id}`);
-    setMessage(t.sessionDeleted);
-
     try {
       await deleteDirectorSession(token, session.id);
-    } catch {
-      // Backend error ignored since local deletion is already completed
+      await loadSessions();
+      setMessage(t.sessionDeleted);
+    } catch (deleteError) {
+      setError(deleteError instanceof Error ? deleteError.message : 'Unable to delete session.');
     }
   };
 
   // Toggle Live / Off for a session
-  const toggleLiveStatus = (session: StoredSessionRecord) => {
-    const updated = sessions.map((s) => {
-      if (s.id === session.id) {
-        return { ...s, isLive: !s.isLive };
-      }
-      return s;
-    });
-    setSessions(updated);
-    localStorage.setItem('director_saved_sessions', JSON.stringify(updated));
+  const toggleLiveStatus = async (session: StoredSessionRecord) => {
+    setError('');
+    setMessage('');
+    try {
+      await updateDirectorSessionLive(token, session.id, !session.isLive);
+      await loadSessions();
+    } catch (toggleError) {
+      setError(toggleError instanceof Error ? toggleError.message : 'Unable to update live status.');
+    }
   };
 
   const fieldClass = 'w-full rounded-xl border border-slate-300 bg-slate-50 p-2.5 text-xs font-semibold text-slate-800 focus:outline-indigo-600';

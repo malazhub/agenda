@@ -16,7 +16,7 @@ export interface CloudflareAccount {
 }
 
 export interface AuthResponse {
-  account: ;
+  account: CloudflareAccount;
   token: string;
 }
 
@@ -76,6 +76,7 @@ export interface StoredSessionRecord {
 }
 
 export interface SessionInput {
+  id?: string;
   gradeId: string;
   subject: string;
   title: string;
@@ -393,6 +394,18 @@ export function createDirectorSession(token: string, session: SessionInput): Pro
     method: 'POST',
     headers: authHeaders(token),
     body: JSON.stringify({ sessions: [session] }),
+  });
+}
+
+export function updateDirectorSessionLive(
+  token: string,
+  sessionId: string,
+  isLive: boolean
+): Promise<{ session: StoredSessionRecord }> {
+  return request(`/api/director/sessions/${encodeURIComponent(sessionId)}`, {
+    method: 'PATCH',
+    headers: authHeaders(token),
+    body: JSON.stringify({ isLive }),
   });
 }
 

@@ -7,6 +7,7 @@ import { DirectorSessionsPanel } from './DirectorSessionsPanel';
 import { LiveBroadcastHost } from './LiveBroadcastHost';
 import { 
   getDirectorAccounts, 
+  getDirectorProfile,
   getRegistrationSessions, 
   loginAccount, 
   setupLiveStream, 
@@ -33,6 +34,7 @@ interface CoursesHubProps {
     onShowMessage: (message: string) => void;
   directorLoginRequest: number;
   registeredAccount: CloudflareAccount | null;
+  schoolId: string;
   sessionToken: string;
   onRegisterSignOutCleanup?: (
     cleanup: (() => Promise<void>) | null
@@ -45,6 +47,7 @@ export const CoursesHub: React.FC<CoursesHubProps> = ({
   currentLang,
   directorLoginRequest,
   registeredAccount,
+  schoolId,
   sessionToken,
     onShowMessage,
   onEnterLiveClassroom,
@@ -62,6 +65,7 @@ export const CoursesHub: React.FC<CoursesHubProps> = ({
   const [directorToken, setDirectorToken] = useState(() =>
     typeof window === 'undefined' ? '' : window.sessionStorage.getItem('agenda-director-token') || ''
   );
+  const [directorSchoolId, setDirectorSchoolId] = useState('');
   const [studentRows, setStudentRows] = useState<DirectorRow[]>([]);
   const [educatorRows, setEducatorRows] = useState<DirectorRow[]>([]);
   const [registrationSessions, setRegistrationSessions] = useState<RegistrationSession[]>([]);
@@ -78,6 +82,22 @@ export const CoursesHub: React.FC<CoursesHubProps> = ({
       setDirectorScreen('login');
     }
   }, [directorLoginRequest]);
+
+  useEffect(() => {
+    if (!directorToken) {
+      setDirectorSchoolId('');
+      return;
+    }
+    let active = true;
+    getDirectorProfile(directorToken)
+      .then(({ profile }) => {
+        if (active) setDirectorSchoolId(profile.schoolId);
+      })
+      .catch((profileError) => {
+        if (active) setDirectorDataError(profileError instanceof Error ? profileError.message : 'Unable to load Director school profile.');
+      });
+    return () => { active = false; };
+  }, [directorToken]);
 
   // Once a visitor signs in, load the grade assigned to that account.
   useEffect(() => {
@@ -137,11 +157,11 @@ export const CoursesHub: React.FC<CoursesHubProps> = ({
   };
 
   useEffect(() => {
-    if (directorScreen !== 'dashboard' || !directorToken) return;
+    if (directorScreen !== 'dashboard' || !directorToken || !directorSchoolId) return;
     let active = true;
     setDirectorLoading(true);
     setDirectorDataError('');
-    Promise.all([getDirectorAccounts(directorToken), getRegistrationSessions()])
+    Promise.all([getDirectorAccounts(directorToken), getRegistrationSessions(directorSchoolId)])
       .then(([{ students, educators }, { sessions }]) => {
         if (!active) return;
         setStudentRows(students);
@@ -157,7 +177,7 @@ export const CoursesHub: React.FC<CoursesHubProps> = ({
     return () => {
       active = false;
     };
-  }, [directorScreen, directorToken]);
+  }, [directorScreen, directorToken, directorSchoolId]);
 
   const handleDirectorLogin = async () => {
     setDirectorError('');
@@ -511,6 +531,7 @@ const updateAccount = async (
             <GradeSessionsView
         currentLang={currentLang}
         selectedGrade={activeGradeForSessions}
+        schoolId={schoolId}
         initialTab={activeGradeTab}
         autoOpenLiveClassroom={autoOpenLiveClassroom}
         registeredAccount={registeredAccount}
