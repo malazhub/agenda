@@ -461,7 +461,7 @@ test('Director login reads persisted role tables and saves status updates', asyn
 });
 
 test('Director can save a live session and the grade catalog returns its playback URL', async () => {
-  const { env } = fakeEnvironment();
+  const { env, accounts } = fakeEnvironment();
   const login = await send(env, '/api/auth/login', {
     method: 'POST',
     body: { username: 'director', password: 'DirectorPassword#2026' },
@@ -504,7 +504,7 @@ test('Director can save a live session and the grade catalog returns its playbac
     activated: 1,
     paid: 1,
   };
-  env.__unused = undefined;
+  accounts.set(liveEducator.id, liveEducator);
   const registration = await send(env, '/api/auth/register', {
     method: 'POST',
     body: {
