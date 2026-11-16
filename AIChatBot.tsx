@@ -60,14 +60,22 @@ export const AIChatBot: React.FC<AIChatBotProps> = ({ currentLang, schoolId, sch
     const q = query.toLowerCase();
     const prices = context?.prices || [];
     const monthlyPriceQuestion = [
-      'price', 'pricing', 'cost', 'fee', 'fees', 'usd', 'dollar', 'payment',
+      'price', 'pricing', 'rate', 'rates', 'cost', 'fee', 'fees', 'usd', 'dollar', 'payment',
       'tarif', 'tarifa', 'tarifas', 'prix', 'precio', 'precios', 'prezzo', 'prezzi', 'tariffa', 'tariffe', 'coût', 'cout', 'costo', 'coste', 'quanto', 'cuanto', 'cuánto', 'how much', 'payer', 'mensuel', 'mensual', 'mensile',
       'month', 'monthly', 'per month', 'شهري', 'سعر', 'اسعار', 'أسعار', 'تكلف', 'بكم', 'دولار', 'دفع'
     ].some((keyword) => q.includes(keyword));
 
     if (monthlyPriceQuestion) {
-      const rateLines = prices.length
-        ? prices.map((price) => `${LEBANESE_GRADE_LEVELS.find((grade) => grade.id === price.gradeId)?.name[currentLang] || price.gradeId}: ${price.monthlyRateUsd} USD`).join('\n')
+      const priceMap = new Map(prices.map((price) => [price.gradeId, price.monthlyRateUsd]));
+      const gradeNumber = q.match(/(?:grade|grado|curso|classe|class)\\s*(\\d{1,2})/)?.[1];
+      const relevantGrades = gradeNumber
+        ? LEBANESE_GRADE_LEVELS.filter((grade) =>
+            [grade.name.en, grade.name.fr, grade.name.it, grade.name.es]
+              .some((name) => name?.match(new RegExp(`\\b${gradeNumber}\\b`)))
+          )
+        : LEBANESE_GRADE_LEVELS.filter((grade) => priceMap.has(grade.id));
+      const rateLines = relevantGrades.length
+        ? relevantGrades.map((grade) => `${grade.name[currentLang] || grade.name.en}: ${priceMap.get(grade.id) ?? context?.defaultMonthlyRateUsd ?? 125} USD`).join('\n')
         : `${context?.defaultMonthlyRateUsd ?? 125} USD per month (default rate)`;
       if (currentLang === 'ar') return `المدرسة: ${context?.schoolName || schoolName || 'Agenda'}\nالأسعار الشهرية المعتمدة حسب الصف:\n${rateLines}\nالسعر الافتراضي للصف الذي لم يحدد المدير سعره هو 125 دولاراً شهرياً. هذه الأسعار خاصة بمدرستك.`;
       if (currentLang === 'fr') return `Établissement : ${context?.schoolName || schoolName || 'Agenda'}\nTarifs mensuels par classe :\n${rateLines}\nLe tarif par défaut d'une classe sans prix personnalisé est de 125 USD par mois. Ces tarifs sont propres à votre établissement.`;
