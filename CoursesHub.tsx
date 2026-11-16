@@ -740,7 +740,7 @@ const updateAccount = async (
                 ? 'لكل مدير مدرسته وموظفوه وطلابه ودروسه وأسعاره المستقلة. يظهر اسم المدرسة المحفوظ في رأس المنصة.'
                 : currentLang === 'fr'
                   ? 'Chaque Directeur possède son établissement, son équipe, ses élèves, ses leçons et ses tarifs. Le nom enregistré apparaît dans l’en-tête.'
-                  : 'Each Director has a separate school, staff, students, lessons, and pricing. The saved school name becomes this school's platform header.'}
+                  : 'Each Director has a separate school, staff, students, lessons, and pricing. The saved school name becomes this school’s platform header.'}
             </p>
           </div>
           <form className="grid gap-4 md:grid-cols-2" onSubmit={handleSaveDirectorSettings}>
