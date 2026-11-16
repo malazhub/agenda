@@ -143,13 +143,36 @@ export const GradeSessionsView: React.FC<GradeSessionsViewProps> = ({
 
   const t = translations[currentLang];
 
-  const classroomLabel = (
-    ar: string,
-    fr: string,
-    en: string
-  ) => {
+  const inlineLabels: Record<string, { es: string; it: string }> = {
+    'Your classroom role does not allow video publishing.': { es: 'Tu función en el aula no permite publicar vídeo.', it: 'Il tuo ruolo in aula non consente di trasmettere video.' },
+    'Unable to change camera settings.': { es: 'No se pudo cambiar la configuración de la cámara.', it: 'Impossibile modificare le impostazioni della fotocamera.' },
+    'Unable to send the message or file.': { es: 'No se pudo enviar el mensaje o el archivo.', it: 'Impossibile inviare il messaggio o il file.' },
+    'Unable to clear the conversation.': { es: 'No se pudo borrar la conversación.', it: 'Impossibile cancellare la conversazione.' },
+    'Close enlarged camera': { es: 'Cerrar cámara ampliada', it: 'Chiudi fotocamera ingrandita' },
+    'Enlarge camera': { es: 'Ampliar cámara', it: 'Ingrandisci fotocamera' },
+    'Click to return to small view': { es: 'Haz clic para volver al tamaño pequeño', it: 'Fai clic per tornare alla visualizzazione ridotta' },
+    'Click to enlarge camera': { es: 'Haz clic para ampliar la cámara', it: 'Fai clic per ingrandire la fotocamera' },
+    'Private Chat': { es: 'Chat privado', it: 'Chat privato' },
+    'Clear all messages for both participants': { es: 'Borrar todos los mensajes para ambos participantes', it: 'Elimina tutti i messaggi per entrambi i partecipanti' },
+    'Clear chat': { es: 'Borrar chat', it: 'Cancella chat' },
+    'Select a student to start chatting': { es: 'Selecciona un estudiante para iniciar el chat', it: 'Seleziona uno studente per iniziare la chat' },
+    'Your private conversation with the educator': { es: 'Tu conversación privada con el educador', it: 'La tua conversazione privata con l’educatore' },
+    'The maximum file size is 25 MB.': { es: 'El tamaño máximo del archivo es de 25 MB.', it: 'La dimensione massima del file è di 25 MB.' },
+    'Remove attachment': { es: 'Eliminar archivo adjunto', it: 'Rimuovi allegato' },
+    'Write a private message...': { es: 'Escribe un mensaje privado...', it: 'Scrivi un messaggio privato...' },
+    'Attach': { es: 'Adjuntar', it: 'Allega' },
+    'Sending...': { es: 'Enviando...', it: 'Invio in corso...' },
+    'Send': { es: 'Enviar', it: 'Invia' },
+    'Self Cam': { es: 'Mi cámara', it: 'La mia fotocamera' },
+    'Flip Camera': { es: 'Cambiar cámara', it: 'Inverti fotocamera' },
+    'Turn Camera Off': { es: 'Apagar cámara', it: 'Spegni fotocamera' },
+    'Turn Camera On': { es: 'Encender cámara', it: 'Accendi fotocamera' },
+  };
+
+  const classroomLabel = (ar: string, fr: string, en: string) => {
     if (currentLang === 'ar') return ar;
     if (currentLang === 'fr') return fr;
+    if (currentLang === 'es' || currentLang === 'it') return inlineLabels[en]?.[currentLang] || en;
     return en;
   };
   const [activeTab, setActiveTab] = useState<'stored' | 'live'>(initialTab);
