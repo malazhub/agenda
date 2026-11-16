@@ -1165,6 +1165,9 @@ async function deleteDirectorAccount(request, env, accountId) {
     );
     if (account.registered_session_id) {
       statements.push(
+        env.DB.prepare(
+          "UPDATE accounts SET registered_session_id = NULL WHERE role = 'student' AND school_id = ? AND registered_session_id = ?"
+        ).bind(schoolId, account.registered_session_id),
         env.DB.prepare("DELETE FROM sessions WHERE id = ? AND school_id = ?").bind(account.registered_session_id, schoolId)
       );
     }
