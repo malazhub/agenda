@@ -44,7 +44,7 @@ function fakeEnvironment() {
     }
 
     async first() {
-      if (this.sql.includes('SELECT id FROM schools WHERE id')) {
+      if (this.sql.includes('FROM schools WHERE id = ?')) {
         const school = schools.get(this.values[0]);
         return school ? { id: school.id, name: school.name } : null;
       }
@@ -583,4 +583,97 @@ test('live stream endpoint rejects users without an assigned activated session',
   const { env } = fakeEnvironment();
   const response = await send(env, '/api/live-stream?sessionId=test-registration-session');
   assert.equal(response.status, 401);
+});
+
+test('Director accounts, sessions, and monthly grade prices are isolated by owned school', async () => {
+  const { env, accounts, schools, sessions, pricing } = fakeEnvironment();
+  const secondPassword = 'DirectorTwoPassword#2026';
+  schools.set('school-two', { id: 'school-two', name: 'Second School', director_id: 'director-account-two' });
+  accounts.set('director-account-two', {
+    id: 'director-account-two',
+    username: 'director.two',
+    password_hash: hashPassword(secondPassword),
+    role: 'director',
+    school_id: 'school-two',
+    full_name: 'Second Director',
+    email: '',
+    phone: '',
+    school_or_subject: '',
+    grade_id: '',
+    registered_session_id: null,
+    created_at: '2026-11-03 09:01:00',
+    expires_at: null,
+    activated: 1,
+    paid: 1,
+  });
+  accounts.set('educator-two', {
+    id: 'educator-two',
+    username: 'educator.two',
+    password_hash: hashPassword('EducatorTwoPassword#2026'),
+    role: 'educator',
+    school_id: 'school-two',
+    full_name: 'Educator Two',
+    email: 'educator.two@example.com',
+    phone: '',
+    school_or_subject: 'Science',
+    grade_id: 'eb8',
+    registered_session_id: 'other-school-session',
+    created_at: '2026-11-03 09:02:00',
+    expires_at: '2026-12-03 10:00:00',
+    activated: 1,
+    paid: 1,
+  });
+  sessions.set('other-school-session', {
+    id: 'other-school-session',
+    school_id: 'school-two',
+    grade_id: 'eb8',
+    subject: 'Science',
+    title: 'Other school class',
+    teacher_name: 'Educator Two',
+    source_name: 'Agenda',
+    source_url: 'https://example.org/other',
+    playback_url: 'https://example.org/other/video',
+    media_key: null,
+    is_live: 0,
+    live_starts_at: null,
+  });
+
+  const firstLogin = await send(env, '/api/auth/login', {
+    method: 'POST',
+    body: { username: 'director', password: 'DirectorPassword#2026' },
+  });
+  const { token: firstToken } = await firstLogin.json();
+  const firstAccounts = await send(env, '/api/director/accounts', { token: firstToken });
+  const firstAccountData = await firstAccounts.json();
+  assert.equal(firstAccounts.status, 200);
+  assert.equal(firstAccountData.educators.some((account) => account.id === 'educator-two'), false);
+
+  const firstSessions = await send(env, '/api/director/sessions', { token: firstToken });
+  const firstSessionData = await firstSessions.json();
+  assert.equal(firstSessionData.sessions.some((session) => session.id === 'other-school-session'), false);
+
+  const savedPrice = await send(env, '/api/director/pricing', {
+    method: 'PUT',
+    token: firstToken,
+    body: { gradeId: 'eb8', monthlyRateUsd: 500 },
+  });
+  assert.equal(savedPrice.status, 200);
+  assert.equal((await savedPrice.json()).price.monthlyRateUsd, 500);
+
+  const firstPricing = await send(env, '/api/director/pricing', { token: firstToken });
+  assert.equal((await firstPricing.json()).prices[0].monthlyRateUsd, 500);
+
+  const secondLogin = await send(env, '/api/auth/login', {
+    method: 'POST',
+    body: { username: 'director.two', password: secondPassword },
+  });
+  const { token: secondToken } = await secondLogin.json();
+  const secondPricing = await send(env, '/api/director/pricing', { token: secondToken });
+  assert.deepEqual((await secondPricing.json()).prices, []);
+
+  const context = await send(env, '/api/school-context?schoolId=default-agenda-school');
+  const contextData = await context.json();
+  assert.equal(contextData.schoolName, 'Agenda');
+  assert.equal(contextData.prices.find((price) => price.gradeId === 'eb8').monthlyRateUsd, 500);
+  assert.equal(pricing.get('default-agenda-school:eb8').monthly_rate_usd, 500);
 });
