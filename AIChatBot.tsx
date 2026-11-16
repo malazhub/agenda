@@ -3,6 +3,7 @@ import { Language } from '../types';
 import { GoogleGenAI } from '@google/genai';
 import { getSchoolPublicContext } from '../services/cloudflareApi';
 import type { SchoolPublicContext } from '../services/cloudflareApi';
+import { LEBANESE_GRADE_LEVELS } from '../data/mockGradesAndSessions';
 import { 
   X, 
   Send, 
@@ -60,13 +61,13 @@ export const AIChatBot: React.FC<AIChatBotProps> = ({ currentLang, schoolId, sch
     const prices = context?.prices || [];
     const monthlyPriceQuestion = [
       'price', 'pricing', 'cost', 'fee', 'fees', 'usd', 'dollar', 'payment',
-      'tarif', 'prix', 'coût', 'cout', 'payer', 'mensuel', 'mensual', 'mensile',
+      'tarif', 'tarifa', 'tarifas', 'prix', 'precio', 'precios', 'prezzo', 'prezzi', 'tariffa', 'tariffe', 'coût', 'cout', 'costo', 'coste', 'quanto', 'cuanto', 'cuánto', 'how much', 'payer', 'mensuel', 'mensual', 'mensile',
       'month', 'monthly', 'per month', 'شهري', 'سعر', 'اسعار', 'أسعار', 'تكلف', 'بكم', 'دولار', 'دفع'
     ].some((keyword) => q.includes(keyword));
 
     if (monthlyPriceQuestion) {
       const rateLines = prices.length
-        ? prices.map((price) => `${price.gradeId.toUpperCase()}: ${price.monthlyRateUsd} USD`).join('\n')
+        ? prices.map((price) => `${LEBANESE_GRADE_LEVELS.find((grade) => grade.id === price.gradeId)?.name[currentLang] || price.gradeId}: ${price.monthlyRateUsd} USD`).join('\n')
         : `${context?.defaultMonthlyRateUsd ?? 125} USD per month (default rate)`;
       if (currentLang === 'ar') return `المدرسة: ${context?.schoolName || schoolName || 'Agenda'}\nالأسعار الشهرية المعتمدة حسب الصف:\n${rateLines}\nالسعر الافتراضي للصف الذي لم يحدد المدير سعره هو 125 دولاراً شهرياً. هذه الأسعار خاصة بمدرستك.`;
       if (currentLang === 'fr') return `Établissement : ${context?.schoolName || schoolName || 'Agenda'}\nTarifs mensuels par classe :\n${rateLines}\nLe tarif par défaut d'une classe sans prix personnalisé est de 125 USD par mois. Ces tarifs sont propres à votre établissement.`;
