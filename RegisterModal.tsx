@@ -18,6 +18,7 @@ interface RegisterModalProps {
   isOpen: boolean;
   onClose: () => void;
   currentLang: Language;
+  schoolId: string;
   onRegisterSuccess: (account: CloudflareAccount, token: string) => void;
 }
 export async function deleteDirectorAccount(token: string, accountId: string): Promise<void> {
@@ -38,6 +39,7 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
   isOpen,
   onClose,
   currentLang,
+  schoolId,
   onRegisterSuccess
 }) => {
   const t = translations[currentLang];
@@ -103,7 +105,7 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
 
     setIsLoadingEducators(true);
 
-    getRegistrationEducators()
+    getRegistrationEducators(schoolId)
       .then(({ educators }) => {
         if (active) {
           setEducatorsList(educators || []);
@@ -129,13 +131,13 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
     return () => {
       active = false;
     };
-  }, [isOpen, t.registrationServiceUnavailable]);
+  }, [isOpen, schoolId, t.registrationServiceUnavailable]);
 
   useEffect(() => {
     if (!isOpen) return;
     let active = true;
     setIsLoadingGrades(true);
-    getRegistrationGrades()
+    getRegistrationGrades(schoolId)
       .then(({ grades }) => {
         if (active) setRegistrationGrades(grades);
       })
@@ -148,7 +150,7 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
     return () => {
       active = false;
     };
-  }, [isOpen, t.registrationServiceUnavailable]);
+  }, [isOpen, schoolId, t.registrationServiceUnavailable]);
 
   const handleClose = () => {
     setShowPayment(false);
@@ -185,6 +187,7 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
       const { account, token } = isLogin
         ? await loginAccount(username, password)
         : await registerAccount({
+            schoolId,
             username,
             password,
             role,
