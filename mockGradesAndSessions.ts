@@ -226,7 +226,7 @@ export const LEBANESE_GRADE_LEVELS: GradeLevelDef[] = [
       ar: 'الروضات والتحضيري (KG / Maternelle)',
       fr: 'Maternelle (Grande Section - KG)',
       en: 'Kindergarten & Preschool (KG)',
-      it: 'Scuola dell'infanzia (KG)',
+      it: 'Scuola dell’infanzia (KG)',
       es: 'Educación infantil (KG)'
     },
     badge: 'KG / Maternelle',
