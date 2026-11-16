@@ -312,7 +312,7 @@ async function handleRegister(request, env) {
 
   if (role === "student" && !selectedSession) {
     return json({
-      error: "The selected educator does not have an assigned classroom."
+      error: "Choose a valid session: the selected educator does not have an assigned classroom."
     }, 400);
   }
 
