@@ -30,8 +30,7 @@ interface CoursesHubProps {
   onSelectQuestionForBooking: (question: any, exam: any) => void;
   onStartPractice: (exam: any) => void;
   onEnterLiveClassroom?: (session?: LiveSessionInfo) => void;
-  onShowMessage: (message: string) => void;
-  onRequestSignIn?: () => void;
+    onShowMessage: (message: string) => void;
   directorLoginRequest: number;
   registeredAccount: CloudflareAccount | null;
   sessionToken: string;
@@ -47,8 +46,7 @@ export const CoursesHub: React.FC<CoursesHubProps> = ({
   directorLoginRequest,
   registeredAccount,
   sessionToken,
-  onShowMessage,
-  onRequestSignIn,
+    onShowMessage,
   onEnterLiveClassroom,
   onRegisterSignOutCleanup,
 }) => {
@@ -287,8 +285,7 @@ const updateAccount = async (
     }
   };
 
-      // Open Broadcast Room for every visitor.
-  // Sign-in is requested later when the visitor selects a section.
+        // Open Broadcast Room for both signed-in users and guests.
   const openSharedLiveRoom = () => {
     const accountGrade = registeredAccount?.gradeId
       ?.toLowerCase()
@@ -313,15 +310,15 @@ const updateAccount = async (
         );
       }) || LEBANESE_GRADE_LEVELS[0];
 
-    // Open the two-section screen.
-    // Learning Resources is selected initially.
-    setActiveGradeTab('stored');
+    // Guests open directly on Live Sessions.
+    // Signed-in users retain Learning Resources as their first tab.
+    setActiveGradeTab(
+      registeredAccount && sessionToken
+        ? 'stored'
+        : 'live'
+    );
 
-    // Do not automatically join a live classroom.
     setAutoOpenLiveClassroom(false);
-
-    // Use the account grade when signed in.
-    // Otherwise, use a temporary grade until sign-in.
     setActiveGradeForSessions(targetGrade);
   };
 
@@ -511,14 +508,14 @@ const updateAccount = async (
 
       if (activeGradeForSessions) {
     return (
-      <GradeSessionsView
+            <GradeSessionsView
         currentLang={currentLang}
         selectedGrade={activeGradeForSessions}
         initialTab={activeGradeTab}
         autoOpenLiveClassroom={autoOpenLiveClassroom}
         registeredAccount={registeredAccount}
         sessionToken={sessionToken}
-        onRequestSignIn={onRequestSignIn}
+        onShowMessage={onShowMessage}
         onRegisterSignOutCleanup={onRegisterSignOutCleanup}
         onBack={() => {
           setActiveGradeForSessions(null);
