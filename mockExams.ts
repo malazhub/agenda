@@ -564,3 +564,26 @@ export const ARCHIVE_YEARS: ArchiveYearSummary[] = Array.from({ length: 27 }, (_
     historicalContext: context
   };
 });
+
+
+/**
+ * Official exam source material may be published in its original examination
+ * language. Keep it readable in every UI locale when a translated source is
+ * not available, while all surrounding navigation and instructions use the
+ * selected application language.
+ */
+function fillMissingExamLocales(value: unknown): void {
+  if (Array.isArray(value)) {
+    value.forEach(fillMissingExamLocales);
+    return;
+  }
+  if (!value || typeof value !== 'object') return;
+  const record = value as Record<string, unknown>;
+  if (typeof record.en === 'string') {
+    if (typeof record.es !== 'string') record.es = record.en;
+    if (typeof record.it !== 'string') record.it = record.en;
+  }
+  Object.values(record).forEach(fillMissingExamLocales);
+}
+
+OFFICIAL_EXAMS.forEach(fillMissingExamLocales);
