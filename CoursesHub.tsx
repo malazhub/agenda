@@ -248,7 +248,11 @@ export const CoursesHub: React.FC<CoursesHubProps> = ({
           ? 'تم حفظ اسم المدرسة وبيانات المدير وتحديث اسم المنصة.'
           : currentLang === 'fr'
             ? 'Le nom de l’établissement et les identifiants du directeur ont été enregistrés.'
-            : 'School name and Director credentials saved. The main header is updated.'
+            : currentLang === 'es'
+              ? 'Se guardaron el nombre de la escuela y las credenciales del Director. Se actualizó el encabezado.'
+              : currentLang === 'it'
+                ? 'Il nome della scuola e le credenziali del Direttore sono stati salvati. L’intestazione è stata aggiornata.'
+                : 'School name and Director credentials saved. The main header is updated.'
       );
     } catch (error) {
       setDirectorDataError(error instanceof Error ? error.message : 'Unable to save Director settings.');
@@ -343,7 +347,13 @@ const updateAccount = async (
       setDirectorMessage(
         currentLang === 'ar'
           ? `تم حذف حساب (${account.fullName}) من Cloudflare نهائياً.`
-          : `Account (${account.fullName}) was permanently deleted from Cloudflare.`
+          : currentLang === 'fr'
+            ? `Le compte de ${account.fullName} a été définitivement supprimé de Cloudflare.`
+            : currentLang === 'es'
+              ? `La cuenta de ${account.fullName} se eliminó permanentemente de Cloudflare.`
+              : currentLang === 'it'
+                ? `L’account di ${account.fullName} è stato eliminato definitivamente da Cloudflare.`
+                : `Account (${account.fullName}) was permanently deleted from Cloudflare.`
       );
     } catch (err) {
       setDirectorDataError(err instanceof Error ? err.message : 'Failed to delete account from Cloudflare.');
@@ -408,11 +418,7 @@ const updateAccount = async (
             <th className="px-3 py-3 text-left font-black text-slate-700">{t.fullNameLabel}</th>
                         {showEducatorColumn && (
               <th className="px-3 py-3 text-left font-black text-slate-700">
-                {currentLang === 'ar'
-                  ? 'المعلّم'
-                  : currentLang === 'fr'
-                    ? 'Éducateur'
-                    : 'Educator'}
+                {currentLang === 'ar' ? 'المعلّم' : currentLang === 'fr' ? 'Éducateur' : currentLang === 'es' ? 'Educador' : currentLang === 'it' ? 'Educatore' : 'Educator'}
               </th>
             )}
             <th className="px-3 py-3 text-left font-black text-slate-700">{t.usernameLabel}</th>
@@ -456,11 +462,7 @@ const updateAccount = async (
       Boolean(educator.registeredSessionId)
   ) && (
     <option value="__assignment_not_found__" disabled>
-      {currentLang === 'ar'
-        ? 'لم يتم العثور على المعلّم المسجّل'
-        : currentLang === 'fr'
-          ? 'Éducateur inscrit introuvable'
-          : 'Registered educator not found'}
+      {currentLang === 'ar' ? 'لم يتم العثور على المعلّم المسجّل' : currentLang === 'fr' ? 'Éducateur inscrit introuvable' : currentLang === 'es' ? 'No se encontró el educador registrado' : currentLang === 'it' ? 'Educatore registrato non trovato' : 'Registered educator not found'}
     </option>
   )}
 
