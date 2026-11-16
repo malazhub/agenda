@@ -168,7 +168,7 @@ function fakeEnvironment() {
         if (school && (!this.values[2] || school.director_id === this.values[2])) school.name = this.values[0];
         return { meta: { changes: school ? 1 : 0 } };
       }
-      if (this.sql.startsWith('UPDATE accounts SET')) {
+      if (this.sql.startsWith('UPDATE accounts') && this.sql.includes(' SET ')) {
         const id = this.values[this.sql.includes('AND school_id = ?') ? this.values.length - 2 : this.values.length - 1];
         const account = accounts.get(id);
         if (!account || account.role === 'director') return { meta: { changes: 0 } };
@@ -402,10 +402,10 @@ test('grade registration loads available grades and grants grade-scoped live acc
     token: directorToken,
     body: { activated: true },
   });
+  sessions.get('test-registration-session').is_live = 1;
   const liveStatus = await send(env, '/api/live-stream?sessionId=test-registration-session', { token });
   assert.equal(liveStatus.status, 200);
   assert.equal((await liveStatus.json()).status, 'waiting');
-  sessions.get('test-registration-session').is_live = 1;
   const liveCatalog = await send(env, '/api/sessions?gradeId=eb8&live=true&sessionId=test-registration-session', { token });
   assert.equal(liveCatalog.status, 200);
   assert.equal((await liveCatalog.json()).sessions[0].id, 'test-registration-session');
