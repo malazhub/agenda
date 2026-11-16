@@ -7,10 +7,12 @@ export const LEBANESE_GRADE_LEVELS: GradeLevelDef[] = [
     name: {
       ar: 'الثانوية العامة - علوم عامة (SG)',
       fr: 'Terminale - Sciences Générales (SG)',
-      en: 'Grade 12 - General Sciences (SG)'
+      en: 'Grade 12 - General Sciences (SG)',
+      it: 'Classe 12 - Scienze generali (SG)',
+      es: 'Curso 12 - Ciencias generales (SG)'
     },
     badge: 'Bac SG',
-    cycle: { ar: 'المرحلة الثانوية', fr: 'Cycle Secondaire', en: 'Secondary' },
+    cycle: { ar: 'المرحلة الثانوية', fr: 'Cycle Secondaire', en: 'Secondary', it: 'Scuola secondaria', es: 'Educación secundaria' },
     color: 'from-blue-600 to-indigo-700',
     iconBg: 'bg-blue-600'
   },
@@ -19,10 +21,12 @@ export const LEBANESE_GRADE_LEVELS: GradeLevelDef[] = [
     name: {
       ar: 'الثانوية العامة - اجتماع واقتصاد (SE)',
       fr: 'Terminale - Sociologie & Économie (SE)',
-      en: 'Grade 12 - Socio-Economics (SE)'
+      en: 'Grade 12 - Socio-Economics (SE)',
+      it: 'Classe 12 - Socioeconomia (SE)',
+      es: 'Curso 12 - Socioeconomía (SE)'
     },
     badge: 'Bac SE',
-    cycle: { ar: 'المرحلة الثانوية', fr: 'Cycle Secondaire', en: 'Secondary' },
+    cycle: { ar: 'المرحلة الثانوية', fr: 'Cycle Secondaire', en: 'Secondary', it: 'Scuola secondaria', es: 'Educación secundaria' },
     color: 'from-amber-600 to-orange-700',
     iconBg: 'bg-amber-600'
   },
@@ -31,10 +35,12 @@ export const LEBANESE_GRADE_LEVELS: GradeLevelDef[] = [
     name: {
       ar: 'الثانوية العامة - آداب وإنسانيات (LH)',
       fr: 'Terminale - Lettres & Humanités (LH)',
-      en: 'Grade 12 - Literature & Humanities (LH)'
+      en: 'Grade 12 - Literature & Humanities (LH)',
+      it: 'Classe 12 - Lettere e discipline umanistiche (LH)',
+      es: 'Curso 12 - Literatura y Humanidades (LH)'
     },
     badge: 'Bac LH',
-    cycle: { ar: 'المرحلة الثانوية', fr: 'Cycle Secondaire', en: 'Secondary' },
+    cycle: { ar: 'المرحلة الثانوية', fr: 'Cycle Secondaire', en: 'Secondary', it: 'Scuola secondaria', es: 'Educación secundaria' },
     color: 'from-purple-600 to-pink-700',
     iconBg: 'bg-purple-600'
   },
@@ -45,10 +51,12 @@ export const LEBANESE_GRADE_LEVELS: GradeLevelDef[] = [
     name: {
       ar: 'الثانوي الثاني - علمي (1ère S)',
       fr: 'Première Scientifique (1ère S)',
-      en: 'Grade 11 - Science Track'
+      en: 'Grade 11 - Science Track',
+      it: 'Classe 11 - Indirizzo scientifico',
+      es: 'Curso 11 - Rama de ciencias'
     },
     badge: '1ère Sc',
-    cycle: { ar: 'المرحلة الثانوية', fr: 'Cycle Secondaire', en: 'Secondary' },
+    cycle: { ar: 'المرحلة الثانوية', fr: 'Cycle Secondaire', en: 'Secondary', it: 'Scuola secondaria', es: 'Educación secundaria' },
     color: 'from-indigo-600 to-blue-800',
     iconBg: 'bg-indigo-600'
   },
@@ -57,10 +65,12 @@ export const LEBANESE_GRADE_LEVELS: GradeLevelDef[] = [
     name: {
       ar: 'الثانوي الثاني - أدبي (1ère L)',
       fr: 'Première Littéraire (1ère L)',
-      en: 'Grade 11 - Humanities Track'
+      en: 'Grade 11 - Humanities Track',
+      it: 'Classe 11 - Indirizzo umanistico',
+      es: 'Curso 11 - Rama de humanidades'
     },
     badge: '1ère Lit',
-    cycle: { ar: 'المرحلة الثانوية', fr: 'Cycle Secondaire', en: 'Secondary' },
+    cycle: { ar: 'المرحلة الثانوية', fr: 'Cycle Secondaire', en: 'Secondary', it: 'Scuola secondaria', es: 'Educación secundaria' },
     color: 'from-violet-600 to-purple-800',
     iconBg: 'bg-violet-600'
   },
@@ -69,10 +79,12 @@ export const LEBANESE_GRADE_LEVELS: GradeLevelDef[] = [
     name: {
       ar: 'الثانوي الأول - مشترك (Seconde)',
       fr: 'Seconde - Tronc Commun (2nde)',
-      en: 'Grade 10 - Sophomore (2nde)'
+      en: 'Grade 10 - Sophomore (2nde)',
+      it: 'Classe 10 - Secondo anno (2nde)',
+      es: 'Curso 10 - Segundo año (2nde)'
     },
     badge: '2nde / EB10',
-    cycle: { ar: 'المرحلة الثانوية', fr: 'Cycle Secondaire', en: 'Secondary' },
+    cycle: { ar: 'المرحلة الثانوية', fr: 'Cycle Secondaire', en: 'Secondary', it: 'Scuola secondaria', es: 'Educación secundaria' },
     color: 'from-teal-600 to-emerald-800',
     iconBg: 'bg-teal-600'
   },
@@ -83,10 +95,12 @@ export const LEBANESE_GRADE_LEVELS: GradeLevelDef[] = [
     name: {
       ar: 'الشهادة المتوسطة - البريفيه (EB9)',
       fr: 'Brevet Officiel - EB9 (3ème)',
-      en: 'Grade 9 - Official Brevet (EB9)'
+      en: 'Grade 9 - Official Brevet (EB9)',
+      it: 'Classe 9 - Brevet ufficiale (EB9)',
+      es: 'Curso 9 - Brevet oficial (EB9)'
     },
     badge: 'Brevet EB9',
-    cycle: { ar: 'المرحلة المتوسطة', fr: 'Cycle Complémentaire', en: 'Middle School' },
+    cycle: { ar: 'المرحلة المتوسطة', fr: 'Cycle Complémentaire', en: 'Middle School', it: 'Scuola media', es: 'Educación secundaria básica' },
     color: 'from-cyan-600 to-blue-700',
     iconBg: 'bg-cyan-600'
   },
@@ -95,10 +109,12 @@ export const LEBANESE_GRADE_LEVELS: GradeLevelDef[] = [
     name: {
       ar: 'الصف الثامن الأساسي (EB8 - 4ème)',
       fr: 'Classe de 4ème (EB8)',
-      en: 'Grade 8 (EB8 - 4ème)'
+      en: 'Grade 8 (EB8 - 4ème)',
+      it: 'Classe 8 (EB8 - 4ème)',
+      es: 'Curso 8 (EB8 - 4ème)'
     },
     badge: 'EB8 / 4ème',
-    cycle: { ar: 'المرحلة المتوسطة', fr: 'Cycle Complémentaire', en: 'Middle School' },
+    cycle: { ar: 'المرحلة المتوسطة', fr: 'Cycle Complémentaire', en: 'Middle School', it: 'Scuola media', es: 'Educación secundaria básica' },
     color: 'from-sky-600 to-indigo-700',
     iconBg: 'bg-sky-600'
   },
@@ -107,10 +123,12 @@ export const LEBANESE_GRADE_LEVELS: GradeLevelDef[] = [
     name: {
       ar: 'الصف السابع الأساسي (EB7 - 5ème)',
       fr: 'Classe de 5ème (EB7)',
-      en: 'Grade 7 (EB7 - 5ème)'
+      en: 'Grade 7 (EB7 - 5ème)',
+      it: 'Classe 7 (EB7 - 5ème)',
+      es: 'Curso 7 (EB7 - 5ème)'
     },
     badge: 'EB7 / 5ème',
-    cycle: { ar: 'المرحلة المتوسطة', fr: 'Cycle Complémentaire', en: 'Middle School' },
+    cycle: { ar: 'المرحلة المتوسطة', fr: 'Cycle Complémentaire', en: 'Middle School', it: 'Scuola media', es: 'Educación secundaria básica' },
     color: 'from-blue-500 to-sky-700',
     iconBg: 'bg-blue-500'
   },
@@ -121,10 +139,12 @@ export const LEBANESE_GRADE_LEVELS: GradeLevelDef[] = [
     name: {
       ar: 'الصف السادس الأساسي (EB6 - 6ème)',
       fr: 'Classe de 6ème (EB6)',
-      en: 'Grade 6 (EB6 - 6ème)'
+      en: 'Grade 6 (EB6 - 6ème)',
+      it: 'Classe 6 (EB6 - 6ème)',
+      es: 'Curso 6 (EB6 - 6ème)'
     },
     badge: 'EB6 / 6ème',
-    cycle: { ar: 'المرحلة الابتدائية', fr: 'Cycle Primaire', en: 'Elementary' },
+    cycle: { ar: 'المرحلة الابتدائية', fr: 'Cycle Primaire', en: 'Elementary', it: 'Scuola primaria', es: 'Educación primaria' },
     color: 'from-emerald-500 to-teal-700',
     iconBg: 'bg-emerald-500'
   },
@@ -133,10 +153,12 @@ export const LEBANESE_GRADE_LEVELS: GradeLevelDef[] = [
     name: {
       ar: 'الصف الخامس الابتدائي (EB5 - CM2)',
       fr: 'Classe de CM2 (EB5)',
-      en: 'Grade 5 (EB5 - CM2)'
+      en: 'Grade 5 (EB5 - CM2)',
+      it: 'Classe 5 (EB5 - CM2)',
+      es: 'Curso 5 (EB5 - CM2)'
     },
     badge: 'EB5 / CM2',
-    cycle: { ar: 'المرحلة الابتدائية', fr: 'Cycle Primaire', en: 'Elementary' },
+    cycle: { ar: 'المرحلة الابتدائية', fr: 'Cycle Primaire', en: 'Elementary', it: 'Scuola primaria', es: 'Educación primaria' },
     color: 'from-teal-500 to-emerald-700',
     iconBg: 'bg-teal-500'
   },
@@ -145,10 +167,12 @@ export const LEBANESE_GRADE_LEVELS: GradeLevelDef[] = [
     name: {
       ar: 'الصف الرابع الابتدائي (EB4 - CM1)',
       fr: 'Classe de CM1 (EB4)',
-      en: 'Grade 4 (EB4 - CM1)'
+      en: 'Grade 4 (EB4 - CM1)',
+      it: 'Classe 4 (EB4 - CM1)',
+      es: 'Curso 4 (EB4 - CM1)'
     },
     badge: 'EB4 / CM1',
-    cycle: { ar: 'المرحلة الابتدائية', fr: 'Cycle Primaire', en: 'Elementary' },
+    cycle: { ar: 'المرحلة الابتدائية', fr: 'Cycle Primaire', en: 'Elementary', it: 'Scuola primaria', es: 'Educación primaria' },
     color: 'from-cyan-500 to-blue-600',
     iconBg: 'bg-cyan-500'
   },
@@ -157,10 +181,12 @@ export const LEBANESE_GRADE_LEVELS: GradeLevelDef[] = [
     name: {
       ar: 'الصف الثالث الابتدائي (EB3 - CE2)',
       fr: 'Classe de CE2 (EB3)',
-      en: 'Grade 3 (EB3 - CE2)'
+      en: 'Grade 3 (EB3 - CE2)',
+      it: 'Classe 3 (EB3 - CE2)',
+      es: 'Curso 3 (EB3 - CE2)'
     },
     badge: 'EB3 / CE2',
-    cycle: { ar: 'المرحلة الابتدائية', fr: 'Cycle Primaire', en: 'Elementary' },
+    cycle: { ar: 'المرحلة الابتدائية', fr: 'Cycle Primaire', en: 'Elementary', it: 'Scuola primaria', es: 'Educación primaria' },
     color: 'from-amber-500 to-orange-600',
     iconBg: 'bg-amber-500'
   },
@@ -169,10 +195,12 @@ export const LEBANESE_GRADE_LEVELS: GradeLevelDef[] = [
     name: {
       ar: 'الصف الثاني الابتدائي (EB2 - CE1)',
       fr: 'Classe de CE1 (EB2)',
-      en: 'Grade 2 (EB2 - CE1)'
+      en: 'Grade 2 (EB2 - CE1)',
+      it: 'Classe 2 (EB2 - CE1)',
+      es: 'Curso 2 (EB2 - CE1)'
     },
     badge: 'EB2 / CE1',
-    cycle: { ar: 'المرحلة الابتدائية', fr: 'Cycle Primaire', en: 'Elementary' },
+    cycle: { ar: 'المرحلة الابتدائية', fr: 'Cycle Primaire', en: 'Elementary', it: 'Scuola primaria', es: 'Educación primaria' },
     color: 'from-orange-500 to-rose-600',
     iconBg: 'bg-orange-500'
   },
@@ -181,10 +209,12 @@ export const LEBANESE_GRADE_LEVELS: GradeLevelDef[] = [
     name: {
       ar: 'الصف الأول الابتدائي (EB1 - CP)',
       fr: 'Classe de CP (EB1)',
-      en: 'Grade 1 (EB1 - CP)'
+      en: 'Grade 1 (EB1 - CP)',
+      it: 'Classe 1 (EB1 - CP)',
+      es: 'Curso 1 (EB1 - CP)'
     },
     badge: 'EB1 / CP',
-    cycle: { ar: 'المرحلة الابتدائية', fr: 'Cycle Primaire', en: 'Elementary' },
+    cycle: { ar: 'المرحلة الابتدائية', fr: 'Cycle Primaire', en: 'Elementary', it: 'Scuola primaria', es: 'Educación primaria' },
     color: 'from-rose-500 to-red-600',
     iconBg: 'bg-rose-500'
   },
@@ -195,10 +225,12 @@ export const LEBANESE_GRADE_LEVELS: GradeLevelDef[] = [
     name: {
       ar: 'الروضات والتحضيري (KG / Maternelle)',
       fr: 'Maternelle (Grande Section - KG)',
-      en: 'Kindergarten & Preschool (KG)'
+      en: 'Kindergarten & Preschool (KG)',
+      it: 'Scuola dell'infanzia (KG)',
+      es: 'Educación infantil (KG)'
     },
     badge: 'KG / Maternelle',
-    cycle: { ar: 'التعليم التحضيري', fr: 'Cycle Préscolaire', en: 'Preschool' },
+    cycle: { ar: 'التعليم التحضيري', fr: 'Cycle Préscolaire', en: 'Preschool', it: 'Scuola prescolare', es: 'Educación preescolar' },
     color: 'from-pink-500 to-rose-600',
     iconBg: 'bg-pink-500'
   }
