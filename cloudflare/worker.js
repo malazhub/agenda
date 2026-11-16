@@ -591,6 +591,34 @@ async function directorAccounts(request, env) {
 }
 
 
+async function deleteAccount(request, env, accountId) {
+  const director = await authenticate(request, env, "director");
+  if (!director) return json({ error: "Director authentication required." }, 401);
+  const schoolId = await getDirectorSchoolId(env, director);
+  if (!schoolId) return json({ error: "Director school is not configured." }, 403);
+  const account = await env.DB.prepare(
+    "SELECT id, role FROM accounts WHERE id = ? AND school_id = ? AND role IN ('student', 'educator')"
+  ).bind(accountId, schoolId).first();
+  if (!account) return json({ error: "Account not found." }, 404);
+
+  if (account.role === "educator") {
+    const lessons = await env.DB.prepare(
+      "SELECT media_key FROM educator_lessons WHERE educator_id = ? AND school_id = ?"
+    ).bind(accountId, schoolId).all();
+    for (const lesson of lessons.results || []) {
+      if (lesson.media_key) await env.SESSION_MEDIA_BUCKET.delete(lesson.media_key);
+    }
+    await env.DB.prepare(
+      "DELETE FROM educator_lessons WHERE educator_id = ? AND school_id = ?"
+    ).bind(accountId, schoolId).run();
+  }
+
+  await env.DB.prepare(
+    "DELETE FROM accounts WHERE id = ? AND school_id = ?"
+  ).bind(accountId, schoolId).run();
+  return json({ deleted: true, fileCleanupComplete: true });
+}
+
 async function updateAccount(request, env, accountId) {
   const director = await authenticate(request, env, "director");
   if (!director) {
@@ -2398,6 +2426,7 @@ async function handle(request, env) {
 
   const accountMatch = path.match(/^\/api\/director\/accounts\/([0-9a-f-]{36})$/i);
   if (request.method === "PATCH" && accountMatch) return updateAccount(request, env, accountMatch[1]);
+  if (request.method === "DELETE" && accountMatch) return deleteAccount(request, env, accountMatch[1]);
 
   const sessionMatch = path.match(/^\/api\/director\/sessions\/([a-zA-Z0-9_-]{1,100})$/);
   if (request.method === "DELETE" && sessionMatch) return deleteSession(request, env, sessionMatch[1]);
