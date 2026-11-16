@@ -596,43 +596,74 @@ async function updateDirectorProfile(request, env) {
   const director = await authenticate(request, env, "director");
   if (!director) return json({ error: "Director authentication required." }, 401);
   const body = await requestJson(request);
+  const requestedSchoolId = typeof body?.schoolId === "string" ? body.schoolId.trim() : "";
   const schoolName = typeof body?.schoolName === "string" ? body.schoolName.trim() : "";
   const username = typeof body?.username === "string" ? body.username.trim().toLowerCase() : "";
   const password = typeof body?.password === "string" ? body.password : "";
-  if (!schoolName || schoolName.length > 160 || !/^[a-z0-9._-]{3,32}$/.test(username)) {
-    return json({ error: "Provide a valid school name and 3–32 character username." }, 400);
+
+  if (!requestedSchoolId || !schoolName || schoolName.length > 160 ||
+      !/^[a-z0-9._-]{3,32}$/.test(username)) {
+    return json({ error: "Choose a school, enter its name, and provide a 3–32 character username." }, 400);
   }
   if (body.password !== undefined && (!password || password.length > MAX_PASSWORD_LENGTH)) {
     return json({ error: "A password must contain 1–1,024 characters." }, 400);
   }
+
   const account = await env.DB.prepare(
     "SELECT id, school_id FROM accounts WHERE id = ? AND role = 'director'"
   ).bind(director.sub).first();
-  if (!account?.school_id) return json({ error: "Director school profile not found." }, 404);
+  if (!account) return json({ error: "Director account not found." }, 404);
+
   const duplicate = await env.DB.prepare(
     "SELECT id FROM accounts WHERE username = ? COLLATE NOCASE AND id != ?"
   ).bind(username, director.sub).first();
   if (duplicate) return json({ error: "That username is already in use." }, 409);
-  try {
-    await env.DB.prepare("UPDATE schools SET name = ? WHERE id = ?")
-      .bind(schoolName, account.school_id).run();
-  } catch {
-    return json({ error: "That school name is already in use." }, 409);
+
+  let schoolId = requestedSchoolId;
+  if (requestedSchoolId === "__new__") {
+    schoolId = crypto.randomUUID();
+    try {
+      await env.DB.prepare("INSERT INTO schools (id, name) VALUES (?, ?)")
+        .bind(schoolId, schoolName).run();
+    } catch {
+      return json({ error: "That school name already exists. Select it from the list instead." }, 409);
+    }
+  } else {
+    const selectedSchool = await env.DB.prepare(
+      "SELECT id FROM schools WHERE id = ?"
+    ).bind(requestedSchoolId).first();
+    if (!selectedSchool) return json({ error: "The selected school no longer exists. Refresh and try again." }, 404);
+    try {
+      await env.DB.prepare("UPDATE schools SET name = ? WHERE id = ?")
+        .bind(schoolName, schoolId).run();
+    } catch {
+      return json({ error: "That school name is already in use." }, 409);
+    }
   }
+
   if (password) {
     await env.DB.prepare(
-      "UPDATE accounts SET username = ?, password_hash = ? WHERE id = ? AND role = 'director'"
-    ).bind(username, await hashPassword(password), director.sub).run();
+      "UPDATE accounts SET school_id = ?, username = ?, password_hash = ? WHERE id = ? AND role = 'director'"
+    ).bind(schoolId, username, await hashPassword(password), director.sub).run();
   } else {
     await env.DB.prepare(
-      "UPDATE accounts SET username = ? WHERE id = ? AND role = 'director'"
-    ).bind(username, director.sub).run();
+      "UPDATE accounts SET school_id = ?, username = ? WHERE id = ? AND role = 'director'"
+    ).bind(schoolId, username, director.sub).run();
   }
+
+  await env.DB.prepare(
+    `INSERT INTO app_settings (setting_key, setting_value, updated_at)
+     VALUES ('active_school_id', ?, datetime('now'))
+     ON CONFLICT(setting_key) DO UPDATE SET
+       setting_value = excluded.setting_value,
+       updated_at = datetime('now')`
+  ).bind(schoolId).run();
+
   const token = await signToken(
     { sub: director.sub, role: "director", username, exp: Math.floor(Date.now() / 1000) + SESSION_TTL_SECONDS },
     env.SESSION_SIGNING_KEY,
   );
-  return json({ profile: { schoolId: account.school_id, schoolName, username }, token });
+  return json({ profile: { schoolId, schoolName, username }, token });
 }
 
 async function directorAccounts(request, env) {
@@ -2477,8 +2508,14 @@ async function handle(request, env) {
   if (lessonWriteMatch && request.method === "PUT") return updateEducatorLesson(request, env, lessonWriteMatch[1]);
   if (lessonWriteMatch && request.method === "DELETE") return updateEducatorLesson(request, env, lessonWriteMatch[1], true);
   if (request.method === "GET" && path === "/api/schools") {
-    const result = await env.DB.prepare("SELECT id, name FROM schools ORDER BY name COLLATE NOCASE").all();
-    return json({ schools: result.results || [] });
+    const [result, setting] = await Promise.all([
+      env.DB.prepare("SELECT id, name FROM schools ORDER BY name COLLATE NOCASE").all(),
+      env.DB.prepare("SELECT setting_value FROM app_settings WHERE setting_key = 'active_school_id'").first(),
+    ]);
+    return json({
+      schools: result.results || [],
+      activeSchoolId: setting?.setting_value || "default-agenda-school",
+    });
   }
   const schoolId = url.searchParams.get("schoolId") || "";
   if (request.method === "GET" && path === "/api/registration/sessions") return schoolId ? registrationSessions(env, schoolId) : json({ error: "schoolId is required." }, 400);
