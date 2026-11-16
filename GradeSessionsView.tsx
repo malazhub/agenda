@@ -335,7 +335,7 @@ const containerRef = useRef<HTMLDivElement>(null);
             sessionId,
             grade: (liveSession?.gradeId || educator.gradeId || '').toUpperCase(),
             educatorName: educator.fullName,
-            subject: liveSession?.subject || educator.subject || 'Subject',
+            subject: liveSession?.subject || educator.subject || (currentLang === 'ar' ? 'المادة' : currentLang === 'fr' ? 'Matière' : currentLang === 'es' ? 'Materia' : currentLang === 'it' ? 'Materia' : 'Subject'),
             isLive: Boolean(liveSession?.isLive),
           };
         });
