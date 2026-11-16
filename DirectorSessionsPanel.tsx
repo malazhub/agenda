@@ -57,13 +57,13 @@ export const DirectorSessionsPanel: React.FC<DirectorSessionsPanelProps> = ({
     try {
       const { sessions: loadedSessions } = await getDirectorSessions(token);
       setSessions(loadedSessions);
-      localStorage.setItem('director_saved_sessions', JSON.stringify(loadedSessions));
-    } catch {
-      // Fallback to local storage if API is offline
-      const cached = localStorage.getItem('director_saved_sessions');
-      if (cached) {
-        setSessions(JSON.parse(cached));
-      }
+    } catch (requestError) {
+      setSessions([]);
+      setError(
+        requestError instanceof Error
+          ? requestError.message
+          : 'Unable to load sessions from the server.'
+      );
     } finally {
       setLoading(false);
     }
@@ -97,49 +97,36 @@ export const DirectorSessionsPanel: React.FC<DirectorSessionsPanelProps> = ({
     try {
       await createDirectorSession(token, newSessionInput);
       await loadSessions();
-      setMessage(t.sessionSaved);
-    } catch {
-      // Local fallback creation
-      const localId = `sess_${Date.now()}`;
-      const localRecord: StoredSessionRecord = {
-        id: localId,
-        gradeId,
-        title: form.educatorName.trim(),
-        subject: form.subject.trim(),
-        sourceName: form.educatorName.trim(),
-        sourceUrl: `https://agenda.live/room/${gradeId}`,
-        playbackUrl: '',
-        isLive,
-        createdAt: new Date().toISOString(),
-      };
-      const updated = [localRecord, ...sessions];
-      setSessions(updated);
-      localStorage.setItem('director_saved_sessions', JSON.stringify(updated));
-      localStorage.setItem(`max_students_${localId}`, String(form.maxStudents));
-      setMessage(t.sessionSaved);
-    } finally {
       setForm({ educatorName: '', subject: '', maxStudents: 25 });
+      setMessage(t.sessionSaved);
+    } catch (requestError) {
+      setError(
+        requestError instanceof Error
+          ? requestError.message
+          : 'Unable to save this session.'
+      );
+    } finally {
       setSaving(false);
     }
   };
 
-  // Fixed Delete: Removes permanently from state, localStorage, and API
+  // Remove the row only after the server confirms the deletion.
   const removeSession = async (session: StoredSessionRecord) => {
     if (!window.confirm(t.confirm)) return;
     setError('');
     setMessage('');
 
-    // Remove immediately from UI & localStorage so it is never stuck
-    const updated = sessions.filter((item) => item.id !== session.id);
-    setSessions(updated);
-    localStorage.setItem('director_saved_sessions', JSON.stringify(updated));
-    localStorage.removeItem(`max_students_${session.id}`);
-    setMessage(t.sessionDeleted);
-
     try {
       await deleteDirectorSession(token, session.id);
-    } catch {
-      // Backend error ignored since local deletion is already completed
+      setSessions((current) => current.filter((item) => item.id !== session.id));
+      localStorage.removeItem(`max_students_${session.id}`);
+      setMessage(t.sessionDeleted);
+    } catch (requestError) {
+      setError(
+        requestError instanceof Error
+          ? requestError.message
+          : 'Unable to delete this session.'
+      );
     }
   };
 
@@ -152,7 +139,6 @@ export const DirectorSessionsPanel: React.FC<DirectorSessionsPanelProps> = ({
       return s;
     });
     setSessions(updated);
-    localStorage.setItem('director_saved_sessions', JSON.stringify(updated));
   };
 
   const fieldClass = 'w-full rounded-xl border border-slate-300 bg-slate-50 p-2.5 text-xs font-semibold text-slate-800 focus:outline-indigo-600';
