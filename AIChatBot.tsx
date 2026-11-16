@@ -249,20 +249,13 @@ export const AIChatBot: React.FC<AIChatBotProps> = ({ currentLang, schoolId, sch
     const apiKey = (typeof process !== 'undefined' && process.env?.GEMINI_API_KEY) ||
       (typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_GEMINI_API_KEY) || '';
     const ai = apiKey ? new GoogleGenAI({ apiKey }) : null;
-    const userMessageId = `user_${Date.now()}`;
-    const userMsg: ChatMessage = {
-      id: userMessageId,
-      sender: 'user',
-      text,
-      time: formatChatTime(),
-    };
-
-    setMessages(prev => [...prev, userMsg]);
     setInputText('');
     setIsTyping(true);
 
-    // Translate the incoming question to the app's selected language.
-    let selectedLanguageQuestion = text;
+    // Never put a question in the conversation until it is available in the
+    // selected language. If translation is unavailable, preserve the draft
+    // and show a localized explanation instead of mixing languages.
+    let selectedLanguageQuestion = '';
     if (ai) {
       try {
         const translation = await ai.models.generateContent({
@@ -275,18 +268,46 @@ If the question is already in ${languageNames[currentLang]}, return it unchanged
 Question: ${JSON.stringify(text)}`,
           }],
         });
-        const translated = translation.text?.trim().replace(/^["']|["']$/g, '');
-        if (translated) selectedLanguageQuestion = translated;
+        selectedLanguageQuestion = translation.text?.trim().replace(/^["']|["']$/g, '') || '';
       } catch (translationError) {
         console.warn('Unable to translate the submitted AI question.', translationError);
       }
     }
 
-    setMessages(prev => prev.map((message) =>
-      message.id === userMessageId
-        ? { ...message, text: selectedLanguageQuestion }
-        : message
-    ));
+    if (!selectedLanguageQuestion) {
+      if (activeLanguageRef.current === currentLang) {
+        setInputText(text);
+        setMessages(prev => [...prev, {
+          id: `bot_${Date.now()}`,
+          sender: 'assistant',
+          text: currentLang === 'ar'
+            ? 'تعذرت ترجمة سؤالك إلى اللغة المحددة حالياً. بقي سؤالك في خانة الكتابة؛ حاول مرة أخرى بعد استعادة خدمة الترجمة.'
+            : currentLang === 'fr'
+              ? 'La traduction de votre question dans la langue sélectionnée est momentanément indisponible. Votre question a été conservée dans le champ de saisie ; veuillez réessayer lorsque le service sera rétabli.'
+              : currentLang === 'es'
+                ? 'La traducción de tu pregunta al idioma seleccionado no está disponible en este momento. Tu pregunta se ha conservado en el campo de texto; inténtalo de nuevo cuando se restablezca el servicio.'
+                : currentLang === 'it'
+                  ? 'La traduzione della domanda nella lingua selezionata non è momentaneamente disponibile. La domanda è stata conservata nel campo di testo; riprova quando il servizio sarà ripristinato.'
+                  : 'Translation into your selected language is temporarily unavailable. Your question has been kept in the input field; please try again when the translation service is available.',
+          time: formatChatTime(),
+        }]);
+      }
+      setIsTyping(false);
+      return;
+    }
+
+    const userMessageId = `user_${Date.now()}`;
+    const userMsg: ChatMessage = {
+      id: userMessageId,
+      sender: 'user',
+      text: selectedLanguageQuestion,
+      time: formatChatTime(),
+    };
+    if (activeLanguageRef.current !== currentLang) {
+      setIsTyping(false);
+      return;
+    }
+    setMessages(prev => [...prev, userMsg]);
 
     // Load the current school's authoritative configuration.
     let currentSchoolContext = schoolContext;
