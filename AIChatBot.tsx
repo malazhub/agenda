@@ -359,10 +359,27 @@ User question: "${text}"`
           {/* Chat Messages Body - Blank by default, zero clutter */}
           <div className="flex-1 p-4 overflow-y-auto space-y-3 bg-slate-50/50">
             {messages.length === 0 && (
-              <div className="h-full flex items-center justify-center text-slate-300 text-xs text-center p-6 select-none">
+              <div className="min-h-full flex flex-col items-center justify-center gap-4 text-slate-400 text-xs text-center p-6">
                 <p>
                   {currentLang === 'ar' ? 'اكتب رسالتك للبدء...' : currentLang === 'fr' ? 'Écrivez votre message pour commencer...' : currentLang === 'es' ? 'Escribe un mensaje para comenzar...' : currentLang === 'it' ? 'Scrivi un messaggio per iniziare...' : 'Type a message to begin...'}
                 </p>
+                <button
+                  type="button"
+                  onClick={() => void handleSend(
+                    currentLang === 'ar'
+                      ? 'أعطني نبذة عن تطبيق Agenda واشرح كيفية تغيير اسم مدرستي والتنقل في المنصة والحصول على نسختي الخاصة مقابل 150 دولاراً.'
+                      : currentLang === 'fr'
+                        ? 'Présentez-moi Agenda et expliquez comment renommer mon établissement, naviguer sur la plateforme et obtenir ma propre copie pour 150 USD.'
+                        : currentLang === 'es'
+                          ? 'Dame una presentación de Agenda y explícame cómo cambiar el nombre de mi escuela, navegar por la plataforma y obtener mi propia copia por 150 USD.'
+                          : currentLang === 'it'
+                            ? 'Fammi una presentazione di Agenda e spiegami come rinominare la mia scuola, navigare nella piattaforma e ottenere la mia copia per 150 USD.'
+                            : 'Give me an application overview and explain how to rename my school, navigate the platform, and get my own USD 150 copy.'
+                  )}
+                  className="rounded-xl border border-indigo-200 bg-white px-4 py-3 text-xs font-bold text-indigo-700 shadow-sm transition hover:bg-indigo-50"
+                >
+                  {currentLang === 'ar' ? 'نبذة عن Agenda وكيفية استخدامه' : currentLang === 'fr' ? 'Présentation d’Agenda et guide d’utilisation' : currentLang === 'es' ? 'Presentación de Agenda y guía de uso' : currentLang === 'it' ? 'Presentazione di Agenda e guida all’uso' : 'About Agenda & how to use it'}
+                </button>
               </div>
             )}
 
