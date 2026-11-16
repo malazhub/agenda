@@ -8,6 +8,7 @@ import { LiveVideoPlayer } from './LiveVideoPlayer';
 import { 
   getDirectorAccounts,
   getDirectorProfile,
+  updateDirectorProfile,
   getRegistrationSessions,
   loginAccount,
   updateDirectorAccount,
@@ -68,6 +69,9 @@ export const CoursesHub: React.FC<CoursesHubProps> = ({
     typeof window === 'undefined' ? '' : window.sessionStorage.getItem('agenda-director-token') || ''
   );
   const [directorSchoolId, setDirectorSchoolId] = useState('');
+  const [directorSchoolName, setDirectorSchoolName] = useState('');
+  const [directorUsername, setDirectorUsername] = useState('');
+  const [schoolNameSaving, setSchoolNameSaving] = useState(false);
   const [studentRows, setStudentRows] = useState<DirectorRow[]>([]);
   const [educatorRows, setEducatorRows] = useState<DirectorRow[]>([]);
   const [registrationSessions, setRegistrationSessions] = useState<RegistrationSession[]>([]);
@@ -96,6 +100,8 @@ export const CoursesHub: React.FC<CoursesHubProps> = ({
       .then(({ profile }) => {
         if (!active) return;
         setDirectorSchoolId(profile.schoolId);
+        setDirectorSchoolName(profile.schoolName);
+        setDirectorUsername(profile.username);
         onSchoolBrandChange(profile.schoolId, profile.schoolName);
       })
       .catch((profileError) => {
@@ -197,6 +203,43 @@ export const CoursesHub: React.FC<CoursesHubProps> = ({
       setDirectorForm({ username: '', password: '' });
     } catch (error) {
       setDirectorError(currentLang === 'ar' ? 'تعذر تسجيل دخول المدير. تحقق من اسم المستخدم وكلمة المرور.' : currentLang === 'fr' ? 'Connexion du Directeur impossible. Vérifiez le nom d’utilisateur et le mot de passe.' : currentLang === 'es' ? 'No se pudo iniciar sesión como Director. Comprueba el usuario y la contraseña.' : currentLang === 'it' ? 'Accesso Direttore non riuscito. Verifica nome utente e password.' : error instanceof Error ? error.message : 'Unable to sign in.');
+    }
+  };
+
+  const handleSchoolNameSave = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!directorToken || !directorSchoolName.trim()) return;
+    setSchoolNameSaving(true);
+    setDirectorDataError('');
+    setDirectorMessage('');
+    try {
+      const { profile, token } = await updateDirectorProfile(directorToken, {
+        schoolName: directorSchoolName.trim(),
+        username: directorUsername,
+      });
+      sessionStorage.setItem('agenda-director-token', token);
+      setDirectorToken(token);
+      setDirectorSchoolId(profile.schoolId);
+      setDirectorSchoolName(profile.schoolName);
+      setDirectorUsername(profile.username);
+      onSchoolBrandChange(profile.schoolId, profile.schoolName);
+      setDirectorMessage(
+        currentLang === 'ar' ? 'تم تحديث اسم المدرسة في المنصة.' :
+        currentLang === 'fr' ? 'Le nom de l’établissement a été mis à jour sur la plateforme.' :
+        currentLang === 'es' ? 'El nombre de la escuela se ha actualizado en la plataforma.' :
+        currentLang === 'it' ? 'Il nome della scuola è stato aggiornato sulla piattaforma.' :
+        'The school name has been updated across the platform.'
+      );
+    } catch (error) {
+      setDirectorDataError(
+        currentLang === 'ar' ? 'تعذر تحديث اسم المدرسة.' :
+        currentLang === 'fr' ? 'Impossible de mettre à jour le nom de l’établissement.' :
+        currentLang === 'es' ? 'No se pudo actualizar el nombre de la escuela.' :
+        currentLang === 'it' ? 'Impossibile aggiornare il nome della scuola.' :
+        error instanceof Error ? error.message : 'Unable to update the school name.'
+      );
+    } finally {
+      setSchoolNameSaving(false);
     }
   };
 
@@ -684,6 +727,34 @@ const updateAccount = async (
         </div>
 
 
+
+        {directorTab === 'accounts' && (
+          <form
+            onSubmit={(event) => void handleSchoolNameSave(event)}
+            className="flex flex-wrap items-end gap-3 rounded-xl border border-slate-200 bg-white p-4"
+          >
+            <label className="min-w-56 flex-1 space-y-1">
+              <span className="block text-xs font-bold text-slate-700">
+                {currentLang === 'ar' ? 'اسم المدرسة' : currentLang === 'fr' ? 'Nom de l’établissement' : currentLang === 'es' ? 'Nombre de la escuela' : currentLang === 'it' ? 'Nome della scuola' : 'School name'}
+              </span>
+              <input
+                required
+                maxLength={160}
+                value={directorSchoolName}
+                onChange={(event) => setDirectorSchoolName(event.target.value)}
+                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-800"
+                placeholder={currentLang === 'ar' ? 'اسم مدرستك' : currentLang === 'fr' ? 'Nom de votre établissement' : currentLang === 'es' ? 'Nombre de tu escuela' : currentLang === 'it' ? 'Nome della tua scuola' : 'Your school name'}
+              />
+            </label>
+            <button
+              type="submit"
+              disabled={schoolNameSaving || !directorSchoolName.trim()}
+              className="rounded-xl bg-indigo-700 px-4 py-2.5 text-xs font-black text-white hover:bg-indigo-800 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {schoolNameSaving ? '…' : currentLang === 'ar' ? 'حفظ اسم المدرسة' : currentLang === 'fr' ? 'Enregistrer le nom' : currentLang === 'es' ? 'Guardar nombre' : currentLang === 'it' ? 'Salva nome' : 'Save school name'}
+            </button>
+          </form>
+        )}
 
         {directorDataError && (
           <div role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-xs font-semibold text-red-700">
