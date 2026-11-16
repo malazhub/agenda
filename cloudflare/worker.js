@@ -25,7 +25,7 @@ function corsHeaders(origin) {
   return origin
     ? {
         "access-control-allow-origin": origin,
-        "access-control-allow-methods": "GET, POST, PATCH, PUT, OPTIONS",
+        "access-control-allow-methods": "GET, POST, PATCH, PUT, DELETE, OPTIONS",
         "access-control-allow-headers": "Authorization, Content-Type",
         "access-control-max-age": "86400",
         vary: "Origin",
@@ -230,6 +230,7 @@ function publicAccount(account) {
     id: account.id,
     username: account.username,
     role: account.role,
+    schoolId: account.school_id || "",
     fullName: account.full_name,
     email: account.email,
     phone: account.phone,
@@ -257,6 +258,7 @@ async function handleRegister(request, env) {
   const username = typeof body?.username === "string" ? body.username.trim().toLowerCase() : "";
   const password = typeof body?.password === "string" ? body.password : "";
   const role = body?.role;
+  const schoolId = typeof body?.schoolId === "string" ? body.schoolId.trim() : "";
   const fullName = typeof body?.fullName === "string" ? body.fullName.trim() : "";
   const email = typeof body?.email === "string" ? body.email.trim().toLowerCase() : "";
   const phone = typeof body?.phone === "string" ? body.phone.trim() : "";
@@ -264,6 +266,9 @@ async function handleRegister(request, env) {
   const requestedGradeId = typeof body?.gradeId === "string" ? body.gradeId.trim() : "";
   const registeredSessionId = typeof body?.registeredSessionId === "string" ? body.registeredSessionId.trim() : "";
 
+  if (!schoolId || !(await env.DB.prepare("SELECT id FROM schools WHERE id = ?").bind(schoolId).first())) {
+    return json({ error: "Choose a valid school before registering." }, 400);
+  }
   if (!/^[a-z0-9._-]{3,32}$/.test(username) || !password || password.length > MAX_PASSWORD_LENGTH) {
     return json({ error: "Use a 3–32 character username and a non-empty password of at most 1,024 characters." }, 400);
   }
@@ -289,8 +294,8 @@ async function handleRegister(request, env) {
          INNER JOIN accounts educator
            ON educator.registered_session_id = s.id
            AND educator.role = 'educator'
-         WHERE s.id = ?`
-      ).bind(registeredSessionId).first()
+         WHERE s.id = ? AND s.school_id = ? AND educator.school_id = ?`
+      ).bind(registeredSessionId, schoolId, schoolId).first()
     : null;
 
   if (role === "student" && !selectedSession) {
@@ -313,8 +318,8 @@ async function handleRegister(request, env) {
 
   const selectedGrade = gradeId
     ? await env.DB.prepare(
-        "SELECT grade_id FROM sessions WHERE grade_id = ? LIMIT 1"
-      ).bind(gradeId).first()
+        "SELECT grade_id FROM sessions WHERE grade_id = ? AND school_id = ? LIMIT 1"
+      ).bind(gradeId, schoolId).first()
     : null;
 
   if (!selectedGrade) {
@@ -329,6 +334,7 @@ async function handleRegister(request, env) {
   const registration = {
     password,
     role,
+    schoolId,
     fullName,
     email,
     phone,
@@ -342,8 +348,8 @@ async function handleRegister(request, env) {
   const id = randomId();
   try {
     await env.DB.prepare(
-      "INSERT INTO accounts (id, username, password_hash, role, full_name, email, phone, school_or_subject, grade_id, registered_session_id, expires_at, activated) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now', '+1 month'), 0)",
-    ).bind(id, username, passwordHash, role, fullName, email, phone, schoolOrSubject, gradeId, registeredSessionId || null).run();
+      "INSERT INTO accounts (id, username, password_hash, role, school_id, full_name, email, phone, school_or_subject, grade_id, registered_session_id, expires_at, activated) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now', '+1 month'), 0)",
+    ).bind(id, username, passwordHash, role, schoolId, fullName, email, phone, schoolOrSubject, gradeId, registeredSessionId || null).run();
   } catch (error) {
     if (error instanceof Error && error.message.toLowerCase().includes("unique")) {
       const conflictingAccount = await env.DB.prepare("SELECT * FROM accounts WHERE username = ? COLLATE NOCASE")
@@ -366,6 +372,7 @@ async function handleRegister(request, env) {
 
 async function existingRegistrationResponse(account, registration, env, selectedSession) {
   const matches = await verifyPassword(registration.password, account.password_hash);
+  if (account.school_id !== registration.schoolId) return json({ error: "That username is already registered at another school." }, 409);
   if (!matches) return json({ error: "That username is already registered. Sign in or choose another username." }, 409);
   const accountIsActive = Boolean(account.activated);
   if (accountIsActive && account.role !== registration.role) {
@@ -377,9 +384,10 @@ async function existingRegistrationResponse(account, registration, env, selected
   if (!accountIsActive) {
     const registeredSessionId = registration.registeredSessionId || null;
     await env.DB.prepare(
-      "UPDATE accounts SET role = ?, full_name = ?, email = ?, phone = ?, school_or_subject = ?, grade_id = ?, registered_session_id = ? WHERE id = ?",
+      "UPDATE accounts SET role = ?, school_id = ?, full_name = ?, email = ?, phone = ?, school_or_subject = ?, grade_id = ?, registered_session_id = ? WHERE id = ?",
     ).bind(
       registration.role,
+      registration.schoolId,
       registration.fullName,
       registration.email,
       registration.phone,
@@ -389,6 +397,7 @@ async function existingRegistrationResponse(account, registration, env, selected
       account.id,
     ).run();
     account.role = registration.role;
+    account.school_id = registration.schoolId;
     account.full_name = registration.fullName;
     account.email = registration.email;
     account.phone = registration.phone;
@@ -414,7 +423,7 @@ async function existingRegistrationResponse(account, registration, env, selected
 }
 
 
-async function registrationSessions(env) {
+async function registrationSessions(env, schoolId) {
   const result = await env.DB.prepare(
     `SELECT
        id,
@@ -423,8 +432,9 @@ async function registrationSessions(env) {
        title,
        teacher_name
      FROM sessions
+     WHERE school_id = ?
      ORDER BY grade_id, subject, teacher_name COLLATE NOCASE, title`
-  ).all();
+  ).bind(schoolId).all();
 
   return json({
     sessions: (result.results || []).map((session) => ({
@@ -438,13 +448,13 @@ async function registrationSessions(env) {
 }
 
 
-async function registrationGrades(env) {
+async function registrationGrades(env, schoolId) {
   const result = await env.DB.prepare(
-    "SELECT DISTINCT grade_id FROM sessions WHERE grade_id != '' ORDER BY grade_id",
-  ).all();
+    "SELECT DISTINCT grade_id FROM sessions WHERE grade_id != '' AND school_id = ? ORDER BY grade_id",
+  ).bind(schoolId).all();
   return json({ grades: (result.results || []).map((row) => row.grade_id) });
 }
-async function registrationEducators(env) {
+async function registrationEducators(env, schoolId) {
   const result = await env.DB.prepare(
     `SELECT
        a.id,
@@ -458,9 +468,9 @@ async function registrationEducators(env) {
      FROM accounts a
      LEFT JOIN sessions s
        ON s.id = a.registered_session_id
-     WHERE a.role = 'educator'
+     WHERE a.role = 'educator' AND a.school_id = ?
      ORDER BY a.full_name COLLATE NOCASE`
-  ).all();
+  ).bind(schoolId).all();
 
   return json({
     educators: (result.results || []).map((educator) => ({
@@ -479,7 +489,7 @@ async function registrationEducators(env) {
 
 // Public read-only directory of educators who are currently live.
 // This endpoint does not provide Stream credentials or classroom access.
-async function liveEducators(request, env) {
+async function liveEducators(request, env, schoolId) {
   const result = await env.DB.prepare(
     `SELECT
        s.id AS session_id,
@@ -492,9 +502,9 @@ async function liveEducators(request, env) {
      INNER JOIN accounts a
        ON a.registered_session_id = s.id
        AND a.role = 'educator'
-     WHERE s.is_live = 1
+     WHERE s.is_live = 1 AND s.school_id = ? AND a.school_id = ?
      ORDER BY s.live_starts_at DESC, a.full_name COLLATE NOCASE`
-  ).all();
+  ).bind(schoolId, schoolId).all();
 
   return json({
     educators: (result.results || []).map((row) => ({
@@ -2215,10 +2225,15 @@ async function handle(request, env) {
   if (request.method === "POST" && path === "/api/auth/register") return handleRegister(request, env);
   if (request.method === "POST" && path === "/api/auth/login") return handleLogin(request, env);
   if (request.method === "GET" && path === "/api/auth/me") return getCurrentAccount(request, env);
-    if (request.method === "GET" && path === "/api/registration/sessions") return registrationSessions(env);
-  if (request.method === "GET" && path === "/api/registration/grades") return registrationGrades(env);
-  if (request.method === "GET" && path === "/api/registration/educators") return registrationEducators(env);
-  if (request.method === "GET" && path === "/api/live-educators") return liveEducators(request, env);
+    if (request.method === "GET" && path === "/api/schools") {
+    const result = await env.DB.prepare("SELECT id, name FROM schools ORDER BY name COLLATE NOCASE").all();
+    return json({ schools: result.results || [] });
+  }
+  const schoolId = url.searchParams.get("schoolId") || "";
+  if (request.method === "GET" && path === "/api/registration/sessions") return schoolId ? registrationSessions(env, schoolId) : json({ error: "schoolId is required." }, 400);
+  if (request.method === "GET" && path === "/api/registration/grades") return schoolId ? registrationGrades(env, schoolId) : json({ error: "schoolId is required." }, 400);
+  if (request.method === "GET" && path === "/api/registration/educators") return schoolId ? registrationEducators(env, schoolId) : json({ error: "schoolId is required." }, 400);
+  if (request.method === "GET" && path === "/api/live-educators") return schoolId ? liveEducators(request, env, schoolId) : json({ error: "schoolId is required." }, 400);
    if (
     request.method === "POST" &&
     path === "/api/guest/live-stream"
