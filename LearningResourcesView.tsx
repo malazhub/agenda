@@ -1,16 +1,16 @@
 import React, { useEffect, useState } from 'react';
-import type { Language } from './types';
-import type { CloudflareAccount } from './cloudflareApi';
+import type { Language } from '../types';
+import type {
+  CloudflareAccount,
+  EducatorLesson,
+  SchoolEducator,
+} from '../services/cloudflareApi';
 import {
   deleteEducatorLesson,
   getEducatorLessons,
   getSchoolEducators,
   saveEducatorLesson,
-} from './cloudflareApi';
-import type {
-  EducatorLesson,
-  SchoolEducator,
-} from './cloudflareApi';
+} from '../services/cloudflareApi';
 
 interface LearningResourcesViewProps {
   currentLang: Language;
@@ -39,7 +39,8 @@ export const LearningResourcesView: React.FC<LearningResourcesViewProps> = ({
   const [description, setDescription] = useState('');
   const [file, setFile] = useState<File | null>(null);
 
-  const [loading, setLoading] = useState(false);
+    const [loading, setLoading] = useState(false);
+  const [educatorsLoading, setEducatorsLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
@@ -72,15 +73,22 @@ export const LearningResourcesView: React.FC<LearningResourcesViewProps> = ({
     Boolean(sessionToken) &&
     educatorId === registeredAccount?.id;
 
-  useEffect(() => {
+    useEffect(() => {
     let active = true;
 
     setEducators([]);
     setLessons([]);
     setSelectedLesson(null);
+    setEducatorId('');
     setError('');
+    setEducatorsLoading(true);
 
-    if (!schoolId) return;
+    if (!schoolId) {
+      setEducatorsLoading(false);
+      return () => {
+        active = false;
+      };
+    }
 
     getSchoolEducators(schoolId)
       .then(({ educators: loaded }) => {
@@ -89,14 +97,24 @@ export const LearningResourcesView: React.FC<LearningResourcesViewProps> = ({
         setEducators(loaded);
 
         if (isEducator && registeredAccount?.id) {
-          setEducatorId(registeredAccount.id);
+          const ownEducator = loaded.find(
+            (educator) => educator.id === registeredAccount.id
+          );
+
+          if (!ownEducator) {
+            setError('Your educator account does not belong to this school.');
+            return;
+          }
+
+          setEducatorId(ownEducator.id);
           return;
         }
 
         const assignedEducator = loaded.find(
           (educator) =>
             Boolean(registeredAccount?.registeredSessionId) &&
-            educator.registeredSessionId === registeredAccount?.registeredSessionId
+            educator.registeredSessionId ===
+              registeredAccount.registeredSessionId
         );
 
         setEducatorId(
@@ -113,6 +131,9 @@ export const LearningResourcesView: React.FC<LearningResourcesViewProps> = ({
               : 'Unable to load educators.'
           );
         }
+      })
+      .finally(() => {
+        if (active) setEducatorsLoading(false);
       });
 
     return () => {
@@ -120,8 +141,8 @@ export const LearningResourcesView: React.FC<LearningResourcesViewProps> = ({
     };
   }, [
     schoolId,
+    isEducator,
     registeredAccount?.id,
-    registeredAccount?.role,
     registeredAccount?.registeredSessionId,
   ]);
 
@@ -333,7 +354,15 @@ export const LearningResourcesView: React.FC<LearningResourcesViewProps> = ({
     );
   }
 
-  if (educators.length === 0 && !loading) {
+    if (educatorsLoading) {
+    return (
+      <div className="rounded-2xl border border-slate-200 bg-white p-10 text-center text-sm text-slate-500">
+        …
+      </div>
+    );
+  }
+
+  if (educators.length === 0) {
     return (
       <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center text-sm text-slate-500">
         {text.noEducators}
