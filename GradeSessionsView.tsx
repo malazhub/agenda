@@ -2745,8 +2745,8 @@ const handleClearChatMessages = async () => {
             </div>
           </div>
 
-          {/* TAB 1: LIVE SESSIONS */}
-                     : activeTab === 'live' ? (
+            {/* TAB 1: LIVE SESSIONS */}
+          {activeTab === 'live' ? (
   <div className="space-y-4">
 
     {cameraError && (
