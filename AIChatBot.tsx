@@ -282,8 +282,12 @@ export const AIChatBot: React.FC<AIChatBotProps> = ({ currentLang, schoolId, sch
     // Never put a question in the conversation until it is available in the
     // selected language. If translation is unavailable, preserve the draft
     // and show a localized explanation instead of mixing languages.
-    let selectedLanguageQuestion = '';
-    if (ai) {
+    // Arabic questions already written in Arabic do not need a Gemini
+    // translation request. This lets the built-in Arabic Agenda guidance work
+    // even when the translation API is temporarily unreachable.
+    const isAlreadyArabic = currentLang === 'ar' && /[\\u0600-\\u06FF]/.test(text);
+    let selectedLanguageQuestion = isAlreadyArabic ? text : '';
+    if (ai && !selectedLanguageQuestion) {
       try {
         const translation = await ai.models.generateContent({
           model: 'gemini-3.8-flash',
