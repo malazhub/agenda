@@ -30,9 +30,9 @@ interface ChatMessage {
  * previous chat transcript to know how Agenda works.
  */
 const isQuestionAlreadyInLanguage = (value: string, language: Language): boolean => {
-  const normalized = value.toLocaleLowerCase().replace(/[^\\p{L}\\p{N}\\s'-]/gu, ' ').replace(/\\s+/g, ' ').trim();
+  const normalized = value.toLocaleLowerCase().replace(/[^\p{L}\p{N}\s'-]/gu, ' ').replace(/\s+/g, ' ').trim();
   if (!normalized) return false;
-  if (language === 'ar') return /[\\u0600-\\u06FF]/.test(normalized);
+  if (language === 'ar') return /[\u0600-\u06FF]/.test(normalized);
 
   const strongPhrases: Record<Exclude<Language, 'ar'>, string[]> = {
     en: ['what is', 'how do i', 'how can i', 'please explain', 'give me', 'tell me', 'my school', 'own copy', 'rename', 'overview', 'navigate', 'platform', 'application'],
