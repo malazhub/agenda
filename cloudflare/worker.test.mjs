@@ -309,6 +309,21 @@ function fakeEnvironment() {
         school.name = v[0];
         return { meta: { changes: 1 } };
       }
+      if (q.startsWith("update accounts set registered_session_id = null")) {
+        const [schoolId, sessionId] = v;
+        let changes = 0;
+        for (const account of accounts.values()) {
+          if (
+            account.role === 'student' &&
+            account.school_id === schoolId &&
+            account.registered_session_id === sessionId
+          ) {
+            account.registered_session_id = null;
+            changes++;
+          }
+        }
+        return { meta: { changes } };
+      }
       if (q.startsWith('update educator_lessons')) {
         const lesson = lessons.get(v[v.length - 3]);
         if (!lesson) return { meta: { changes: 0 } };
@@ -501,14 +516,24 @@ async function send(env, path, { method = 'GET', body, token, origin } = {}) {
 
 async function send(env, path, { method = 'GET', body, token, origin } = {}) {
   const headers = new Headers();
-  if (body !== undefined) headers.set('content-type', 'application/json');
+  const isFormData = typeof FormData !== 'undefined' && body instanceof FormData;
+
+  if (body !== undefined && !isFormData) {
+    headers.set('content-type', 'application/json');
+  }
   if (token) headers.set('authorization', `Bearer ${token}`);
   if (origin) headers.set('origin', origin);
+
   const request = new Request(`https://agenda-api.test${path}`, {
     method,
     headers,
-    body: body === undefined ? undefined : JSON.stringify(body),
+    body: body === undefined
+      ? undefined
+      : isFormData
+        ? body
+        : JSON.stringify(body),
   });
+
   return worker.fetch(request, env);
 }
 
