@@ -64,7 +64,15 @@ function fakeEnvironment() {
       if (this.sql.includes('SELECT * FROM accounts WHERE username')) {
         return [...accounts.values()].find((item) => item.username.toLowerCase() === this.values[0].toLowerCase()) || null;
       }
-      if (this.sql.includes('FROM accounts WHERE id')) return accounts.get(this.values[0]) || null;
+      if (this.sql.includes('FROM accounts') && this.sql.includes('WHERE id = ?')) {
+        const account = accounts.get(this.values[0]) || null;
+        if (!account) return null;
+        const schoolId = this.values.slice(1).find((value) => schools.has(value));
+        if (schoolId && account.school_id !== schoolId) return null;
+        if (this.sql.includes("role = 'director'") && account.role !== 'director') return null;
+        if (this.sql.includes("role IN ('student', 'educator')") && !['student', 'educator'].includes(account.role)) return null;
+        return account;
+      }
       if (this.sql.includes('INNER JOIN accounts educator')) {
         const sessionId = this.values[0];
         const session = sessions.get(sessionId);
@@ -400,7 +408,7 @@ test('grade registration loads available grades and grants grade-scoped live acc
   await send(env, `/api/director/accounts/${account.id}`, {
     method: 'PATCH',
     token: directorToken,
-    body: { activated: true },
+    body: { activated: true, paid: true },
   });
   sessions.get('test-registration-session').is_live = 1;
   const liveStatus = await send(env, '/api/live-stream?sessionId=test-registration-session', { token });
