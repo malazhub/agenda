@@ -40,12 +40,12 @@ export const HeroSearch: React.FC<HeroSearchProps> = ({
   const t = translations[currentLang];
 
   const quickSubjects = [
-    { id: 'math', label: 'Mathématiques / رياضيات', color: 'from-blue-600 to-indigo-600', icon: Calculator },
-    { id: 'physics', label: 'Physique / فيزياء', color: 'from-purple-600 to-violet-700', icon: Atom },
-    { id: 'biology', label: 'Biologie (SVT)', color: 'from-emerald-500 to-teal-700', icon: Dna },
-    { id: 'economics', label: 'Économie / اقتصاد', color: 'from-amber-500 to-orange-600', icon: Coins },
-    { id: 'arabic', label: 'اللغة العربية', color: 'from-rose-500 to-pink-600', icon: BookOpen },
-    { id: 'french', label: 'Français / English', color: 'from-sky-500 to-cyan-600', icon: Globe2 },
+    { id: 'math', label: currentLang === 'ar' ? 'رياضيات' : currentLang === 'fr' ? 'Mathématiques' : currentLang === 'es' ? 'Matemáticas' : currentLang === 'it' ? 'Matematica' : 'Mathematics', color: 'from-blue-600 to-indigo-600', icon: Calculator },
+    { id: 'physics', label: currentLang === 'ar' ? 'فيزياء' : currentLang === 'fr' ? 'Physique' : currentLang === 'es' ? 'Física' : currentLang === 'it' ? 'Fisica' : 'Physics', color: 'from-purple-600 to-violet-700', icon: Atom },
+    { id: 'biology', label: currentLang === 'ar' ? 'علم الأحياء' : currentLang === 'fr' ? 'Biologie (SVT)' : currentLang === 'es' ? 'Biología' : currentLang === 'it' ? 'Biologia' : 'Biology', color: 'from-emerald-500 to-teal-700', icon: Dna },
+    { id: 'economics', label: currentLang === 'ar' ? 'اقتصاد' : currentLang === 'fr' ? 'Économie' : currentLang === 'es' ? 'Economía' : currentLang === 'it' ? 'Economia' : 'Economics', color: 'from-amber-500 to-orange-600', icon: Coins },
+    { id: 'arabic', label: currentLang === 'ar' ? 'اللغة العربية' : currentLang === 'fr' ? 'Arabe' : currentLang === 'es' ? 'Árabe' : currentLang === 'it' ? 'Arabo' : 'Arabic', color: 'from-rose-500 to-pink-600', icon: BookOpen },
+    { id: 'french', label: currentLang === 'ar' ? 'الفرنسية والإنجليزية' : currentLang === 'fr' ? 'Français et anglais' : currentLang === 'es' ? 'Francés e inglés' : currentLang === 'it' ? 'Francese e inglese' : 'French & English', color: 'from-sky-500 to-cyan-600', icon: Globe2 },
   ];
 
   return (
@@ -61,7 +61,7 @@ export const HeroSearch: React.FC<HeroSearchProps> = ({
           {/* Tagline Badge with multiple colors */}
           <div className="inline-flex items-center gap-2 bg-linear-to-r from-amber-400/20 via-emerald-400/20 to-teal-400/20 border border-emerald-400/40 text-emerald-300 px-4 py-1.5 rounded-full text-xs font-bold shadow-xs">
             <Sparkles className="w-4 h-4 text-amber-300" />
-            <span>K-12 Education & Certified 1-on-1 Tutoring • 7$ Flat Rate</span>
+            <span>{currentLang === 'ar' ? 'تعليم من الروضة حتى الصف الثاني عشر ودروس فردية معتمدة' : currentLang === 'fr' ? 'Enseignement de la maternelle au lycée et cours particuliers certifiés' : currentLang === 'es' ? 'Educación desde infantil hasta secundaria y tutorías individuales certificadas' : currentLang === 'it' ? 'Istruzione dalla scuola dell’infanzia alle superiori e lezioni individuali certificate' : 'K-12 Education & Certified 1-on-1 Tutoring'}</span>
           </div>
 
           {/* Main User Requested Headline */}
@@ -118,7 +118,7 @@ export const HeroSearch: React.FC<HeroSearchProps> = ({
         <div className="flex items-center justify-between">
           <div>
             <h2 className="text-lg sm:text-xl font-black text-slate-900 tracking-tight">
-              {currentLang === 'ar' ? 'استكشف مسارات التعليم المتكاملة' : 'Explore Learning Paths & Activities'}
+              {currentLang === 'ar' ? 'استكشف مسارات التعليم المتكاملة' : currentLang === 'fr' ? 'Explorez les parcours et activités pédagogiques' : currentLang === 'es' ? 'Explora itinerarios y actividades educativas' : currentLang === 'it' ? 'Esplora percorsi e attività formative' : 'Explore Learning Paths & Activities'}
             </h2>
             <p className="text-xs sm:text-sm text-slate-500 font-medium">
               {t.heroCollageTitle}
@@ -146,10 +146,10 @@ export const HeroSearch: React.FC<HeroSearchProps> = ({
               {currentLang === 'ar' ? 'دروس خصوصية فردية' : '1-on-1 Live Tutoring'}
             </h3>
             <p className="text-xs text-amber-100 font-medium mt-1 leading-relaxed">
-              {currentLang === 'ar' ? 'نخبة من أساتذة كبرى المدارس لمتابعة الطالب خطوة بخطوة.' : 'Certified teachers from top schools providing tailored academic coaching.'}
+              {currentLang === 'ar' ? 'نخبة من أساتذة كبرى المدارس لمتابعة الطالب خطوة بخطوة.' : currentLang === 'fr' ? 'Des enseignants certifiés des meilleures écoles pour un accompagnement personnalisé.' : currentLang === 'es' ? 'Educadores certificados de las mejores escuelas con apoyo académico personalizado.' : currentLang === 'it' ? 'Educatori certificati delle migliori scuole per un supporto didattico personalizzato.' : 'Certified teachers from top schools providing tailored academic coaching.'}
             </p>
             <div className="mt-4 flex items-center gap-1 text-xs font-bold text-white">
-              <span>{currentLang === 'ar' ? 'احجز مدرّساً' : 'Find a Tutor'}</span>
+              <span>{currentLang === 'ar' ? 'احجز مدرّساً' : currentLang === 'fr' ? 'Trouver un éducateur' : currentLang === 'es' ? 'Buscar educador' : currentLang === 'it' ? 'Trova un educatore' : 'Find a Tutor'}</span>
               <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
             </div>
           </div>
@@ -169,13 +169,13 @@ export const HeroSearch: React.FC<HeroSearchProps> = ({
               </span>
             </div>
             <h3 className="font-extrabold text-base text-white group-hover:underline">
-              {currentLang === 'ar' ? 'الامتحانات وسلالم التصحيح' : 'Official Exams & Barème'}
+              {currentLang === 'ar' ? 'الامتحانات وسلالم التصحيح' : currentLang === 'fr' ? 'Examens officiels et barème' : currentLang === 'es' ? 'Exámenes oficiales y criterios de corrección' : currentLang === 'it' ? 'Esami ufficiali e criteri di valutazione' : 'Official Exams & Barème'}
             </h3>
             <p className="text-xs text-emerald-100 font-medium mt-1 leading-relaxed">
-              {currentLang === 'ar' ? 'مسابقات الشهادات الرسمية وحلول نموذجية وفق معايير المركز التربوي.' : 'Past official exams with exact Barème points rubrics and model solutions.'}
+              {currentLang === 'ar' ? 'مسابقات الشهادات الرسمية وحلول نموذجية وفق معايير المركز التربوي.' : currentLang === 'fr' ? 'Anciens examens officiels avec barèmes détaillés et solutions types.' : currentLang === 'es' ? 'Exámenes oficiales anteriores con criterios de puntuación y soluciones modelo.' : currentLang === 'it' ? 'Esami ufficiali precedenti con criteri di valutazione e soluzioni modello.' : 'Past official exams with exact Barème points rubrics and model solutions.'}
             </p>
             <div className="mt-4 flex items-center gap-1 text-xs font-bold text-white">
-              <span>{currentLang === 'ar' ? 'استعراض المسابقات' : 'Explore Exams'}</span>
+              <span>{currentLang === 'ar' ? 'استعراض المسابقات' : currentLang === 'fr' ? 'Consulter les examens' : currentLang === 'es' ? 'Explorar exámenes' : currentLang === 'it' ? 'Esplora gli esami' : 'Explore Exams'}</span>
               <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
             </div>
           </div>
@@ -195,13 +195,13 @@ export const HeroSearch: React.FC<HeroSearchProps> = ({
               </span>
             </div>
             <h3 className="font-extrabold text-base text-white group-hover:underline">
-              {currentLang === 'ar' ? 'المفكرة المدرسية والفروض' : 'Daily Homework & Agenda'}
+              {currentLang === 'ar' ? 'المفكرة المدرسية والفروض' : currentLang === 'fr' ? 'Devoirs quotidiens et agenda' : currentLang === 'es' ? 'Tareas diarias y agenda' : currentLang === 'it' ? 'Compiti quotidiani e agenda' : 'Daily Homework & Agenda'}
             </h3>
             <p className="text-xs text-purple-100 font-medium mt-1 leading-relaxed">
-              {currentLang === 'ar' ? 'تتبع فروضك اليومية وطلب المساعدة المباشرة لحل المسائل المستعصية.' : 'Organize school assignments and solve challenging exercises with an educator.'}
+              {currentLang === 'ar' ? 'تتبع فروضك اليومية وطلب المساعدة المباشرة لحل المسائل المستعصية.' : currentLang === 'fr' ? 'Organisez les devoirs et résolvez les exercices difficiles avec un éducateur.' : currentLang === 'es' ? 'Organiza las tareas escolares y resuelve ejercicios difíciles con un educador.' : currentLang === 'it' ? 'Organizza i compiti e risolvi esercizi difficili con un educatore.' : 'Organize school assignments and solve challenging exercises with an educator.'}
             </p>
             <div className="mt-4 flex items-center gap-1 text-xs font-bold text-white">
-              <span>{currentLang === 'ar' ? 'فتح الأجندة' : 'View Agenda'}</span>
+              <span>{currentLang === 'ar' ? 'فتح الأجندة' : currentLang === 'fr' ? 'Voir l’agenda' : currentLang === 'es' ? 'Ver agenda' : currentLang === 'it' ? 'Visualizza agenda' : 'View Agenda'}</span>
               <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
             </div>
           </div>
@@ -221,13 +221,13 @@ export const HeroSearch: React.FC<HeroSearchProps> = ({
               </span>
             </div>
             <h3 className="font-extrabold text-base text-white group-hover:underline">
-              {currentLang === 'ar' ? 'الصف الرقمي التفاعلي' : 'Live Interactive Classroom'}
+              {currentLang === 'ar' ? 'الصف الرقمي التفاعلي' : currentLang === 'fr' ? 'Salle de classe interactive en direct' : currentLang === 'es' ? 'Aula interactiva en directo' : currentLang === 'it' ? 'Aula interattiva dal vivo' : 'Live Interactive Classroom'}
             </h3>
             <p className="text-xs text-rose-100 font-medium mt-1 leading-relaxed">
-              {currentLang === 'ar' ? 'لوح رسم ومسائل رياضية وصوت وصورة في بيئة تعليمية مباشرة.' : 'Shared interactive digital board with math tools, formula inserts, and live notes.'}
+              {currentLang === 'ar' ? 'لوح رسم ومسائل رياضية وصوت وصورة في بيئة تعليمية مباشرة.' : currentLang === 'fr' ? 'Tableau numérique partagé avec outils mathématiques, formules et notes en direct.' : currentLang === 'es' ? 'Pizarra digital compartida con herramientas matemáticas, fórmulas y notas en directo.' : currentLang === 'it' ? 'Lavagna digitale condivisa con strumenti matematici, formule e appunti in diretta.' : 'Shared interactive digital board with math tools, formula inserts, and live notes.'}
             </p>
             <div className="mt-4 flex items-center gap-1 text-xs font-bold text-white">
-              <span>{currentLang === 'ar' ? 'دخول الصف' : 'Enter Classroom'}</span>
+              <span>{currentLang === 'ar' ? 'دخول الصف' : currentLang === 'fr' ? 'Entrer dans la classe' : currentLang === 'es' ? 'Entrar en el aula' : currentLang === 'it' ? 'Entra in aula' : 'Enter Classroom'}</span>
               <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
             </div>
           </div>
