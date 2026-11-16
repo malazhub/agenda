@@ -13,10 +13,13 @@ function hashPassword(password) {
 
 function fakeEnvironment() {
   const accounts = new Map();
+  const schools = new Map([['default-agenda-school', { id: 'default-agenda-school', name: 'Agenda', director_id: 'director-account-0000000000000000' }]]);
+  const pricing = new Map();
   const attempts = [];
   const sessions = new Map();
   sessions.set('test-registration-session', {
     id: 'test-registration-session',
+    school_id: 'default-agenda-school',
     grade_id: 'eb8',
     subject: 'Mathematics',
     title: 'Registered algebra session',
@@ -41,6 +44,15 @@ function fakeEnvironment() {
     }
 
     async first() {
+      if (this.sql.includes('SELECT id FROM schools WHERE id')) {
+        const school = schools.get(this.values[0]);
+        return school ? { id: school.id, name: school.name } : null;
+      }
+      if (this.sql.includes('schools.director_id = accounts.id') || this.sql.includes('schools.director_id = a.id')) {
+        const account = accounts.get(this.values[0]);
+        const school = account ? schools.get(account.school_id) : null;
+        return school?.director_id === account?.id ? { school_id: school.id, id: school.id, username: account.username, school_name: school.name } : null;
+      }
       if (this.sql.includes('SELECT id FROM accounts WHERE username')) {
         const account = [...accounts.values()].find((item) => item.username.toLowerCase() === this.values[0].toLowerCase());
         return account ? { id: account.id } : null;
@@ -55,7 +67,11 @@ function fakeEnvironment() {
       if (this.sql.includes('FROM accounts WHERE id')) return accounts.get(this.values[0]) || null;
       if (this.sql.includes('SELECT id, grade_id FROM sessions WHERE id')) {
         const session = sessions.get(this.values[0]);
-        return session ? { id: session.id, grade_id: session.grade_id } : null;
+        return session && (!this.values[1] || session.school_id === this.values[1]) ? { id: session.id, grade_id: session.grade_id } : null;
+      }
+      if (this.sql.includes('SELECT * FROM sessions WHERE id = ? AND school_id = ?')) {
+        const session = sessions.get(this.values[0]);
+        return session && session.school_id === this.values[1] && (!this.sql.includes('is_live = 1') || Boolean(session.is_live)) ? session : null;
       }
       if (this.sql.includes('SELECT grade_id FROM sessions WHERE grade_id')) {
         return [...sessions.values()].some((item) => item.grade_id === this.values[0])
@@ -71,18 +87,23 @@ function fakeEnvironment() {
 
     async all() {
       if (this.sql.includes('SELECT DISTINCT grade_id FROM sessions')) {
-        return { results: [...new Set([...sessions.values()].map((item) => item.grade_id))].map((grade_id) => ({ grade_id })) };
+        const schoolId = this.values[0];
+        return { results: [...new Set([...sessions.values()].filter((item) => !schoolId || item.school_id === schoolId).map((item) => item.grade_id))].map((grade_id) => ({ grade_id })) };
       }
-      if (this.sql.includes('SELECT id, grade_id, subject, title FROM sessions')) {
-        return { results: [...sessions.values()] };
+      if (this.sql.includes('FROM sessions') && this.sql.includes('school_id = ?')) {
+        const schoolId = this.values[0];
+        const gradeId = this.sql.includes('grade_id = ?') ? this.values[1] : null;
+        const liveOnly = this.sql.includes('is_live = 1');
+        return { results: [...sessions.values()].filter((item) => item.school_id === schoolId && (!gradeId || item.grade_id === gradeId) && (this.sql.includes('is_live =') ? Boolean(item.is_live) === liveOnly : true)) };
       }
       if (this.sql.includes('FROM sessions ORDER BY')) return { results: [...sessions.values()] };
       if (this.sql.includes('FROM accounts WHERE role')) {
         const role = this.sql.match(/role = '([^']+)'/)?.[1];
-        return { results: [...accounts.values()].filter((item) => item.role === role) };
+        const schoolId = this.sql.includes('school_id = ?') ? this.values[0] : null;
+        return { results: [...accounts.values()].filter((item) => item.role === role && (!schoolId || item.school_id === schoolId)) };
       }
       if (this.sql.includes('FROM sessions WHERE grade_id')) {
-        const gradeId = this.values[0];
+        const gradeId = this.values[this.values.length - 1];
         const liveOnly = this.sql.includes('is_live = 1');
         return {
           results: [...sessions.values()].filter((item) => item.grade_id === gradeId && Boolean(item.is_live) === liveOnly),
@@ -93,12 +114,12 @@ function fakeEnvironment() {
 
     async run() {
       if (this.sql.startsWith('INSERT INTO accounts')) {
-        const [id, username, password_hash, role, full_name, email, phone, school_or_subject, grade_id, registered_session_id] = this.values;
+        const [id, username, password_hash, role, school_id, full_name, email, phone, school_or_subject, grade_id, registered_session_id] = this.values;
         if ([...accounts.values()].some((item) => item.username.toLowerCase() === username.toLowerCase())) {
           throw new Error('UNIQUE constraint failed: accounts.username');
         }
         accounts.set(id, {
-          id, username, password_hash, role, full_name, email, phone, school_or_subject, grade_id, registered_session_id,
+          id, username, password_hash, role, school_id, full_name, email, phone, school_or_subject, grade_id, registered_session_id,
           created_at: '2026-11-03 10:00:00', expires_at: '2026-12-03 10:00:00', activated: 0, paid: 0,
         });
         return { meta: { changes: 1 } };
@@ -111,7 +132,19 @@ function fakeEnvironment() {
         return { meta: { changes: 1 } };
       }
       if (this.sql.startsWith('DELETE FROM sessions WHERE id')) {
-        return { meta: { changes: sessions.delete(this.values[0]) ? 1 : 0 } };
+        const session = sessions.get(this.values[0]);
+        if (!session || (this.values[1] && session.school_id !== this.values[1])) return { meta: { changes: 0 } };
+        sessions.delete(this.values[0]);
+        return { meta: { changes: 1 } };
+      }
+      if (this.sql.startsWith('INSERT INTO school_grade_pricing')) {
+        pricing.set(`${this.values[0]}:${this.values[1]}`, { school_id: this.values[0], grade_id: this.values[1], monthly_rate_usd: this.values[2] });
+        return { meta: { changes: 1 } };
+      }
+      if (this.sql.startsWith('UPDATE schools SET name')) {
+        const school = schools.get(this.values[1]);
+        if (school && (!this.values[2] || school.director_id === this.values[2])) school.name = this.values[0];
+        return { meta: { changes: school ? 1 : 0 } };
       }
       if (this.sql.startsWith('UPDATE accounts SET')) {
         const id = this.values[this.values.length - 1];
@@ -139,9 +172,9 @@ function fakeEnvironment() {
     async batch(statements) {
       for (const statement of statements) {
         const values = statement.values;
-        const [id, grade_id, subject, title, teacher_name, source_name, source_url, playback_url, media_key, is_live, live_starts_at] = values;
+        const [id, school_id, grade_id, subject, title, teacher_name, source_name, source_url, playback_url, media_key, is_live, live_starts_at] = values;
         sessions.set(id, {
-          id, grade_id, subject, title, teacher_name, source_name, source_url, playback_url, is_live, live_starts_at,
+          id, school_id, grade_id, subject, title, teacher_name, source_name, source_url, playback_url, is_live, live_starts_at,
           media_key,
         });
       }
@@ -157,6 +190,7 @@ function fakeEnvironment() {
     username: 'director',
     password_hash: `pbkdf2_sha256$100000$${salt.toString('base64url')}$${hash.toString('base64url')}`,
     role: 'director',
+    school_id: 'default-agenda-school',
     full_name: 'Director',
     email: '',
     phone: '',
@@ -178,7 +212,9 @@ function fakeEnvironment() {
       STREAM_VIDEO_API_SECRET: 'test-stream-video-secret-with-sufficient-length',
     },
     accounts,
+    schools,
     sessions,
+    pricing,
     password,
   };
 }
@@ -188,10 +224,16 @@ async function send(env, path, { method = 'GET', body, token, origin } = {}) {
   if (body !== undefined) headers.set('content-type', 'application/json');
   if (token) headers.set('authorization', `Bearer ${token}`);
   if (origin) headers.set('origin', origin);
-  const request = new Request(`https://agenda-api.test${path}`, {
+  let requestPath = path;
+  let requestBody = body;
+  if (path === '/api/auth/register' && body && !body.schoolId) requestBody = { ...body, schoolId: 'default-agenda-school' };
+  if ((path.startsWith('/api/registration/') || path.startsWith('/api/sessions?')) && !path.includes('schoolId=')) {
+    requestPath += `${path.includes('?') ? '&' : '?'}schoolId=default-agenda-school`;
+  }
+  const request = new Request(`https://agenda-api.test${requestPath}`, {
     method,
     headers,
-    body: body === undefined ? undefined : JSON.stringify(body),
+    body: requestBody === undefined ? undefined : JSON.stringify(requestBody),
   });
   return worker.fetch(request, env);
 }
