@@ -187,7 +187,13 @@ const registerSignOutCleanup = useCallback(
     showToast(
       currentLang === 'ar'
         ? `تم تأكيد حجز الحصة بنجاح مع الأستاذ ${newBooking.teacherName}`
-        : `Session booked successfully with ${newBooking.teacherName}`
+        : currentLang === 'fr'
+          ? `Cours réservé avec succès auprès de ${newBooking.teacherName}`
+          : currentLang === 'es'
+            ? `Sesión reservada correctamente con ${newBooking.teacherName}`
+            : currentLang === 'it'
+              ? `Lezione prenotata correttamente con ${newBooking.teacherName}`
+              : `Session booked successfully with ${newBooking.teacherName}`
     );
 
     // Launch classroom for booked session
@@ -238,7 +244,13 @@ const registerSignOutCleanup = useCallback(
     showToast(
       currentLang === 'ar'
         ? 'تم تسجيل الخروج والعودة للشاشة الرئيسية'
-        : 'Signed out successfully'
+        : currentLang === 'fr'
+          ? 'Déconnexion réussie.'
+          : currentLang === 'es'
+            ? 'Sesión cerrada correctamente.'
+            : currentLang === 'it'
+              ? 'Disconnessione completata.'
+              : 'Signed out successfully'
     );
   };
 
