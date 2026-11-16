@@ -2,6 +2,10 @@ const SESSION_TTL_SECONDS = 12 * 60 * 60;
 const PASSWORD_ITERATIONS = 100000;
 const MAX_PASSWORD_LENGTH = 1024;
 const STREAM_VIDEO_CALL_ID = "agenda-shared-classroom";
+const VALID_GRADE_IDS = new Set([
+  "bac_sg", "bac_se", "bac_lh", "premiere_sc", "premiere_lit", "seconde",
+  "brevet", "eb8", "eb7", "eb6", "eb5", "eb4", "eb3", "eb2", "eb1", "kg",
+]);
 const encoder = new TextEncoder();
 
 function json(data, status = 200, headers = {}) {
@@ -230,6 +234,7 @@ function publicAccount(account) {
     id: account.id,
     username: account.username,
     role: account.role,
+    schoolId: account.school_id || "default-agenda-school",
     fullName: account.full_name,
     email: account.email,
     phone: account.phone,
@@ -252,11 +257,364 @@ async function authenticate(request, env, requiredRole) {
   return payload;
 }
 
+async function getSchoolRecord(env, schoolId) {
+  if (!schoolId || !/^[a-zA-Z0-9_-]{3,100}$/.test(schoolId)) return null;
+  return env.DB.prepare(
+    "SELECT id, name FROM schools WHERE id = ?"
+  ).bind(schoolId).first();
+}
+
+async function getDirectorSchoolId(env, director) {
+  const row = await env.DB.prepare(
+    "SELECT school_id FROM accounts WHERE id = ? AND role = 'director'"
+  ).bind(director.sub).first();
+  return row?.school_id || null;
+}
+
+async function ensureEducatorLessonSlots(env, schoolId, educatorId) {
+  const statements = Array.from({ length: 10 }, (_, index) =>
+    env.DB.prepare(
+      "INSERT OR IGNORE INTO educator_lessons (id, school_id, educator_id, slot) VALUES (?, ?, ?, ?)"
+    ).bind(randomId(), schoolId, educatorId, index + 1)
+  );
+  await env.DB.batch(statements);
+}
+
+function publicEducatorLesson(lesson, request) {
+  const url = new URL(request.url);
+  return {
+    id: lesson.id,
+    schoolId: lesson.school_id,
+    educatorId: lesson.educator_id,
+    slot: lesson.slot,
+    title: lesson.title || "",
+    subject: lesson.subject || "",
+    description: lesson.description || "",
+    mediaUrl: lesson.media_key
+      ? `/api/learning/lessons/${encodeURIComponent(lesson.id)}/media?schoolId=${encodeURIComponent(lesson.school_id)}`
+      : null,
+    mediaName: lesson.media_name || null,
+    mediaType: lesson.media_type || null,
+    mediaSize: Number(lesson.media_size || 0),
+    updatedAt: lesson.updated_at || "",
+  };
+}
+
+async function getSchools(env) {
+  const result = await env.DB.prepare(
+    "SELECT id, name FROM schools ORDER BY name COLLATE NOCASE"
+  ).all();
+  return json({
+    schools: (result.results || []).map((school) => ({
+      id: school.id,
+      name: school.name,
+    })),
+  });
+}
+
+async function getSchoolEducators(env, schoolId) {
+  const school = await getSchoolRecord(env, schoolId);
+  if (!school) return json({ error: "Choose a valid school." }, 400);
+
+  const result = await env.DB.prepare(
+    `SELECT
+       a.id,
+       a.full_name,
+       a.school_or_subject,
+       a.grade_id,
+       a.registered_session_id,
+       s.subject AS assigned_subject
+     FROM accounts a
+     LEFT JOIN sessions s
+       ON s.id = a.registered_session_id
+       AND s.school_id = a.school_id
+     WHERE a.role = 'educator'
+       AND a.school_id = ?
+     ORDER BY a.full_name COLLATE NOCASE`
+  ).bind(schoolId).all();
+
+  return json({
+    educators: (result.results || []).map((row) => ({
+      id: row.id,
+      fullName: row.full_name,
+      subject: row.assigned_subject || row.school_or_subject || "Academic Subject",
+      gradeId: row.grade_id || "",
+      registeredSessionId: row.registered_session_id || null,
+    })),
+  });
+}
+
+async function getEducatorLessons(request, env, educatorId) {
+  const url = new URL(request.url);
+  const schoolId = url.searchParams.get("schoolId") || "";
+  const school = await getSchoolRecord(env, schoolId);
+  if (!school) return json({ error: "Choose a valid school." }, 400);
+  if (!/^[a-zA-Z0-9_-]{1,100}$/.test(educatorId)) {
+    return json({ error: "A valid educator ID is required." }, 400);
+  }
+
+  const educator = await env.DB.prepare(
+    "SELECT id FROM accounts WHERE id = ? AND role = 'educator' AND school_id = ?"
+  ).bind(educatorId, schoolId).first();
+  if (!educator) return json({ error: "Educator not found in this school." }, 404);
+
+  await ensureEducatorLessonSlots(env, schoolId, educatorId);
+  const result = await env.DB.prepare(
+    "SELECT * FROM educator_lessons WHERE school_id = ? AND educator_id = ? ORDER BY slot"
+  ).bind(schoolId, educatorId).all();
+
+  return json({
+    lessons: (result.results || []).map((lesson) => publicEducatorLesson(lesson, request)),
+  });
+}
+
+async function saveEducatorLesson(request, env, lessonId) {
+  const claims = await authenticate(request, env, "educator");
+  if (!claims) return json({ error: "Educator authentication required." }, 401);
+
+  const educator = await env.DB.prepare(
+    "SELECT id, school_id FROM accounts WHERE id = ? AND role = 'educator'"
+  ).bind(claims.sub).first();
+  if (!educator) return json({ error: "Educator account not found." }, 404);
+
+  const lesson = await env.DB.prepare(
+    "SELECT * FROM educator_lessons WHERE id = ? AND school_id = ? AND educator_id = ?"
+  ).bind(lessonId, educator.school_id, educator.id).first();
+  if (!lesson) return json({ error: "Lesson slot not found for this educator." }, 404);
+
+  const form = await request.formData();
+  const title = String(form.get("title") || "").trim();
+  const subject = String(form.get("subject") || "").trim();
+  const description = String(form.get("description") || "").trim();
+  const file = form.get("file");
+
+  if (!title || title.length > 150 || !subject || subject.length > 100 || description.length > 5000) {
+    return json({ error: "Enter a lesson title and subject; keep the description under 5,000 characters." }, 400);
+  }
+
+  let mediaKey = lesson.media_key || null;
+  let mediaName = lesson.media_name || null;
+  let mediaType = lesson.media_type || null;
+  let mediaSize = Number(lesson.media_size || 0);
+  let newMediaKey = null;
+
+  if (file && typeof file.arrayBuffer === "function" && file.size > 0) {
+    if (file.size > 100 * 1024 * 1024) {
+      return json({ error: "Lesson files must be 100 MB or smaller." }, 413);
+    }
+
+    const contentType = String(file.type || "application/octet-stream").toLowerCase();
+    const allowedType = /^(image\/(jpeg|png|webp|gif)|video\/(mp4|webm|quicktime)|audio\/(mpeg|ogg|webm)|application\/(pdf|msword|vnd\.openxmlformats-officedocument\.(wordprocessingml\.document|spreadsheetml\.sheet|presentationml\.presentation))|text\/plain)$/;
+    if (!allowedType.test(contentType)) {
+      return json({ error: "This file type is not supported. Use common images, videos, audio, PDF, Office or text documents." }, 415);
+    }
+
+    const safeName = String(file.name || "lesson-file")
+      .replace(/[\\/\r\n"]/g, "_")
+      .slice(0, 180) || "lesson-file";
+    newMediaKey = `lessons/${educator.school_id}/${educator.id}/${lesson.id}/${randomId()}`;
+
+    await env.SESSION_MEDIA_BUCKET.put(
+      newMediaKey,
+      await file.arrayBuffer(),
+      {
+        httpMetadata: { contentType },
+        customMetadata: {
+          schoolId: educator.school_id,
+          educatorId: educator.id,
+          lessonId: lesson.id,
+          fileName: safeName,
+        },
+      }
+    );
+
+    mediaKey = newMediaKey;
+    mediaName = safeName;
+    mediaType = contentType;
+    mediaSize = file.size;
+  }
+
+  try {
+    await env.DB.prepare(
+      `UPDATE educator_lessons
+       SET title = ?, subject = ?, description = ?,
+           media_key = ?, media_name = ?, media_type = ?, media_size = ?,
+           updated_at = datetime('now')
+       WHERE id = ? AND school_id = ? AND educator_id = ?`
+    ).bind(
+      title, subject, description, mediaKey, mediaName, mediaType, mediaSize,
+      lesson.id, educator.school_id, educator.id
+    ).run();
+  } catch (error) {
+    if (newMediaKey) {
+      await env.SESSION_MEDIA_BUCKET.delete(newMediaKey).catch(() => {});
+    }
+    throw error;
+  }
+
+  if (newMediaKey && lesson.media_key) {
+    await env.SESSION_MEDIA_BUCKET.delete(lesson.media_key).catch((error) => {
+      console.error("Unable to remove replaced educator lesson media:", error);
+    });
+  }
+
+  const saved = await env.DB.prepare(
+    "SELECT * FROM educator_lessons WHERE id = ? AND school_id = ? AND educator_id = ?"
+  ).bind(lesson.id, educator.school_id, educator.id).first();
+
+  return json({ saved: true, lesson: publicEducatorLesson(saved, request) });
+}
+
+async function deleteEducatorLesson(request, env, lessonId) {
+  const claims = await authenticate(request, env, "educator");
+  if (!claims) return json({ error: "Educator authentication required." }, 401);
+
+  const educator = await env.DB.prepare(
+    "SELECT id, school_id FROM accounts WHERE id = ? AND role = 'educator'"
+  ).bind(claims.sub).first();
+  if (!educator) return json({ error: "Educator account not found." }, 404);
+
+  const lesson = await env.DB.prepare(
+    "SELECT * FROM educator_lessons WHERE id = ? AND school_id = ? AND educator_id = ?"
+  ).bind(lessonId, educator.school_id, educator.id).first();
+  if (!lesson) return json({ error: "Lesson slot not found for this educator." }, 404);
+
+  await env.DB.prepare(
+    `UPDATE educator_lessons
+     SET title = '', subject = '', description = '',
+         media_key = NULL, media_name = NULL, media_type = NULL,
+         media_size = 0, updated_at = datetime('now')
+     WHERE id = ? AND school_id = ? AND educator_id = ?`
+  ).bind(lesson.id, educator.school_id, educator.id).run();
+
+  if (lesson.media_key) {
+    await env.SESSION_MEDIA_BUCKET.delete(lesson.media_key).catch((error) => {
+      console.error("Unable to remove deleted educator lesson media:", error);
+    });
+  }
+
+  const cleared = await env.DB.prepare(
+    "SELECT * FROM educator_lessons WHERE id = ? AND school_id = ? AND educator_id = ?"
+  ).bind(lesson.id, educator.school_id, educator.id).first();
+
+  return json({ deleted: true, lesson: publicEducatorLesson(cleared, request) });
+}
+
+async function readEducatorLessonMedia(request, env, lessonId) {
+  const url = new URL(request.url);
+  const schoolId = url.searchParams.get("schoolId") || "";
+  const lesson = await env.DB.prepare(
+    `SELECT media_key, media_name, media_type
+     FROM educator_lessons
+     WHERE id = ? AND school_id = ? AND media_key IS NOT NULL`
+  ).bind(lessonId, schoolId).first();
+
+  if (!lesson) return json({ error: "Lesson media not found." }, 404);
+  const object = await env.SESSION_MEDIA_BUCKET.get(lesson.media_key);
+  if (!object) return json({ error: "Lesson media not found." }, 404);
+
+  const contentType = lesson.media_type || "application/octet-stream";
+  const inline = /^(image\/|video\/|audio\/|application\/pdf$)/i.test(contentType);
+  const headers = new Headers();
+  object.writeHttpMetadata(headers);
+  headers.set("content-type", contentType);
+  headers.set("content-disposition", `${inline ? "inline" : "attachment"}; filename*=UTF-8''${encodeURIComponent(lesson.media_name || "lesson-file")}`);
+  headers.set("x-content-type-options", "nosniff");
+  headers.set("cache-control", "public, max-age=3600");
+  if (object.httpEtag) headers.set("etag", object.httpEtag);
+  return new Response(object.body, { headers });
+}
+
+async function getDirectorProfile(request, env) {
+  const director = await authenticate(request, env, "director");
+  if (!director) return json({ error: "Director authentication required." }, 401);
+
+  const account = await env.DB.prepare(
+    "SELECT id, username, school_id FROM accounts WHERE id = ? AND role = 'director'"
+  ).bind(director.sub).first();
+  if (!account) return json({ error: "Director account not found." }, 404);
+
+  const school = await getSchoolRecord(env, account.school_id);
+  if (!school) return json({ error: "The Director's school profile was not found." }, 404);
+
+  return json({
+    profile: {
+      schoolId: school.id,
+      schoolName: school.name,
+      username: account.username,
+    },
+  });
+}
+
+async function updateDirectorProfile(request, env) {
+  const director = await authenticate(request, env, "director");
+  if (!director) return json({ error: "Director authentication required." }, 401);
+
+  const account = await env.DB.prepare(
+    "SELECT id, username, school_id FROM accounts WHERE id = ? AND role = 'director'"
+  ).bind(director.sub).first();
+  if (!account) return json({ error: "Director account not found." }, 404);
+
+  const body = await requestJson(request);
+  const schoolName = typeof body?.schoolName === "string" ? body.schoolName.trim() : "";
+  const username = typeof body?.username === "string" ? body.username.trim().toLowerCase() : "";
+  const password = typeof body?.password === "string" ? body.password : "";
+
+  if (schoolName.length < 2 || schoolName.length > 100) {
+    return json({ error: "School name must contain 2–100 characters." }, 400);
+  }
+  if (!/^[a-z0-9._-]{3,32}$/.test(username)) {
+    return json({ error: "Director username must contain 3–32 letters, numbers, dots, underscores or hyphens." }, 400);
+  }
+  if (password && (password.length < 12 || password.length > MAX_PASSWORD_LENGTH)) {
+    return json({ error: "A new Director password must contain 12–1,024 characters." }, 400);
+  }
+
+  const duplicateSchool = await env.DB.prepare(
+    "SELECT id FROM schools WHERE name = ? COLLATE NOCASE AND id != ?"
+  ).bind(schoolName, account.school_id).first();
+  if (duplicateSchool) return json({ error: "That school name is already in use." }, 409);
+
+  const duplicateUsername = await env.DB.prepare(
+    "SELECT id FROM accounts WHERE username = ? COLLATE NOCASE AND id != ?"
+  ).bind(username, account.id).first();
+  if (duplicateUsername) return json({ error: "That username is already in use." }, 409);
+
+  await env.DB.prepare(
+    "UPDATE schools SET name = ? WHERE id = ?"
+  ).bind(schoolName, account.school_id).run();
+
+  if (password) {
+    await env.DB.prepare(
+      "UPDATE accounts SET username = ?, password_hash = ? WHERE id = ? AND role = 'director'"
+    ).bind(username, await hashPassword(password), account.id).run();
+  } else {
+    await env.DB.prepare(
+      "UPDATE accounts SET username = ? WHERE id = ? AND role = 'director'"
+    ).bind(username, account.id).run();
+  }
+
+  const token = await signToken(
+    { sub: account.id, role: "director", username, exp: Math.floor(Date.now() / 1000) + SESSION_TTL_SECONDS },
+    env.SESSION_SIGNING_KEY
+  );
+
+  return json({
+    profile: {
+      schoolId: account.school_id,
+      schoolName,
+      username,
+    },
+    token,
+  });
+}
+
 async function handleRegister(request, env) {
   const body = await requestJson(request);
   const username = typeof body?.username === "string" ? body.username.trim().toLowerCase() : "";
   const password = typeof body?.password === "string" ? body.password : "";
   const role = body?.role;
+  const schoolId = typeof body?.schoolId === "string" ? body.schoolId.trim() : "default-agenda-school";
   const fullName = typeof body?.fullName === "string" ? body.fullName.trim() : "";
   const email = typeof body?.email === "string" ? body.email.trim().toLowerCase() : "";
   const phone = typeof body?.phone === "string" ? body.phone.trim() : "";
@@ -274,61 +632,47 @@ async function handleRegister(request, env) {
     return json({ error: "One or more profile fields are too long." }, 400);
   }
 
-    if (role === "student" && !registeredSessionId) {
-    return json({
-      error: "Please select your registered educator before registering."
-    }, 400);
+  const school = await getSchoolRecord(env, schoolId);
+  if (!school) return json({ error: "Choose a valid school before registering." }, 400);
+
+  if (role === "student" && !registeredSessionId) {
+    return json({ error: "Please select your registered educator before registering." }, 400);
   }
 
   const selectedSession = registeredSessionId
     ? await env.DB.prepare(
-        `SELECT
-           s.id,
-           s.grade_id
+        `SELECT s.id, s.grade_id
          FROM sessions s
          INNER JOIN accounts educator
            ON educator.registered_session_id = s.id
            AND educator.role = 'educator'
-         WHERE s.id = ?`
-      ).bind(registeredSessionId).first()
+           AND educator.school_id = s.school_id
+         WHERE s.id = ?
+           AND s.school_id = ?
+           AND educator.school_id = ?`
+      ).bind(registeredSessionId, schoolId, schoolId).first()
     : null;
 
   if (role === "student" && !selectedSession) {
-    return json({
-      error: "The selected educator does not have an assigned classroom."
-    }, 400);
+    return json({ error: "The selected educator does not have an assigned classroom in this school." }, 400);
   }
-
   if (registeredSessionId && !selectedSession) {
-    return json({
-      error: "Choose a valid educator classroom before registering."
-    }, 400);
+    return json({ error: "Choose a valid educator classroom in this school before registering." }, 400);
   }
 
-  // A student's grade must match the selected educator's actual classroom.
-  const gradeId =
-    role === "student"
-      ? selectedSession.grade_id
-      : requestedGradeId;
-
-  const selectedGrade = gradeId
-    ? await env.DB.prepare(
-        "SELECT grade_id FROM sessions WHERE grade_id = ? LIMIT 1"
-      ).bind(gradeId).first()
-    : null;
-
-  if (!selectedGrade) {
-    return json({
-      error: "Choose a valid grade before registering."
-    }, 400);
+  const gradeId = role === "student" ? selectedSession.grade_id : requestedGradeId;
+  if (!VALID_GRADE_IDS.has(gradeId)) {
+    return json({ error: "Choose a valid grade before registering." }, 400);
   }
 
-  const existing = await env.DB.prepare("SELECT * FROM accounts WHERE username = ? COLLATE NOCASE")
-    .bind(username)
-    .first();
+  const existing = await env.DB.prepare(
+    "SELECT * FROM accounts WHERE username = ? COLLATE NOCASE"
+  ).bind(username).first();
+
   const registration = {
     password,
     role,
+    schoolId,
     fullName,
     email,
     phone,
@@ -342,13 +686,20 @@ async function handleRegister(request, env) {
   const id = randomId();
   try {
     await env.DB.prepare(
-      "INSERT INTO accounts (id, username, password_hash, role, full_name, email, phone, school_or_subject, grade_id, registered_session_id, expires_at, activated) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now', '+1 month'), 0)",
-    ).bind(id, username, passwordHash, role, fullName, email, phone, schoolOrSubject, gradeId, registeredSessionId || null).run();
+      `INSERT INTO accounts (
+        id, username, password_hash, role, full_name, email, phone,
+        school_or_subject, grade_id, registered_session_id, expires_at,
+        activated, school_id
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now', '+1 month'), 0, ?)`
+    ).bind(
+      id, username, passwordHash, role, fullName, email, phone,
+      schoolOrSubject, gradeId, registeredSessionId || null, schoolId
+    ).run();
   } catch (error) {
     if (error instanceof Error && error.message.toLowerCase().includes("unique")) {
-      const conflictingAccount = await env.DB.prepare("SELECT * FROM accounts WHERE username = ? COLLATE NOCASE")
-        .bind(username)
-        .first();
+      const conflictingAccount = await env.DB.prepare(
+        "SELECT * FROM accounts WHERE username = ? COLLATE NOCASE"
+      ).bind(username).first();
       if (conflictingAccount) {
         return existingRegistrationResponse(conflictingAccount, registration, env, selectedSession);
       }
@@ -357,6 +708,8 @@ async function handleRegister(request, env) {
   }
 
   const account = await env.DB.prepare("SELECT * FROM accounts WHERE id = ?").bind(id).first();
+  if (role === "educator") await ensureEducatorLessonSlots(env, schoolId, id);
+
   const token = await signToken(
     { sub: id, role, username, exp: Math.floor(Date.now() / 1000) + SESSION_TTL_SECONDS },
     env.SESSION_SIGNING_KEY,
@@ -365,8 +718,13 @@ async function handleRegister(request, env) {
 }
 
 async function existingRegistrationResponse(account, registration, env, selectedSession) {
+  if ((account.school_id || "default-agenda-school") !== registration.schoolId) {
+    return json({ error: "That username is already registered at another school. Choose another username or sign in." }, 409);
+  }
+
   const matches = await verifyPassword(registration.password, account.password_hash);
   if (!matches) return json({ error: "That username is already registered. Sign in or choose another username." }, 409);
+
   const accountIsActive = Boolean(account.activated);
   if (accountIsActive && account.role !== registration.role) {
     return json({ error: "That username is already registered. Sign in or choose another username." }, 409);
@@ -374,10 +732,14 @@ async function existingRegistrationResponse(account, registration, env, selected
   if (accountIsActive && registration.gradeId && account.grade_id !== registration.gradeId) {
     return json({ error: "This account is already registered for another grade." }, 409);
   }
+
   if (!accountIsActive) {
     const registeredSessionId = registration.registeredSessionId || null;
     await env.DB.prepare(
-      "UPDATE accounts SET role = ?, full_name = ?, email = ?, phone = ?, school_or_subject = ?, grade_id = ?, registered_session_id = ? WHERE id = ?",
+      `UPDATE accounts
+       SET role = ?, full_name = ?, email = ?, phone = ?, school_or_subject = ?,
+           grade_id = ?, registered_session_id = ?
+       WHERE id = ? AND school_id = ?`
     ).bind(
       registration.role,
       registration.fullName,
@@ -387,7 +749,9 @@ async function existingRegistrationResponse(account, registration, env, selected
       registration.gradeId,
       registeredSessionId,
       account.id,
+      registration.schoolId,
     ).run();
+
     account.role = registration.role;
     account.full_name = registration.fullName;
     account.email = registration.email;
@@ -401,11 +765,16 @@ async function existingRegistrationResponse(account, registration, env, selected
     }
     if (!selectedSession) return json({ error: "Choose a valid session before registering." }, 400);
     await env.DB.prepare(
-      "UPDATE accounts SET registered_session_id = ?, grade_id = ? WHERE id = ?",
-    ).bind(registration.registeredSessionId, selectedSession.grade_id, account.id).run();
+      "UPDATE accounts SET registered_session_id = ?, grade_id = ? WHERE id = ? AND school_id = ?"
+    ).bind(registration.registeredSessionId, selectedSession.grade_id, account.id, registration.schoolId).run();
     account.registered_session_id = registration.registeredSessionId;
     account.grade_id = selectedSession.grade_id;
   }
+
+  if (account.role === "educator") {
+    await ensureEducatorLessonSlots(env, registration.schoolId, account.id);
+  }
+
   const token = await signToken(
     { sub: account.id, role: account.role, username: account.username, exp: Math.floor(Date.now() / 1000) + SESSION_TTL_SECONDS },
     env.SESSION_SIGNING_KEY,
@@ -413,18 +782,18 @@ async function existingRegistrationResponse(account, registration, env, selected
   return json({ account: publicAccount(account), token });
 }
 
+async function registrationSessions(request, env) {
+  const url = new URL(request.url);
+  const schoolId = url.searchParams.get("schoolId") || "";
+  const school = await getSchoolRecord(env, schoolId);
+  if (!school) return json({ error: "Choose a valid school." }, 400);
 
-async function registrationSessions(env) {
   const result = await env.DB.prepare(
-    `SELECT
-       id,
-       grade_id,
-       subject,
-       title,
-       teacher_name
+    `SELECT id, grade_id, subject, title, teacher_name
      FROM sessions
+     WHERE school_id = ?
      ORDER BY grade_id, subject, teacher_name COLLATE NOCASE, title`
-  ).all();
+  ).bind(schoolId).all();
 
   return json({
     sessions: (result.results || []).map((session) => ({
@@ -437,14 +806,24 @@ async function registrationSessions(env) {
   });
 }
 
-
-async function registrationGrades(env) {
-  const result = await env.DB.prepare(
-    "SELECT DISTINCT grade_id FROM sessions WHERE grade_id != '' ORDER BY grade_id",
-  ).all();
-  return json({ grades: (result.results || []).map((row) => row.grade_id) });
+async function registrationGrades(request, env) {
+  const url = new URL(request.url);
+  const schoolId = url.searchParams.get("schoolId") || "";
+  const school = await getSchoolRecord(env, schoolId);
+  if (!school) return json({ error: "Choose a valid school." }, 400);
+  return json({ grades: [...VALID_GRADE_IDS] });
 }
-async function registrationEducators(env) {
+
+async function registrationEducators(request, env) {
+  const url = new URL(request.url);
+  const schoolId = url.searchParams.get("schoolId") || "";
+  return getSchoolEducatorsRegistration(env, schoolId);
+}
+
+async function getSchoolEducatorsRegistration(env, schoolId) {
+  const school = await getSchoolRecord(env, schoolId);
+  if (!school) return json({ error: "Choose a valid school." }, 400);
+
   const result = await env.DB.prepare(
     `SELECT
        a.id,
@@ -458,18 +837,17 @@ async function registrationEducators(env) {
      FROM accounts a
      LEFT JOIN sessions s
        ON s.id = a.registered_session_id
+       AND s.school_id = a.school_id
      WHERE a.role = 'educator'
+       AND a.school_id = ?
      ORDER BY a.full_name COLLATE NOCASE`
-  ).all();
+  ).bind(schoolId).all();
 
   return json({
     educators: (result.results || []).map((educator) => ({
       id: educator.id,
       name: educator.full_name,
-      subject:
-        educator.assigned_subject ||
-        educator.school_or_subject ||
-        "Academic Subject",
+      subject: educator.assigned_subject || educator.school_or_subject || "Academic Subject",
       gradeId: educator.assigned_grade_id || educator.grade_id,
       registeredSessionId: educator.assigned_session_id || null,
       hasAssignedClassroom: Boolean(educator.assigned_session_id),
@@ -477,9 +855,12 @@ async function registrationEducators(env) {
   });
 }
 
-// Public read-only directory of educators who are currently live.
-// This endpoint does not provide Stream credentials or classroom access.
 async function liveEducators(request, env) {
+  const url = new URL(request.url);
+  const schoolId = url.searchParams.get("schoolId") || "";
+  const school = await getSchoolRecord(env, schoolId);
+  if (!school) return json({ error: "Choose a valid school." }, 400);
+
   const result = await env.DB.prepare(
     `SELECT
        s.id AS session_id,
@@ -492,9 +873,12 @@ async function liveEducators(request, env) {
      INNER JOIN accounts a
        ON a.registered_session_id = s.id
        AND a.role = 'educator'
+       AND a.school_id = s.school_id
      WHERE s.is_live = 1
+       AND s.school_id = ?
+       AND a.school_id = ?
      ORDER BY s.live_starts_at DESC, a.full_name COLLATE NOCASE`
-  ).all();
+  ).bind(schoolId, schoolId).all();
 
   return json({
     educators: (result.results || []).map((row) => ({
