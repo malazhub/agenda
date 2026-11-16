@@ -453,8 +453,10 @@ test('Director login reads persisted role tables and saves status updates', asyn
   const lists = await dashboard.json();
   assert.equal(lists.students.length, 0);
   assert.equal(lists.educators.length, 2);
+  const educatorAccount = lists.educators.find((item) => item.username === 'educator.one');
+  assert.ok(educatorAccount);
 
-  const updated = await send(env, `/api/director/accounts/${lists.educators[0].id}`, {
+  const updated = await send(env, `/api/director/accounts/${educatorAccount.id}`, {
     method: 'PATCH',
     token,
     body: { activated: false, paid: true, registeredSessionId: 'test-registration-session' },
