@@ -620,44 +620,54 @@ async function updateDirectorProfile(request, env) {
   if (duplicate) return json({ error: "That username is already in use." }, 409);
 
   let schoolId = requestedSchoolId;
+  const statements = [];
+
   if (requestedSchoolId === "__new__") {
     schoolId = crypto.randomUUID();
-    try {
-      await env.DB.prepare("INSERT INTO schools (id, name) VALUES (?, ?)")
-        .bind(schoolId, schoolName).run();
-    } catch {
-      return json({ error: "That school name already exists. Select it from the list instead." }, 409);
-    }
+    statements.push(
+      env.DB.prepare("INSERT INTO schools (id, name) VALUES (?, ?)")
+        .bind(schoolId, schoolName)
+    );
   } else {
     const selectedSchool = await env.DB.prepare(
       "SELECT id FROM schools WHERE id = ?"
     ).bind(requestedSchoolId).first();
     if (!selectedSchool) return json({ error: "The selected school no longer exists. Refresh and try again." }, 404);
-    try {
-      await env.DB.prepare("UPDATE schools SET name = ? WHERE id = ?")
-        .bind(schoolName, schoolId).run();
-    } catch {
-      return json({ error: "That school name is already in use." }, 409);
-    }
+    statements.push(
+      env.DB.prepare("UPDATE schools SET name = ? WHERE id = ?")
+        .bind(schoolName, schoolId)
+    );
   }
 
   if (password) {
-    await env.DB.prepare(
-      "UPDATE accounts SET school_id = ?, username = ?, password_hash = ? WHERE id = ? AND role = 'director'"
-    ).bind(schoolId, username, await hashPassword(password), director.sub).run();
+    statements.push(
+      env.DB.prepare(
+        "UPDATE accounts SET school_id = ?, username = ?, password_hash = ? WHERE id = ? AND role = 'director'"
+      ).bind(schoolId, username, await hashPassword(password), director.sub)
+    );
   } else {
-    await env.DB.prepare(
-      "UPDATE accounts SET school_id = ?, username = ? WHERE id = ? AND role = 'director'"
-    ).bind(schoolId, username, director.sub).run();
+    statements.push(
+      env.DB.prepare(
+        "UPDATE accounts SET school_id = ?, username = ? WHERE id = ? AND role = 'director'"
+      ).bind(schoolId, username, director.sub)
+    );
   }
 
-  await env.DB.prepare(
-    `INSERT INTO app_settings (setting_key, setting_value, updated_at)
-     VALUES ('active_school_id', ?, datetime('now'))
-     ON CONFLICT(setting_key) DO UPDATE SET
-       setting_value = excluded.setting_value,
-       updated_at = datetime('now')`
-  ).bind(schoolId).run();
+  statements.push(
+    env.DB.prepare(
+      `INSERT INTO app_settings (setting_key, setting_value, updated_at)
+       VALUES ('active_school_id', ?, datetime('now'))
+       ON CONFLICT(setting_key) DO UPDATE SET
+         setting_value = excluded.setting_value,
+         updated_at = datetime('now')`
+    ).bind(schoolId)
+  );
+
+  try {
+    await env.DB.batch(statements);
+  } catch {
+    return json({ error: "The school name is already in use, or the settings could not be saved." }, 409);
+  }
 
   const token = await signToken(
     { sub: director.sub, role: "director", username, exp: Math.floor(Date.now() / 1000) + SESSION_TTL_SECONDS },
