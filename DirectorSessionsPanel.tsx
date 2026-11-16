@@ -116,14 +116,25 @@ export const DirectorSessionsPanel: React.FC<DirectorSessionsPanelProps> = ({
   };
 
   // Toggle Live / Off for a session
-  const toggleLiveStatus = (session: StoredSessionRecord) => {
-    const updated = sessions.map((s) => {
-      if (s.id === session.id) {
-        return { ...s, isLive: !s.isLive };
-      }
-      return s;
-    });
-    setSessions(updated);
+  const toggleLiveStatus = async (session: StoredSessionRecord) => {
+    setError('');
+    setMessage('');
+    try {
+      await createDirectorSession(token, {
+        id: session.id,
+        gradeId: session.gradeId,
+        subject: session.subject,
+        title: session.title,
+        teacherName: session.teacherName,
+        sourceName: session.sourceName,
+        sourceUrl: session.sourceUrl,
+        playbackUrl: session.playbackUrl,
+        isLive: !session.isLive,
+      });
+      await loadSessions();
+    } catch (toggleError) {
+      setError(toggleError instanceof Error ? toggleError.message : 'Unable to update live status.');
+    }
   };
 
   const fieldClass = 'w-full rounded-xl border border-slate-300 bg-slate-50 p-2.5 text-xs font-semibold text-slate-800 focus:outline-indigo-600';
