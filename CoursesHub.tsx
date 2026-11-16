@@ -99,7 +99,7 @@ export const CoursesHub: React.FC<CoursesHubProps> = ({
         onSchoolBrandChange(profile.schoolId, profile.schoolName);
       })
       .catch((profileError) => {
-        if (active) setDirectorDataError(profileError instanceof Error ? profileError.message : 'Unable to load Director school profile.');
+        if (active) setDirectorDataError(currentLang === 'ar' ? 'تعذر تحميل معلومات المدرسة.' : currentLang === 'fr' ? 'Impossible de charger les informations de l’établissement.' : currentLang === 'es' ? 'No se pudo cargar la información de la escuela.' : currentLang === 'it' ? 'Impossibile caricare le informazioni della scuola.' : profileError instanceof Error ? profileError.message : 'Unable to load Director school profile.');
       });
     return () => { active = false; };
   }, [directorToken]);
@@ -174,7 +174,7 @@ export const CoursesHub: React.FC<CoursesHubProps> = ({
         setRegistrationSessions(sessions);
       })
       .catch((error) => {
-        if (active) setDirectorDataError(error instanceof Error ? error.message : 'Unable to load registrations.');
+        if (active) setDirectorDataError(currentLang === 'ar' ? 'تعذر تحميل الحسابات والتسجيلات.' : currentLang === 'fr' ? 'Impossible de charger les comptes et les inscriptions.' : currentLang === 'es' ? 'No se pudieron cargar las cuentas y los registros.' : currentLang === 'it' ? 'Impossibile caricare gli account e le registrazioni.' : error instanceof Error ? error.message : 'Unable to load registrations.');
       })
       .finally(() => {
         if (active) setDirectorLoading(false);
@@ -268,9 +268,7 @@ const updateAccount = async (
     );
   } catch (error) {
     setDirectorDataError(
-      error instanceof Error
-        ? error.message
-        : currentLang === 'ar' ? 'تعذر حفظ حالة الحساب.' : currentLang === 'fr' ? 'Impossible d’enregistrer l’état du compte.' : currentLang === 'es' ? 'No se pudo guardar el estado de la cuenta.' : currentLang === 'it' ? 'Impossibile salvare lo stato dell’account.' : 'Unable to save the account status.'
+      currentLang === 'ar' ? 'تعذر حفظ حالة الحساب.' : currentLang === 'fr' ? 'Impossible d’enregistrer l’état du compte.' : currentLang === 'es' ? 'No se pudo guardar el estado de la cuenta.' : currentLang === 'it' ? 'Impossibile salvare lo stato dell’account.' : error instanceof Error ? error.message : 'Unable to save the account status.'
     );
   }
 };
