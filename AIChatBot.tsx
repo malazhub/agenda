@@ -1,7 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Language } from '../types';
-import { GoogleGenAI } from '@google/genai';
-import { getSchoolPublicContext } from '../services/cloudflareApi';
+import { generateGeminiContent, getSchoolPublicContext } from '../services/cloudflareApi';
 import type { SchoolPublicContext } from '../services/cloudflareApi';
 import { LEBANESE_GRADE_LEVELS } from '../data/mockGradesAndSessions';
 import { 
@@ -304,9 +303,6 @@ export const AIChatBot: React.FC<AIChatBotProps> = ({ currentLang, schoolId, sch
     const text = (textToSend || inputText).trim();
     if (!text || isTyping) return;
 
-    const apiKey = (typeof process !== 'undefined' && process.env?.GEMINI_API_KEY) ||
-      (typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_GEMINI_API_KEY) || '';
-    const ai = apiKey ? new GoogleGenAI({ apiKey }) : null;
     setInputText('');
     setIsTyping(true);
 
@@ -318,9 +314,9 @@ export const AIChatBot: React.FC<AIChatBotProps> = ({ currentLang, schoolId, sch
     // Only questions written in another language need the translation request.
     const questionAlreadyLocalized = isQuestionAlreadyInLanguage(text, currentLang);
     let selectedLanguageQuestion = questionAlreadyLocalized ? text : '';
-    if (ai && !selectedLanguageQuestion) {
+    if (!selectedLanguageQuestion) {
       try {
-        const translation = await ai.models.generateContent({
+        const translation = await generateGeminiContent(
           model: 'gemini-3.8-flash',
           contents: [{
             text: `Translate the user question below into ${languageNames[currentLang]}.
@@ -404,11 +400,9 @@ Question: ${JSON.stringify(text)}`,
 
     // 2. For all other questions, use Gemini AI
     let reply = '';
-    if (ai) {
+    {
       try {
-        const response = await ai.models.generateContent({
-          model: 'gemini-3.8-flash',
-          contents: [
+        const response = await generateGeminiContent([
             {
               text: `You are the AI academic assistant for Agenda (منصة الأجندة اللبنانية).
 CANONICAL AGENDA KNOWLEDGE (always available; do not rely on previous chat messages to remember these facts):
@@ -443,16 +437,13 @@ Platform architecture and navigation:
 - Explain the current school's prices, educators, grades and sessions using the supplied school configuration. Do not expose private account data, passwords, or other schools' information.
 User question (translated to the selected language): "${selectedLanguageQuestion}"`
             }
-          ]
-        });
+          ]);
 
         reply = response.text?.trim() || '';
         if (reply) {
           // Run a final translation pass so even an imperfectly compliant model
           // cannot leave the assistant response in a different language.
-          const localizedResponse = await ai.models.generateContent({
-            model: 'gemini-3.8-flash',
-            contents: [{
+          const localizedResponse = await generateGeminiContent([{
               text: `Translate the complete assistant response below into ${languageNames[currentLang]}.
 Return ONLY the translated response, preserving every factual detail, number, price, list item, warning, and paragraph.
 Do not summarize, omit, add facts, or answer the user separately.
@@ -460,8 +451,7 @@ Keep only proper names, school names, usernames, URLs, code, and standard techni
 If it is already fully in ${languageNames[currentLang]}, return it unchanged.
 Response to translate:
 ${JSON.stringify(reply)}`,
-            }],
-          });
+            }]);
           reply = localizedResponse.text?.trim() || reply;
         }
       } catch (e) {
