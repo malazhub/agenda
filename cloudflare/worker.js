@@ -588,7 +588,7 @@ async function directorProfile(request, env) {
   const profile = await env.DB.prepare(
     `SELECT a.school_id, a.username, schools.name AS school_name
      FROM accounts a
-     INNER JOIN schools ON schools.id = a.school_id
+     INNER JOIN schools ON schools.id = a.school_id AND schools.director_id = a.id
      WHERE a.id = ? AND a.role = 'director'`
   ).bind(director.sub).first();
   if (!profile) return json({ error: "Director school profile not found." }, 404);
