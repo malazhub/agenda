@@ -2839,11 +2839,11 @@ const handleClearChatMessages = async () => {
                   <Radio className="w-8 h-8 text-slate-400 mx-auto mb-3" />
 
                   <h3 className="text-sm font-black text-slate-800">
-                    {currentLang === 'ar' ? 'لا يوجد أساتذة يبثون مباشرة حالياً' : currentLang === 'fr' ? 'Aucun éducateur ne diffuse actuellement.' : currentLang === 'es' ? 'Ningún educador está transmitiendo ahora.' : currentLang === 'it' ? 'Nessun educatore sta trasmettendo in questo momento.' : 'No educators are broadcasting right now'}
+                    {currentLang === 'ar' ? 'لا يوجد معلمون مسجلون في هذه المدرسة بعد.' : currentLang === 'fr' ? 'Aucun éducateur n’est encore inscrit dans cet établissement.' : currentLang === 'es' ? 'Todavía no hay educadores registrados en esta escuela.' : currentLang === 'it' ? 'Non ci sono ancora educatori registrati in questa scuola.' : 'No educators are registered at this school yet.'}
                   </h3>
 
                   <p className="text-xs text-slate-500 mt-2">
-                    {currentLang === 'ar' ? 'سيتم تحديث قائمة الأساتذة تلقائياً.' : currentLang === 'fr' ? 'La liste des éducateurs en direct s’actualise automatiquement.' : currentLang === 'es' ? 'El directorio de educadores en directo se actualiza automáticamente.' : currentLang === 'it' ? 'L’elenco degli educatori in diretta si aggiorna automaticamente.' : 'The live educator directory refreshes automatically.'}
+                    {currentLang === 'ar' ? 'تُحدّث قائمة المدرسة وحالة الاتصال تلقائياً.' : currentLang === 'fr' ? 'La liste de l’établissement et le statut de connexion s’actualisent automatiquement.' : currentLang === 'es' ? 'El directorio de la escuela y el estado de conexión se actualizan automáticamente.' : currentLang === 'it' ? 'L’elenco della scuola e lo stato di connessione si aggiornano automaticamente.' : 'The school directory and connection status refresh automatically.'}
                   </p>
                 </div>
               ) : (
