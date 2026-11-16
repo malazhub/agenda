@@ -154,7 +154,16 @@ export interface SchoolGradePrice {
 export interface SchoolPublicContext {
   schoolId: string;
   schoolName: string;
+  defaultMonthlyRateUsd: number;
   prices: SchoolGradePrice[];
+  sessions: Array<{ gradeId: string; subject: string; sessionName: string; educatorName: string }>;
+  educators: Array<{ id: string; name: string; subject: string; gradeId: string }>;
+  guidance: {
+    register: string;
+    signIn: string;
+    live: string;
+    lessons: string;
+  };
 }
 const API_BASE_URL = (import.meta.env.VITE_CLOUDFLARE_API_URL || '').replace(/\/+$/, '');
 function withAbsoluteLessonMedia(
