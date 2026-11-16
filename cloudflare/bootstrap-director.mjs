@@ -69,10 +69,16 @@ async function promptPassword(label) {
 
 let username = process.env.DIRECTOR_USERNAME?.trim().toLowerCase();
 let password = process.env.DIRECTOR_PASSWORD;
+let schoolName = process.env.DIRECTOR_SCHOOL_NAME?.trim();
 
 if (interactive && !username) {
   username = (await prompt('Director username: ')).trim().toLowerCase();
 }
+if (interactive && !schoolName) {
+  schoolName = (await prompt('School name (default: Agenda): ')).trim();
+}
+if (!schoolName) schoolName = 'Agenda';
+
 if (interactive && !password) {
   password = await promptPassword('Director password (input hidden): ');
   const confirmation = await promptPassword('Confirm director password: ');
@@ -90,6 +96,10 @@ if (!password || password.length < 12) {
   console.error('Provide DIRECTOR_PASSWORD or enter a password with at least 12 characters.');
   process.exit(1);
 }
+if (schoolName.length < 2 || schoolName.length > 100) {
+  console.error('DIRECTOR_SCHOOL_NAME must contain 2–100 characters.');
+  process.exit(1);
+}
 
 const iterations = 100000;
 const salt = randomBytes(16);
@@ -97,10 +107,15 @@ const digest = pbkdf2Sync(password, salt, iterations, 32, 'sha256');
 const encode = (buffer) => buffer.toString('base64url');
 const passwordHash = `pbkdf2_sha256$${iterations}$${encode(salt)}$${encode(digest)}`;
 const escapeSql = (value) => `'${value.replace(/'/g, "''")}'`;
+const schoolId =
+  schoolName.toLowerCase() === 'agenda'
+    ? 'default-agenda-school'
+    : randomBytes(16).toString('hex');
 const command = [
-  'INSERT INTO accounts (id, username, password_hash, role, full_name, email, activated, paid)',
-  `VALUES (lower(hex(randomblob(16))), ${escapeSql(username)}, ${escapeSql(passwordHash)}, 'director', 'Director', '', 1, 1)`,
-  'ON CONFLICT(username) DO UPDATE SET password_hash = excluded.password_hash WHERE accounts.role = \'director\'',
+  `INSERT OR IGNORE INTO schools (id, name) VALUES (${escapeSql(schoolId)}, ${escapeSql(schoolName)});`,
+  'INSERT INTO accounts (id, username, password_hash, role, full_name, email, activated, paid, school_id)',
+  `VALUES (lower(hex(randomblob(16))), ${escapeSql(username)}, ${escapeSql(passwordHash)}, 'director', 'Director', '', 1, 1, ${escapeSql(schoolId)})`,
+  'ON CONFLICT(username) DO UPDATE SET password_hash = excluded.password_hash WHERE accounts.role = \'director\' AND accounts.school_id = excluded.school_id',
   ';',
 ].join(' ');
 
