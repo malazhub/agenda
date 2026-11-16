@@ -2568,6 +2568,58 @@ async function clearClassroomMessages(request, env) {
     cleared: true
   });
 }
+async function generateGeminiResponse(request, env) {
+  if (request.method !== "POST") return json({ error: "Method not allowed." }, 405);
+  if (!env.GEMINI_API_KEY) return json({ error: "Gemini is not configured on the server. Add the GEMINI_API_KEY Worker secret." }, 503);
+
+  const declaredLength = Number(request.headers.get("Content-Length") || 0);
+  if (declaredLength > 1_500_000) return json({ error: "AI request is too large." }, 413);
+
+  let payload;
+  try {
+    const rawBody = await request.text();
+    if (rawBody.length > 1_500_000) return json({ error: "AI request is too large." }, 413);
+    payload = JSON.parse(rawBody);
+  } catch {
+    return json({ error: "Invalid AI request body." }, 400);
+  }
+
+  const contents = payload?.contents;
+  if (!contents || !(typeof contents === "string" || (Array.isArray(contents) && contents.length > 0))) {
+    return json({ error: "AI contents are required." }, 400);
+  }
+  const model = payload?.model === "gemini-3.8-flash" ? payload.model : "gemini-3.8-flash";
+
+  let upstream;
+  try {
+    upstream = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-goog-api-key": env.GEMINI_API_KEY
+      },
+      body: JSON.stringify({
+        contents,
+        generationConfig: { maxOutputTokens: 2048 }
+      })
+    });
+  } catch {
+    return json({ error: "Gemini could not be reached. Please try again." }, 502);
+  }
+
+  const result = await upstream.json().catch(() => null);
+  if (!upstream.ok) {
+    const status = upstream.status === 429 ? 429 : 502;
+    return json({ error: status === 429 ? "Gemini is temporarily rate-limited. Please try again shortly." : "Gemini request failed. Check the server-side API key and model access." }, status);
+  }
+  const text = (result?.candidates?.[0]?.content?.parts || [])
+    .map((part) => typeof part.text === "string" ? part.text : "")
+    .join("")
+    .trim();
+  if (!text) return json({ error: "Gemini returned an empty response." }, 502);
+  return json({ text });
+}
+
 async function handle(request, env) {
   const url = new URL(request.url);
   const path = url.pathname.replace(/\/+$/, "") || "/";
@@ -2613,6 +2665,7 @@ async function handle(request, env) {
       classroomAttachmentMatch[1]
     );
   }
+  if (request.method === "POST" && path === "/api/ai/generate") return generateGeminiResponse(request, env);
   if (request.method === "GET" && path === "/api/health") return json({ status: "ok" });
   if (request.method === "POST" && path === "/api/auth/register") return handleRegister(request, env);
   if (request.method === "POST" && path === "/api/auth/login") return handleLogin(request, env);
