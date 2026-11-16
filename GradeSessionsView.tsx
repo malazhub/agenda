@@ -167,6 +167,17 @@ export const GradeSessionsView: React.FC<GradeSessionsViewProps> = ({
     'Flip Camera': { es: 'Cambiar cámara', it: 'Inverti fotocamera' },
     'Turn Camera Off': { es: 'Apagar cámara', it: 'Spegni fotocamera' },
     'Turn Camera On': { es: 'Encender cámara', it: 'Accendi fotocamera' },
+    'Private chat requires sign-in and an assigned educator.': { es: 'El chat privado requiere iniciar sesión y tener un educador asignado.', it: 'La chat privata richiede l’accesso e un educatore assegnato.' },
+    'Select a student thumbnail to open the conversation.': { es: 'Selecciona la imagen de un estudiante para abrir la conversación.', it: 'Seleziona la miniatura di uno studente per aprire la conversazione.' },
+    'No messages yet.': { es: 'Todavía no hay mensajes.', it: 'Ancora nessun messaggio.' },
+    'Actual connected participants:': { es: 'Participantes conectados:', it: 'Partecipanti connessi:' },
+    'Mute Microphone': { es: 'Silenciar micrófono', it: 'Disattiva microfono' },
+    'Unmute Microphone': { es: 'Activar micrófono', it: 'Attiva microfono' },
+    'Choose a section': { es: 'Elige una sección', it: 'Scegli una sezione' },
+    'Learning resources': { es: 'Recursos educativos', it: 'Risorse didattiche' },
+    'Live Sessions': { es: 'Sesiones en directo', it: 'Lezioni dal vivo' },
+    'Opening live classroom...': { es: 'Abriendo el aula en directo...', it: 'Apertura dell’aula dal vivo...' },
+    'Click to join as a guest': { es: 'Haz clic para entrar como invitado', it: 'Clicca per entrare come ospite' },
   };
 
   const classroomLabel = (ar: string, fr: string, en: string) => {
@@ -2358,23 +2369,23 @@ const handleClearChatMessages = async () => {
                         <p className="text-xs text-slate-400 text-center mt-6">
               {isGuestMode
                 ? (
-                    currentLang === 'ar'
-                      ? 'المحادثة الخاصة متاحة بعد تسجيل الدخول واختيار أستاذ.'
-                      : currentLang === 'fr'
-                        ? 'La conversation privée nécessite une connexion et un éducateur.'
-                        : 'Private chat requires sign-in and an assigned educator.'
+                    classroomLabel(
+                      'المحادثة الخاصة متاحة بعد تسجيل الدخول واختيار أستاذ.',
+                      'La conversation privée nécessite une connexion et un éducateur.',
+                      'Private chat requires sign-in and an assigned educator.'
+                    )
                   )
                 : (
-                    currentLang === 'ar'
-                      ? 'اختر طالباً من الصور لفتح المحادثة.'
-                      : 'Select a student thumbnail to open the conversation.'
+                    classroomLabel(
+                      'اختر طالباً من الصور لفتح المحادثة.',
+                      'Sélectionnez la vignette d’un élève pour ouvrir la conversation.',
+                      'Select a student thumbnail to open the conversation.'
+                    )
                   )}
             </p>
           ) : chatMessages.length === 0 ? (
             <p className="text-xs text-slate-400 text-center mt-6">
-              {currentLang === 'ar'
-                ? 'لا توجد رسائل بعد.'
-                : 'No messages yet.'}
+              {classroomLabel('لا توجد رسائل بعد.', 'Aucun message pour le moment.', 'No messages yet.')}
             </p>
           ) : (
                         chatMessages.map((message) => {
@@ -2469,9 +2480,7 @@ const handleClearChatMessages = async () => {
               <div className="flex items-center gap-2 text-xs font-black uppercase text-slate-300">
                 <Users className="w-4 h-4 text-indigo-400" />
                 <span>
-                  {currentLang === 'ar'
-                    ? 'المشاركون المتصلون فعلياً:'
-                    : 'Actual connected participants:'}
+                  {classroomLabel('المشاركون المتصلون فعلياً:', 'Participants actuellement connectés :', 'Actual connected participants:')}
                 </span>
 
                 <span className="text-emerald-400">
@@ -2624,8 +2633,8 @@ const handleClearChatMessages = async () => {
                               : 'Waiting for educator permission'
                           )
                         : isMicOn
-                          ? 'Mute Microphone'
-                          : 'Unmute Microphone'
+                          ? classroomLabel('كتم الميكروفون', 'Couper le microphone', 'Mute Microphone')
+                          : classroomLabel('تشغيل الميكروفون', 'Activer le microphone', 'Unmute Microphone')
                     }
                   >
                     {isMicOn
