@@ -41,10 +41,11 @@ export interface ExamQuestion {
     en: string;
     fr: string;
     ar: string;
+    [key: string]: any;
   };
   subQuestions?: {
     label: string; // "1.a", "1.b", etc.
-    text: { en: string; fr: string; ar: string };
+    text: { en: string; fr: string; ar: string; [key: string]: any };
     points: number;
     bareme: string;
   }[];
@@ -55,6 +56,7 @@ export interface ExamQuestion {
     ar: string;
     keyFormulas?: string[];
     tips?: string;
+    [key: string]: any;
   };
 }
 
@@ -70,17 +72,20 @@ export interface OfficialExam {
     en: string;
     fr: string;
     ar: string;
+    [key: string]: any;
   };
   overview: {
     en: string;
     fr: string;
     ar: string;
+    [key: string]: any;
   };
   questions: ExamQuestion[];
   officialInstructions: {
     en: string;
     fr: string;
     ar: string;
+    [key: string]: any;
   };
   pdfAvailable?: boolean;
 }
