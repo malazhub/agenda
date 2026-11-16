@@ -277,8 +277,10 @@ function fakeEnvironment() {
         }
         return { meta: { changes: 1 } };
       }
-      if (q.startsWith('insert or replace into sessions')) {
-        const [id, school_id, grade_id, subject, title, teacher_name, source_name, source_url, playback_url, media_key, is_live, live_starts_at] = v;
+      if (q.startsWith('insert or replace into sessions') || q.startsWith('insert into sessions')) {
+        const [id, school_id, grade_id, subject, title, teacher_name, source_name, source_url, playback_url, media_key] = v;
+        const is_live = q.includes('is_live, live_starts_at') ? Number(v[10] || 0) : 0;
+        const live_starts_at = q.includes('is_live, live_starts_at') ? v[11] || null : null;
         sessions.set(id, { id, school_id, grade_id, subject, title, teacher_name, source_name, source_url, playback_url, media_key, is_live, live_starts_at });
         return { meta: { changes: 1 } };
       }
@@ -317,23 +319,20 @@ function fakeEnvironment() {
           accountId = v[v.length - 2];
         }
         const account = accounts.get(accountId);
-        if (!account || account.role === 'director' && !q.includes("role = 'director'")) return { meta: { changes: 0 } };
+        if (!account || (account.role === 'director' && !q.includes("role = 'director'"))) return { meta: { changes: 0 } };
         if (schoolId && account.school_id !== schoolId) return { meta: { changes: 0 } };
 
+        const setClause = q.split(' set ')[1].split(' where ')[0];
         let index = 0;
-        if (q.includes('activated = ?')) account.activated = v[index++];
-        if (q.includes('paid = ?')) account.paid = v[index++];
-        if (q.includes('registered_session_id = ?')) {
-          account.registered_session_id = v[index++];
-          account.grade_id = v[index++];
+        for (const assignment of setClause.split(',')) {
+          if (assignment.includes('activated = ?')) account.activated = v[index++];
+          else if (assignment.includes('paid = ?')) account.paid = v[index++];
+          else if (assignment.includes('registered_session_id = ?')) account.registered_session_id = v[index++];
+          else if (assignment.includes('grade_id = ?')) account.grade_id = v[index++];
+          else if (assignment.includes('password_hash = ?')) account.password_hash = v[index++];
+          else if (assignment.includes('username = ?')) account.username = v[index++];
+          else if (assignment.includes("expires_at = datetime('now', '+1 month')")) account.expires_at = '2026-12-03 10:00:00';
         }
-        if (q.includes('password_hash = ?')) {
-          account.password_hash = v[index++];
-        }
-        if (q.includes('username = ?')) {
-          account.username = v[index++];
-        }
-        if (q.includes("expires_at = datetime('now', '+1 month')")) account.expires_at = '2026-12-03 10:00:00';
         return { meta: { changes: 1 } };
       }
       if (q.startsWith('delete from educator_lessons')) {
