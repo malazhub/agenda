@@ -29,7 +29,7 @@ function corsHeaders(origin) {
   return origin
     ? {
         "access-control-allow-origin": origin,
-        "access-control-allow-methods": "GET, POST, PATCH, PUT, OPTIONS",
+        "access-control-allow-methods": "GET, POST, PATCH, PUT, DELETE, OPTIONS",
         "access-control-allow-headers": "Authorization, Content-Type",
         "access-control-max-age": "86400",
         vary: "Origin",
@@ -1209,7 +1209,9 @@ function publicSession(session) {
     playbackUrl: session.playback_url || session.source_url,
     isLive: Boolean(session.is_live),
     liveStartsAt: session.live_starts_at,
-    mediaUrl: session.media_key ? `/api/media/${encodeURIComponent(session.media_key)}` : null,
+    mediaUrl: session.media_key
+      ? `/api/media/${encodeURIComponent(session.media_key)}?schoolId=${encodeURIComponent(session.school_id || "default-agenda-school")}`
+      : null,
   };
 }
 
@@ -1234,19 +1236,18 @@ async function listSessions(url, env, request) {
 
   if (liveOnly) {
     const claims = await authenticate(request, env, null);
-
     if (!claims || !["student", "educator"].includes(claims.role)) {
       return json({ error: "Please sign in first." }, 401);
     }
 
     const account = await env.DB.prepare(
-      `SELECT id, role, activated, paid, expires_at,
-              grade_id, registered_session_id
+      `SELECT id, role, activated, paid, expires_at, grade_id,
+              registered_session_id, school_id
        FROM accounts
        WHERE id = ?`
     ).bind(claims.sub).first();
 
-    if (!account || claims.role !== account.role) {
+    if (!account || claims.role !== account.role || !account.school_id) {
       return json({ error: "Account verification failed." }, 403);
     }
 
@@ -1255,13 +1256,11 @@ async function listSessions(url, env, request) {
       account.activated === 1 ||
       String(account.activated).toLowerCase() === "true" ||
       String(account.activated) === "1";
-
     const isPaid =
       account.paid === true ||
       account.paid === 1 ||
       String(account.paid).toLowerCase() === "true" ||
       String(account.paid) === "1";
-
     const expiryTime = account.expires_at
       ? Date.parse(`${String(account.expires_at).replace(" ", "T")}Z`)
       : null;
@@ -1272,71 +1271,52 @@ async function listSessions(url, env, request) {
       (expiryTime !== null &&
         (!Number.isFinite(expiryTime) || expiryTime <= Date.now()))
     ) {
-      return json({
-        error: "Your account must be activated, paid, and not expired."
-      }, 403);
+      return json({ error: "Your account must be activated, paid, and not expired." }, 403);
     }
-
     if (account.grade_id !== gradeId) {
-      return json({
-        error: "Live sessions are limited to your registered grade."
-      }, 403);
+      return json({ error: "Live sessions are limited to your registered grade." }, 403);
     }
 
     if (sessionId) {
-      const access = await registeredLiveSession(
-        request,
-        env,
-        sessionId
-      );
-
-      if (access.error) {
-        return access.error;
+      const access = await registeredLiveSession(request, env, sessionId);
+      if (access.error) return access.error;
+      if (access.session.grade_id !== gradeId || access.session.school_id !== account.school_id) {
+        return json({ error: "Invalid session grade or school." }, 403);
       }
-
-      if (access.session.grade_id !== gradeId) {
-        return json({ error: "Invalid session grade." }, 403);
-      }
-
-      return json({
-        sessions: [publicSession(access.session)]
-      });
+      return json({ sessions: [publicSession(access.session)] });
     }
 
-    // Only show the exact classroom assigned to this account.
-    if (!account.registered_session_id) {
-      return json({ sessions: [] });
-    }
+    if (!account.registered_session_id) return json({ sessions: [] });
 
     const assignedSession = await env.DB.prepare(
       `SELECT *
        FROM sessions
        WHERE id = ?
          AND grade_id = ?
+         AND school_id = ?
          AND is_live = 1`
-    ).bind(
-      account.registered_session_id,
-      gradeId
-    ).first();
+    ).bind(account.registered_session_id, gradeId, account.school_id).first();
 
     return json({
-      sessions: assignedSession
-        ? [publicSession(assignedSession)]
-        : []
+      sessions: assignedSession ? [publicSession(assignedSession)] : [],
     });
   }
+
+  const schoolId = url.searchParams.get("schoolId") || "";
+  const school = await getSchoolRecord(env, schoolId);
+  if (!school) return json({ error: "Choose a valid school." }, 400);
 
   const result = await env.DB.prepare(
     `SELECT *
      FROM sessions
-     WHERE grade_id = ? AND is_live = 0
+     WHERE grade_id = ?
+       AND school_id = ?
+       AND is_live = 0
      ORDER BY RANDOM()
      LIMIT 20`
-  ).bind(gradeId).all();
+  ).bind(gradeId, schoolId).all();
 
-  return json({
-    sessions: (result.results || []).map(publicSession)
-  });
+  return json({ sessions: (result.results || []).map(publicSession) });
 }
 
 async function registeredLiveSession(request, env, sessionId) {
@@ -1358,7 +1338,7 @@ async function registeredLiveSession(request, env, sessionId) {
 
   const account = await env.DB.prepare(
     `SELECT id, role, full_name, activated, paid, expires_at,
-            registered_session_id, grade_id
+            registered_session_id, grade_id, school_id
      FROM accounts
      WHERE id = ?`
   ).bind(claims.sub).first();
@@ -1410,11 +1390,11 @@ async function registeredLiveSession(request, env, sessionId) {
 // after the educator has marked the classroom live.
 const sessionQuery =
   claims.role === "educator"
-    ? "SELECT * FROM sessions WHERE id = ?"
-    : "SELECT * FROM sessions WHERE id = ? AND is_live = 1";
+    ? "SELECT * FROM sessions WHERE id = ? AND school_id = ?"
+    : "SELECT * FROM sessions WHERE id = ? AND school_id = ? AND is_live = 1";
 
 const session = await env.DB.prepare(sessionQuery)
-  .bind(sessionId)
+  .bind(sessionId, account.school_id)
   .first();
 
   if (!session) {
@@ -1466,7 +1446,7 @@ async function setEducatorLiveSession(request, env) {
 
   const account = await env.DB.prepare(
     `SELECT id, role, activated, paid, expires_at,
-            registered_session_id, grade_id
+            registered_session_id, grade_id, school_id
      FROM accounts
      WHERE id = ?`
   ).bind(claims.sub).first();
@@ -1484,8 +1464,9 @@ async function setEducatorLiveSession(request, env) {
   const session = await env.DB.prepare(
   `SELECT id, grade_id
    FROM sessions
-   WHERE id = ?`
-).bind(account.registered_session_id).first();
+   WHERE id = ?
+     AND school_id = ?`
+).bind(account.registered_session_id, account.school_id).first();
 
   if (!session) {
     return json({
@@ -1525,11 +1506,13 @@ async function setEducatorLiveSession(request, env) {
   await env.DB.prepare(
     `UPDATE sessions
      SET is_live = ?, live_starts_at = ?
-     WHERE id = ?`
+     WHERE id = ?
+       AND school_id = ?`
   ).bind(
     Number(body.isLive),
     body.isLive ? new Date().toISOString() : null,
-    session.id
+    session.id,
+    account.school_id
   ).run();
 
   return json({
@@ -1861,6 +1844,8 @@ async function ensureLiveStream(request, env) {
 async function createSessions(request, env) {
   const director = await authenticate(request, env, "director");
   if (!director) return json({ error: "Director authentication required." }, 401);
+  const schoolId = await getDirectorSchoolId(env, director);
+  if (!schoolId) return json({ error: "Director school not found." }, 403);
   const body = await requestJson(request);
   if (!Array.isArray(body?.sessions) || body.sessions.length < 1 || body.sessions.length > 500) {
     return json({ error: "Provide between 1 and 500 session records." }, 400);
@@ -1873,7 +1858,8 @@ async function createSessions(request, env) {
     const title = typeof session?.title === "string" ? session.title.trim() : "";
     const sourceName = typeof session?.sourceName === "string" ? session.sourceName.trim() : "";
     const sourceUrl = typeof session?.sourceUrl === "string" ? session.sourceUrl.trim() : "";
-    const playbackUrl = typeof session?.playbackUrl === "string" ? session.playbackUrl.trim() : sourceUrl;
+    const requestedPlaybackUrl = typeof session?.playbackUrl === "string" ? session.playbackUrl.trim() : "";
+    const playbackUrl = requestedPlaybackUrl || sourceUrl;
     const mediaKey = typeof session?.mediaKey === "string" ? session.mediaKey.trim() : "";
     let source;
     let playback;
@@ -1906,11 +1892,22 @@ async function createSessions(request, env) {
     if (liveStartsAt && Number.isNaN(Date.parse(liveStartsAt))) {
       return json({ error: "The live start time must be a valid date." }, 400);
     }
+    const sessionId = typeof session.id === "string" && /^[a-zA-Z0-9_-]{1,100}$/.test(session.id)
+      ? session.id
+      : randomId();
+    const existingSession = await env.DB.prepare(
+      "SELECT school_id FROM sessions WHERE id = ?"
+    ).bind(sessionId).first();
+    if (existingSession && existingSession.school_id !== schoolId) {
+      return json({ error: "That session ID belongs to another school." }, 409);
+    }
+
     statements.push(
       env.DB.prepare(
-        "INSERT OR REPLACE INTO sessions (id, grade_id, subject, title, teacher_name, source_name, source_url, playback_url, media_key, is_live, live_starts_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        "INSERT OR REPLACE INTO sessions (id, school_id, grade_id, subject, title, teacher_name, source_name, source_url, playback_url, media_key, is_live, live_starts_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
       ).bind(
-        typeof session.id === "string" && /^[a-zA-Z0-9_-]{1,100}$/.test(session.id) ? session.id : randomId(),
+        sessionId,
+        schoolId,
         gradeId,
         subject,
         title,
@@ -1951,14 +1948,25 @@ async function uploadMedia(request, env, objectKey) {
   return json({ mediaKey: key }, 201);
 }
 
-async function readMedia(env, objectKey) {
+async function readMedia(request, env, objectKey) {
   const key = decodeURIComponent(objectKey);
-  if (!key || key.split("/").some((part) => part === "." || part === "..")) return json({ error: "Invalid media key." }, 400);
+  const url = new URL(request.url);
+  const schoolId = url.searchParams.get("schoolId") || "";
+  if (!key || key.split("/").some((part) => !part || part === "." || part === "..")) {
+    return json({ error: "Invalid media key." }, 400);
+  }
+
+  const ownedMedia = await env.DB.prepare(
+    "SELECT id FROM sessions WHERE media_key = ? AND school_id = ? LIMIT 1"
+  ).bind(key, schoolId).first();
+  if (!ownedMedia) return json({ error: "Media not found." }, 404);
+
   const object = await env.SESSION_MEDIA_BUCKET.get(key);
   if (!object) return json({ error: "Media not found." }, 404);
   const headers = new Headers();
   object.writeHttpMetadata(headers);
   headers.set("etag", object.httpEtag);
+  headers.set("x-content-type-options", "nosniff");
   headers.set("cache-control", "public, max-age=3600");
   return new Response(object.body, { headers });
 }
@@ -2629,12 +2637,44 @@ async function handle(request, env) {
     );
   }
   if (request.method === "GET" && path === "/api/health") return json({ status: "ok" });
+  if (request.method === "GET" && path === "/api/schools") return getSchools(env);
+
+  const schoolEducatorsMatch = path.match(/^\/api\/schools\/([a-zA-Z0-9_-]{3,100})\/educators$/);
+  if (request.method === "GET" && schoolEducatorsMatch) {
+    const school = await getSchoolRecord(env, schoolEducatorsMatch[1]);
+    if (!school) return json({ error: "School not found." }, 404);
+    const result = await env.DB.prepare(
+      `SELECT
+         a.id,
+         a.full_name,
+         a.school_or_subject,
+         a.grade_id,
+         a.registered_session_id,
+         s.subject AS assigned_subject
+       FROM accounts a
+       LEFT JOIN sessions s
+         ON s.id = a.registered_session_id
+         AND s.school_id = a.school_id
+       WHERE a.role = 'educator'
+         AND a.school_id = ?
+       ORDER BY a.full_name COLLATE NOCASE`
+    ).bind(school.id).all();
+    return json({
+      educators: (result.results || []).map((row) => ({
+        id: row.id,
+        fullName: row.full_name,
+        subject: row.assigned_subject || row.school_or_subject || "Academic Subject",
+        gradeId: row.grade_id || "",
+        registeredSessionId: row.registered_session_id || null,
+      })),
+    });
+  }
   if (request.method === "POST" && path === "/api/auth/register") return handleRegister(request, env);
   if (request.method === "POST" && path === "/api/auth/login") return handleLogin(request, env);
   if (request.method === "GET" && path === "/api/auth/me") return getCurrentAccount(request, env);
-    if (request.method === "GET" && path === "/api/registration/sessions") return registrationSessions(env);
-  if (request.method === "GET" && path === "/api/registration/grades") return registrationGrades(env);
-  if (request.method === "GET" && path === "/api/registration/educators") return registrationEducators(env);
+  if (request.method === "GET" && path === "/api/registration/sessions") return registrationSessions(request, env);
+  if (request.method === "GET" && path === "/api/registration/grades") return registrationGrades(request, env);
+  if (request.method === "GET" && path === "/api/registration/educators") return registrationEducators(request, env);
   if (request.method === "GET" && path === "/api/live-educators") return liveEducators(request, env);
    if (
     request.method === "POST" &&
@@ -2642,6 +2682,8 @@ async function handle(request, env) {
   ) {
     return createGuestLiveStream(request, env);
   }
+  if (request.method === "GET" && path === "/api/director/profile") return getDirectorProfile(request, env);
+  if (request.method === "PATCH" && path === "/api/director/profile") return updateDirectorProfile(request, env);
   if (request.method === "GET" && path === "/api/director/accounts") return directorAccounts(request, env);
   if (request.method === "GET" && path === "/api/director/sessions") return directorSessions(request, env);
   if (request.method === "POST" && path === "/api/director/sessions") return createSessions(request, env);
@@ -2650,8 +2692,27 @@ async function handle(request, env) {
   if (request.method === "GET" && path === "/api/live-stream") return getLiveStream(request, env);
   if (request.method === "GET" && path === "/api/sessions") return listSessions(url, env, request);
 
+  const educatorLessonsMatch = path.match(/^\/api\/learning\/educators\/([a-zA-Z0-9_-]{1,100})\/lessons$/);
+  if (request.method === "GET" && educatorLessonsMatch) {
+    return getEducatorLessons(request, env, educatorLessonsMatch[1]);
+  }
+
+  const lessonMediaMatch = path.match(/^\/api\/learning\/lessons\/([a-zA-Z0-9_-]{1,100})\/media$/);
+  if (request.method === "GET" && lessonMediaMatch) {
+    return readEducatorLessonMedia(request, env, lessonMediaMatch[1]);
+  }
+
+  const lessonMatch = path.match(/^\/api\/learning\/lessons\/([a-zA-Z0-9_-]{1,100})$/);
+  if (request.method === "PUT" && lessonMatch) {
+    return saveEducatorLesson(request, env, lessonMatch[1]);
+  }
+  if (request.method === "DELETE" && lessonMatch) {
+    return deleteEducatorLesson(request, env, lessonMatch[1]);
+  }
+
   const accountMatch = path.match(/^\/api\/director\/accounts\/([0-9a-f-]{36})$/i);
   if (request.method === "PATCH" && accountMatch) return updateAccount(request, env, accountMatch[1]);
+  if (request.method === "DELETE" && accountMatch) return deleteDirectorAccount(request, env, accountMatch[1]);
 
   const sessionMatch = path.match(/^\/api\/director\/sessions\/([a-zA-Z0-9_-]{1,100})$/);
   if (request.method === "DELETE" && sessionMatch) return deleteSession(request, env, sessionMatch[1]);
@@ -2660,7 +2721,7 @@ async function handle(request, env) {
   if (request.method === "PUT" && uploadMatch) return uploadMedia(request, env, uploadMatch[1]);
 
   const mediaMatch = path.match(/^\/api\/media\/(.+)$/);
-  if (request.method === "GET" && mediaMatch) return readMedia(env, mediaMatch[1]);
+  if (request.method === "GET" && mediaMatch) return readMedia(request, env, mediaMatch[1]);
 
   return json({ error: "Not found." }, 404);
 }
