@@ -87,6 +87,10 @@ const registerSignOutCleanup = useCallback(
   }, [currentLang, isRTL]);
 
   useEffect(() => {
+    document.title = activeSchoolName || 'Agenda';
+  }, [activeSchoolName]);
+
+  useEffect(() => {
     let active = true;
     void getSchools().then(({ schools: records, activeSchoolId: serverActiveSchoolId }) => {
       if (!active) return;
