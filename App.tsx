@@ -389,10 +389,10 @@ const registerSignOutCleanup = useCallback(
                 <ShieldCheck className="h-5 w-5 shrink-0 text-amber-300" />
                 <span>
                   <span className="block text-sm font-black text-white">
-                    {currentLang === 'ar' ? 'المدير' : currentLang === 'fr' ? 'Directeur' : 'Director'}
+                    {currentLang === 'ar' ? 'المدير' : currentLang === 'fr' ? 'Directeur' : currentLang === 'es' ? 'Director' : currentLang === 'it' ? 'Direttore' : 'Director'}
                   </span>
                   <span className="block text-[10px] font-semibold text-slate-300">
-                    {currentLang === 'ar' ? 'تسجيل الدخول وإدارة المحتوى' : currentLang === 'fr' ? 'Connexion et gestion du contenu' : 'Sign in and manage content'}
+                    {currentLang === 'ar' ? 'تسجيل الدخول وإدارة المحتوى' : currentLang === 'fr' ? 'Connexion et gestion du contenu' : currentLang === 'es' ? 'Iniciar sesión y gestionar el contenido' : currentLang === 'it' ? 'Accedi e gestisci i contenuti' : 'Sign in and manage content'}
                   </span>
                 </span>
               </button>
@@ -400,11 +400,11 @@ const registerSignOutCleanup = useCallback(
 
                     <div className="flex flex-wrap items-center justify-between gap-4 text-xs text-slate-400">
             <div className="flex items-center gap-1">
-              <span>Made for students & educators with</span>
+              <span>{currentLang === 'ar' ? 'صُنع للطلاب والمعلمين بكل' : currentLang === 'fr' ? 'Conçu pour les élèves et les éducateurs avec' : currentLang === 'es' ? 'Creado para estudiantes y educadores con' : currentLang === 'it' ? 'Creato per studenti ed educatori con' : 'Made for students & educators with'}</span>
               <Heart className="w-3.5 h-3.5 text-rose-500 fill-rose-500" />
             </div>
             <div>
-              © Education. Certified Tutoring & Official Exam Preparation.
+              © {activeSchoolName || 'Agenda'}. {currentLang === 'ar' ? 'تعليم ودروس معتمدة وتحضير للامتحانات الرسمية.' : currentLang === 'fr' ? 'Éducation, cours certifiés et préparation aux examens officiels.' : currentLang === 'es' ? 'Educación, tutorías certificadas y preparación para exámenes oficiales.' : currentLang === 'it' ? 'Istruzione, lezioni certificate e preparazione agli esami ufficiali.' : 'Education. Certified Tutoring & Official Exam Preparation.'}
             </div>
           </div>
         </div>
