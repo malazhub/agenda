@@ -308,7 +308,7 @@ const containerRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     let active = true;
     const loadEducatorDirectory = async () => {
-      const currentSchoolId = schoolId || registeredAccount?.schoolId || '';
+      const currentSchoolId = registeredAccount?.schoolId || schoolId || '';
       if (!currentSchoolId) {
         setLiveSessionsList([]);
         return;
@@ -2945,7 +2945,7 @@ const handleClearChatMessages = async () => {
                             </button>
                           ) : (
                             <div className="w-full py-2.5 text-center text-xs font-bold text-slate-400 bg-slate-100 rounded-xl">
-                              {isStudent && String(session.sessionId || '') === String(assignedSessionId) && !session.isLive
+                              {isStudent && Boolean(assignedSessionId) && Boolean(session.sessionId) && String(session.sessionId) === String(assignedSessionId) && !session.isLive
                                 ? (currentLang === 'ar' ? 'الأستاذ المسجّل غير متصل حالياً' : currentLang === 'fr' ? 'Votre éducateur inscrit est actuellement hors ligne' : currentLang === 'es' ? 'Tu educador asignado está desconectado' : currentLang === 'it' ? 'Il tuo educatore assegnato è offline' : 'Your assigned educator is currently offline')
                                 : (currentLang === 'ar' ? 'غير مسجل في هذه الحصة' : currentLang === 'fr' ? 'Non inscrit à ce cours' : currentLang === 'es' ? 'No estás asignado a esta sesión' : currentLang === 'it' ? 'Non sei assegnato a questa lezione' : 'Not assigned to this session')}
                             </div>
