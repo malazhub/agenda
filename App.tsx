@@ -250,7 +250,7 @@ const registerSignOutCleanup = useCallback(
             registeredAccount={registeredAccount}
             sessionToken={sessionToken}
             onRegisterSignOutCleanup={registerSignOutCleanup}
-            onRequestSignIn={() => setIsRegisterOpen(true)}
+            
             onShowMessage={showToast}
             onBookTeacher={handleBookTeacherDirect}
             onSelectQuestionForBooking={handleSelectQuestionForBooking}
