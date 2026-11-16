@@ -254,7 +254,14 @@ async function authenticate(request, env, requiredRole) {
 }
 
 async function getDirectorSchoolId(env, director) {
-  const row = await env.DB.prepare("SELECT school_id FROM accounts WHERE id = ? AND role = 'director'").bind(director.sub).first();
+  const row = await env.DB.prepare(
+    `SELECT accounts.school_id
+     FROM accounts
+     INNER JOIN schools
+       ON schools.id = accounts.school_id
+       AND schools.director_id = accounts.id
+     WHERE accounts.id = ? AND accounts.role = 'director'`
+  ).bind(director.sub).first();
   return row?.school_id || null;
 }
 
@@ -596,84 +603,179 @@ async function updateDirectorProfile(request, env) {
   const director = await authenticate(request, env, "director");
   if (!director) return json({ error: "Director authentication required." }, 401);
   const body = await requestJson(request);
-  const requestedSchoolId = typeof body?.schoolId === "string" ? body.schoolId.trim() : "";
   const schoolName = typeof body?.schoolName === "string" ? body.schoolName.trim() : "";
   const username = typeof body?.username === "string" ? body.username.trim().toLowerCase() : "";
   const password = typeof body?.password === "string" ? body.password : "";
 
-  if (!requestedSchoolId || !schoolName || schoolName.length > 160 ||
+  if (!schoolName || schoolName.length > 160 ||
       !/^[a-z0-9._-]{3,32}$/.test(username)) {
-    return json({ error: "Choose a school, enter its name, and provide a 3–32 character username." }, 400);
+    return json({ error: "Enter a school name and a valid 3–32 character username." }, 400);
   }
   if (body.password !== undefined && (!password || password.length > MAX_PASSWORD_LENGTH)) {
     return json({ error: "A password must contain 1–1,024 characters." }, 400);
   }
 
   const account = await env.DB.prepare(
-    "SELECT id, school_id FROM accounts WHERE id = ? AND role = 'director'"
+    `SELECT accounts.id, accounts.school_id
+     FROM accounts
+     INNER JOIN schools
+       ON schools.id = accounts.school_id
+       AND schools.director_id = accounts.id
+     WHERE accounts.id = ? AND accounts.role = 'director'`
   ).bind(director.sub).first();
-  if (!account) return json({ error: "Director account not found." }, 404);
+  if (!account) return json({ error: "Your school ownership is not configured. Contact platform support." }, 403);
 
   const duplicate = await env.DB.prepare(
     "SELECT id FROM accounts WHERE username = ? COLLATE NOCASE AND id != ?"
   ).bind(username, director.sub).first();
   if (duplicate) return json({ error: "That username is already in use." }, 409);
 
-  let schoolId = requestedSchoolId;
-  const statements = [];
-
-  if (requestedSchoolId === "__new__") {
-    schoolId = crypto.randomUUID();
-    statements.push(
-      env.DB.prepare("INSERT INTO schools (id, name) VALUES (?, ?)")
-        .bind(schoolId, schoolName)
-    );
-  } else {
-    const selectedSchool = await env.DB.prepare(
-      "SELECT id FROM schools WHERE id = ?"
-    ).bind(requestedSchoolId).first();
-    if (!selectedSchool) return json({ error: "The selected school no longer exists. Refresh and try again." }, 404);
-    statements.push(
-      env.DB.prepare("UPDATE schools SET name = ? WHERE id = ?")
-        .bind(schoolName, schoolId)
-    );
-  }
-
+  const statements = [
+    env.DB.prepare("UPDATE schools SET name = ? WHERE id = ? AND director_id = ?")
+      .bind(schoolName, account.school_id, director.sub),
+  ];
   if (password) {
-    statements.push(
-      env.DB.prepare(
-        "UPDATE accounts SET school_id = ?, username = ?, password_hash = ? WHERE id = ? AND role = 'director'"
-      ).bind(schoolId, username, await hashPassword(password), director.sub)
-    );
+    statements.push(env.DB.prepare(
+      "UPDATE accounts SET username = ?, password_hash = ? WHERE id = ? AND role = 'director'"
+    ).bind(username, await hashPassword(password), director.sub));
   } else {
-    statements.push(
-      env.DB.prepare(
-        "UPDATE accounts SET school_id = ?, username = ? WHERE id = ? AND role = 'director'"
-      ).bind(schoolId, username, director.sub)
-    );
+    statements.push(env.DB.prepare(
+      "UPDATE accounts SET username = ? WHERE id = ? AND role = 'director'"
+    ).bind(username, director.sub));
   }
-
-  statements.push(
-    env.DB.prepare(
-      `INSERT INTO app_settings (setting_key, setting_value, updated_at)
-       VALUES ('active_school_id', ?, datetime('now'))
-       ON CONFLICT(setting_key) DO UPDATE SET
-         setting_value = excluded.setting_value,
-         updated_at = datetime('now')`
-    ).bind(schoolId)
-  );
 
   try {
     await env.DB.batch(statements);
   } catch {
-    return json({ error: "The school name is already in use, or the settings could not be saved." }, 409);
+    return json({ error: "That school name is already in use, or the settings could not be saved." }, 409);
   }
 
   const token = await signToken(
     { sub: director.sub, role: "director", username, exp: Math.floor(Date.now() / 1000) + SESSION_TTL_SECONDS },
     env.SESSION_SIGNING_KEY,
   );
-  return json({ profile: { schoolId, schoolName, username }, token });
+  return json({ profile: { schoolId: account.school_id, schoolName, username }, token });
+}
+
+async function getDirectorGradePricing(request, env) {
+  const director = await authenticate(request, env, "director");
+  if (!director) return json({ error: "Director authentication required." }, 401);
+  const schoolId = await getDirectorSchoolId(env, director);
+  if (!schoolId) return json({ error: "Director school is not configured." }, 403);
+  const result = await env.DB.prepare(
+    "SELECT grade_id, monthly_rate_usd FROM school_grade_pricing WHERE school_id = ? ORDER BY grade_id"
+  ).bind(schoolId).all();
+  return json({ prices: (result.results || []).map((row) => ({
+    gradeId: row.grade_id,
+    monthlyRateUsd: Number(row.monthly_rate_usd),
+  })) });
+}
+
+async function updateDirectorGradePricing(request, env) {
+  const director = await authenticate(request, env, "director");
+  if (!director) return json({ error: "Director authentication required." }, 401);
+  const schoolId = await getDirectorSchoolId(env, director);
+  if (!schoolId) return json({ error: "Director school is not configured." }, 403);
+  const body = await requestJson(request);
+  const gradeId = typeof body?.gradeId === "string" ? body.gradeId.trim() : "";
+  const monthlyRateUsd = Number(body?.monthlyRateUsd);
+  if (!/^[a-z0-9_-]{1,40}$/.test(gradeId) ||
+      !Number.isFinite(monthlyRateUsd) || monthlyRateUsd < 0 || monthlyRateUsd > 1000000) {
+    return json({ error: "Enter a valid grade and a monthly rate between 0 and 1,000,000 USD." }, 400);
+  }
+  await env.DB.prepare(
+    `INSERT INTO school_grade_pricing (school_id, grade_id, monthly_rate_usd, updated_at)
+     VALUES (?, ?, ?, datetime('now'))
+     ON CONFLICT(school_id, grade_id) DO UPDATE SET
+       monthly_rate_usd = excluded.monthly_rate_usd,
+       updated_at = datetime('now')`
+  ).bind(schoolId, gradeId, monthlyRateUsd).run();
+  return json({ price: { gradeId, monthlyRateUsd } });
+}
+
+async function schoolPublicContext(env, schoolId) {
+  if (!schoolId || schoolId.length > 100) return json({ error: "A valid schoolId is required." }, 400);
+  const school = await env.DB.prepare(
+    "SELECT id, name FROM schools WHERE id = ?"
+  ).bind(schoolId).first();
+  if (!school) return json({ error: "School not found." }, 404);
+  const [prices, sessions, educators] = await Promise.all([
+    env.DB.prepare("SELECT grade_id, monthly_rate_usd FROM school_grade_pricing WHERE school_id = ?").bind(schoolId).all(),
+    env.DB.prepare(
+      "SELECT grade_id, subject, title, teacher_name FROM sessions WHERE school_id = ? ORDER BY grade_id, subject LIMIT 500"
+    ).bind(schoolId).all(),
+    env.DB.prepare(
+      "SELECT id, full_name, school_or_subject, grade_id FROM accounts WHERE school_id = ? AND role = 'educator' ORDER BY full_name COLLATE NOCASE"
+    ).bind(schoolId).all(),
+  ]);
+  const priceMap = new Map((prices.results || []).map((row) => [row.grade_id, Number(row.monthly_rate_usd)]));
+  const grades = [...new Set((sessions.results || []).map((row) => row.grade_id))];
+  return json({
+    schoolId: school.id,
+    schoolName: school.name,
+    defaultMonthlyRateUsd: 125,
+    prices: grades.map((gradeId) => ({ gradeId, monthlyRateUsd: priceMap.get(gradeId) ?? 125 })),
+    sessions: (sessions.results || []).map((row) => ({
+      gradeId: row.grade_id,
+      subject: row.subject,
+      sessionName: row.title,
+      educatorName: row.teacher_name || row.title,
+    })),
+    educators: (educators.results || []).map((row) => ({
+      id: row.id,
+      name: row.full_name,
+      subject: row.school_or_subject || "",
+      gradeId: row.grade_id || "",
+    })),
+    guidance: {
+      register: "Choose this school's shared link, select Student or Educator, complete the registration fields, choose an available educator/session, and wait for Director activation.",
+      signIn: "Use the username and password created during registration. The Director can activate, renew, or reset credentials.",
+      live: "Sign in with the account assigned to the exact educator session. Educators start their class; activated and paid students join their registered live class. The Director can monitor any class from Manage Sessions.",
+      lessons: "Open Learning Resources from the classroom tabs to view an educator's saved lesson slots and media. Educators manage their own lesson slots.",
+    },
+  });
+}
+
+async function getDirectorLiveStream(request, env) {
+  const director = await authenticate(request, env, "director");
+  if (!director) return json({ error: "Director authentication required." }, 401);
+  const schoolId = await getDirectorSchoolId(env, director);
+  if (!schoolId) return json({ error: "Director school is not configured." }, 403);
+  const url = new URL(request.url);
+  const sessionId = url.searchParams.get("sessionId") || "";
+  const session = await env.DB.prepare(
+    "SELECT id, title, teacher_name FROM sessions WHERE id = ? AND school_id = ?"
+  ).bind(sessionId, schoolId).first();
+  if (!session) return json({ error: "This class does not belong to your school." }, 404);
+
+  const stream = await signStreamCallToken(env, director.sub, session.id, "admin", "default");
+  if (!stream) return json({ error: "Stream Video is not configured." }, 503);
+
+  let serverToken;
+  try { serverToken = await signStreamServerToken(env); }
+  catch { return json({ error: "Stream server authentication is not configured." }, 503); }
+  const headers = { Authorization: serverToken, "stream-auth-type": "jwt", "Content-Type": "application/json" };
+  const userResponse = await fetch(
+    `https://video.stream-io-api.com/api/v2/users?api_key=${encodeURIComponent(stream.apiKey)}`,
+    { method: "POST", headers, body: JSON.stringify({ users: { [director.sub]: { id: director.sub, name: director.username || "Director" } } }) }
+  );
+  if (!userResponse.ok) return json({ error: "Could not register the Director with Stream Video." }, 502);
+
+  const callUrl = `https://video.stream-io-api.com/api/v2/video/call/default/${encodeURIComponent(stream.callId)}?api_key=${encodeURIComponent(stream.apiKey)}`;
+  const existingCall = await fetch(callUrl, { headers });
+  if (existingCall.status === 404) {
+    const createResponse = await fetch(callUrl, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ data: { created_by_id: director.sub, members: [{ user_id: director.sub, role: "admin" }] } }),
+    });
+    if (!createResponse.ok && createResponse.status !== 409) {
+      return json({ error: "Could not open this classroom for Director monitoring." }, 502);
+    }
+  } else if (!existingCall.ok) {
+    return json({ error: "Could not retrieve the classroom for Director monitoring." }, 502);
+  }
+  return json({ status: "waiting", ...stream, userName: director.username || "Director" });
 }
 
 async function directorAccounts(request, env) {
@@ -2518,14 +2620,13 @@ async function handle(request, env) {
   if (lessonWriteMatch && request.method === "PUT") return updateEducatorLesson(request, env, lessonWriteMatch[1]);
   if (lessonWriteMatch && request.method === "DELETE") return updateEducatorLesson(request, env, lessonWriteMatch[1], true);
   if (request.method === "GET" && path === "/api/schools") {
-    const [result, setting] = await Promise.all([
-      env.DB.prepare("SELECT id, name FROM schools ORDER BY name COLLATE NOCASE").all(),
-      env.DB.prepare("SELECT setting_value FROM app_settings WHERE setting_key = 'active_school_id'").first(),
-    ]);
-    return json({
-      schools: result.results || [],
-      activeSchoolId: setting?.setting_value || "default-agenda-school",
-    });
+    const requestedSchoolId = url.searchParams.get("schoolId") || "default-agenda-school";
+    const school = await env.DB.prepare("SELECT id, name FROM schools WHERE id = ?").bind(requestedSchoolId).first();
+    if (!school) return json({ error: "School not found." }, 404);
+    return json({ schools: [school], activeSchoolId: school.id });
+  }
+  if (request.method === "GET" && path === "/api/school-context") {
+    return schoolPublicContext(env, url.searchParams.get("schoolId") || "");
   }
   const schoolId = url.searchParams.get("schoolId") || "";
   if (request.method === "GET" && path === "/api/registration/sessions") return schoolId ? registrationSessions(env, schoolId) : json({ error: "schoolId is required." }, 400);
@@ -2540,6 +2641,9 @@ async function handle(request, env) {
   }
   if (request.method === "GET" && path === "/api/director/profile") return directorProfile(request, env);
   if (request.method === "PATCH" && path === "/api/director/profile") return updateDirectorProfile(request, env);
+  if (request.method === "GET" && path === "/api/director/pricing") return getDirectorGradePricing(request, env);
+  if (request.method === "PUT" && path === "/api/director/pricing") return updateDirectorGradePricing(request, env);
+  if (request.method === "GET" && path === "/api/director/live-stream") return getDirectorLiveStream(request, env);
   if (request.method === "GET" && path === "/api/director/accounts") return directorAccounts(request, env);
   if (request.method === "GET" && path === "/api/director/sessions") return directorSessions(request, env);
   if (request.method === "POST" && path === "/api/director/sessions") return createSessions(request, env);
