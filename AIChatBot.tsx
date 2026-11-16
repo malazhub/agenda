@@ -30,6 +30,8 @@ export const AIChatBot: React.FC<AIChatBotProps> = ({ currentLang, schoolId, sch
   const [isTyping, setIsTyping] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const previousLanguageRef = useRef<Language>(currentLang);
+  const activeLanguageRef = useRef<Language>(currentLang);
+  activeLanguageRef.current = currentLang;
   const languageNames: Record<Language, string> = {
     ar: 'Arabic',
     en: 'English',
@@ -300,6 +302,10 @@ Question: ${JSON.stringify(text)}`,
       (selectedLanguageQuestion !== text ? getSavedResponse(text, currentSchoolContext) : null);
     if (savedAnswer) {
       await new Promise(r => setTimeout(r, 350));
+      if (activeLanguageRef.current !== currentLang) {
+        setIsTyping(false);
+        return;
+      }
       setMessages(prev => [
         ...prev,
         {
@@ -354,6 +360,23 @@ User question (translated to the selected language): "${selectedLanguageQuestion
         });
 
         reply = response.text?.trim() || '';
+        if (reply) {
+          // Run a final translation pass so even an imperfectly compliant model
+          // cannot leave the assistant response in a different language.
+          const localizedResponse = await ai.models.generateContent({
+            model: 'gemini-3.8-flash',
+            contents: [{
+              text: `Translate the complete assistant response below into ${languageNames[currentLang]}.
+Return ONLY the translated response, preserving every factual detail, number, price, list item, warning, and paragraph.
+Do not summarize, omit, add facts, or answer the user separately.
+Keep only proper names, school names, usernames, URLs, code, and standard technical product terms unchanged where necessary.
+If it is already fully in ${languageNames[currentLang]}, return it unchanged.
+Response to translate:
+${JSON.stringify(reply)}`,
+            }],
+          });
+          reply = localizedResponse.text?.trim() || reply;
+        }
       } catch (e) {
         console.warn('Gemini chat error:', e);
       }
@@ -375,6 +398,10 @@ User question (translated to the selected language): "${selectedLanguageQuestion
       }
     }
 
+    if (activeLanguageRef.current !== currentLang) {
+      setIsTyping(false);
+      return;
+    }
     setIsTyping(false);
     setMessages(prev => [
       ...prev,
