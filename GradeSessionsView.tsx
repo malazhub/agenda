@@ -8,8 +8,7 @@ import {
   type StreamVideoClient,
 } from '@stream-io/video-client';
 import {
-  getGradeSessions,
-    getLiveEducators,
+  getLiveEducators,
   createGuestLiveStream,
   setEducatorLiveSession,
   getLiveStreamStatus,
@@ -21,7 +20,6 @@ import {
 
 import type {
   CloudflareAccount,
-  StoredSessionRecord,
   ClassroomMessage,
 } from '../services/cloudflareApi';
 
@@ -31,8 +29,6 @@ import {
   Video,
   VideoOff,
   FileText,
-  ExternalLink,
-  RefreshCw,
  
   Maximize2,
   Minimize,
@@ -157,7 +153,6 @@ export const GradeSessionsView: React.FC<GradeSessionsViewProps> = ({
     return en;
   };
   const [activeTab, setActiveTab] = useState<'stored' | 'live'>(initialTab);
-  const [storedSessions, setStoredSessions] = useState<StoredSessionRecord[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const startCallInProgressRef = useRef(false);
   const [error, setError] = useState<string | null>(null);
@@ -1485,12 +1480,6 @@ const studentPrimarySession =
     startLiveCall,
   ]);
 
-  const openSession = (session: StoredSessionRecord) => {
-    const s = session as any;
-    const url = s.mediaUrl || session.playbackUrl || session.sourceUrl;
-    window.open(url, '_blank', 'noopener,noreferrer');
-  };
-
        // Identify the local Stream user for both registered users and guests.
   const localStreamUserId =
     registeredAccount?.id || guestUserId;
@@ -2721,34 +2710,7 @@ const handleClearChatMessages = async () => {
                       : 'Click to join as a guest'}
                 </button>
               )}       
-              {/* STUDENT JOIN CARD */}
-              {!isEducator && studentPrimarySession && (
-                <div className="bg-linear-to-r from-emerald-950 via-slate-900 to-indigo-950 border-2 border-emerald-400 p-5 rounded-3xl shadow-xl flex flex-wrap items-center justify-between gap-4 text-white">
-                  <div className="space-y-1">
-                    <span className="text-[11px] font-black uppercase tracking-wider text-emerald-400 flex items-center gap-2">
-                      <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping" />
-                      {currentLang === 'ar' ? 'حصتك المباشرة المعتمدة جاهزة للانضمام' : 'Your Enrolled Live Classroom is Ready'}
-                    </span>
-                    <h3 className="text-xl font-black text-white">
-                      {currentLang === 'ar' ? 'الأستاذ: ' : 'Educator: '}{studentPrimarySession.educatorName}
-                    </h3>
-                    <p className="text-xs text-slate-300 font-semibold">
-                      {selectedGrade.name[currentLang]} • {studentPrimarySession.subject}
-                    </p>
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={() => handleStudentJoinRoom(studentPrimarySession)}
-                    className="bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black px-6 py-3.5 rounded-2xl transition cursor-pointer text-sm shadow-xl flex items-center gap-2 transform hover:scale-105 active:scale-95"
-                  >
-                    <Video className="w-5 h-5 text-slate-950" />
-                    <span>{currentLang === 'ar' ? 'اضغط هنا للدخول إلى الصف (Join Class Now)' : 'Click to Join Class Now'}</span>
-                  </button>
-                </div>
-              )}
-
-                                          {/* CLICKABLE EDUCATOR START LIVE SESSION */}
+                                          {/* CLICKABLE EDUCATOR START LIVE SESSION */}                                          {/* CLICKABLE EDUCATOR START LIVE SESSION */}
               {isEducator && (
                 <button
                   type="button"
@@ -2938,69 +2900,12 @@ const handleClearChatMessages = async () => {
 )}
             </div>
           ) : (
-            /* TAB 2: STORED RESOURCES */
-            isLoading ? (
-              <div className="bg-white rounded-3xl border border-slate-200 p-10 text-center text-slate-500 text-sm">
-                {currentLang === 'ar' ? 'جارٍ تحميل الحصص...' : 'Loading sessions...'}
-              </div>
-            ) : error ? (
-              <div role="alert" className="bg-white rounded-3xl border border-red-200 p-6 text-center space-y-3">
-                <p className="text-sm font-semibold text-red-700">{error}</p>
-                <button
-                  onClick={() => setReloadKey((key) => key + 1)}
-                  className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2 text-xs font-bold text-white cursor-pointer"
-                >
-                  <RefreshCw className="w-3.5 h-3.5" />
-                  {currentLang === 'ar' ? 'إعادة المحاولة' : 'Retry'}
-                </button>
-              </div>
-            ) : storedSessions.length === 0 ? (
-              <div className="bg-white rounded-3xl border border-slate-200 p-10 text-center space-y-2">
-                <p className="text-sm font-bold text-slate-800">
-                  {currentLang === 'ar' ? 'لا توجد حصص محفوظة لهذا الصف حتى الآن.' : 'No stored sessions are available for this grade yet.'}
-                </p>
-              </div>
-            ) : (
-              <div className="grid gap-4 md:grid-cols-2">
-                {storedSessions.map((session) => (
-                  <article key={session.id} className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm space-y-4">
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <p className="text-[10px] font-black uppercase tracking-wide text-indigo-600">{session.subject}</p>
-                        <h3 className="mt-1 text-base font-black text-slate-900">{session.title}</h3>
-                        {(session as any).teacherName && <p className="mt-1 text-xs text-slate-500">{(session as any).teacherName}</p>}
-                      </div>
-                      {session.isLive && (
-                        <span className="shrink-0 rounded-full bg-rose-100 px-2.5 py-1 text-[10px] font-black text-rose-700">LIVE</span>
-                      )}
-                    </div>
-
-                    <div className="flex items-center justify-between gap-3 border-t border-slate-100 pt-3">
-                      <a
-                        href={session.sourceUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="text-xs font-semibold text-slate-500 underline"
-                      >
-                        {session.sourceName}
-                      </a>
-                      <button
-                        type="button"
-                        onClick={() => openSession(session)}
-                        className={`inline-flex items-center gap-2 rounded-xl px-3.5 py-2 text-xs font-black text-white ${
-                          session.isLive ? 'bg-rose-600 hover:bg-rose-700' : 'bg-indigo-700 hover:bg-indigo-800'
-                        }`}
-                      >
-                        {session.isLive ? <Video className="w-4 h-4" /> : <ExternalLink className="w-3.5 h-3.5" />}
-                        {session.isLive
-                          ? currentLang === 'ar' ? 'افتح البث المباشر' : 'Open live video'
-                          : currentLang === 'ar' ? 'افتح الحصة' : 'Open session'}
-                      </button>
-                    </div>
-                  </article>
-                ))}
-              </div>
-            )
+            <LearningResourcesView
+              currentLang={currentLang}
+              schoolId={schoolId || registeredAccount?.schoolId || ''}
+              registeredAccount={registeredAccount}
+              sessionToken={sessionToken}
+            />
           )}
         </>
       )}
