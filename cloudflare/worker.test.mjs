@@ -204,13 +204,11 @@ function fakeEnvironment() {
     },
   };
 
-  const salt = randomBytes(16);
   const password = 'DirectorPassword#2026';
-  const hash = pbkdf2Sync(password, salt, 100000, 32, 'sha256');
   accounts.set('director-account-0000000000000000', {
     id: 'director-account-0000000000000000',
     username: 'director',
-    password_hash: `pbkdf2_sha256$100000${salt.toString('base64url')}${hash.toString('base64url')}`,
+    password_hash: hashPassword(password),
     role: 'director',
     school_id: 'default-agenda-school',
     full_name: 'Director',
