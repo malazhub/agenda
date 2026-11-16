@@ -2710,9 +2710,7 @@ const handleClearChatMessages = async () => {
                 <span className="w-2 h-2 rounded-full bg-rose-400 animate-ping inline-block" />
                 <Video className="w-4 h-4" />
                 <span>
-                  {currentLang === 'ar'
-                    ? 'الحصص المباشرة'
-                    : 'Live Sessions'}
+                  {currentLang === 'ar' ? 'الحصص المباشرة' : currentLang === 'fr' ? 'Cours en direct' : currentLang === 'es' ? 'Sesiones en directo' : currentLang === 'it' ? 'Lezioni dal vivo' : 'Live Sessions'}
                 </span>
               </button>
             </div>
@@ -2736,9 +2734,7 @@ const handleClearChatMessages = async () => {
         role="status"
         className="rounded-2xl border border-indigo-200 bg-indigo-50 p-4 text-sm font-semibold text-indigo-800"
       >
-        {currentLang === 'ar'
-          ? 'جارٍ فتح الصف المباشر...'
-          : 'Opening live classroom...'}
+        {currentLang === 'ar' ? 'جارٍ فتح الصف المباشر...' : currentLang === 'fr' ? 'Ouverture de la classe en direct...' : currentLang === 'es' ? 'Abriendo el aula en directo...' : currentLang === 'it' ? 'Apertura dell’aula dal vivo...' : 'Opening live classroom...'}
       </div>
     )}
                     {/* Guest test room — shown only to visitors who are not signed in. */}
@@ -2749,11 +2745,7 @@ const handleClearChatMessages = async () => {
                   disabled={isLoading}
                   className="w-full rounded-3xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-black text-sm sm:text-base py-5 px-6 shadow-xl transition cursor-pointer disabled:cursor-not-allowed"
                 >
-                  {currentLang === 'ar'
-                    ? 'انقر للانضمام كضيف'
-                    : currentLang === 'fr'
-                      ? 'Cliquer pour rejoindre en tant qu’invité'
-                      : 'Click to join as a guest'}
+                  {currentLang === 'ar' ? 'انقر للانضمام كضيف' : currentLang === 'fr' ? 'Cliquez pour rejoindre en tant qu’invité' : currentLang === 'es' ? 'Haz clic para entrar como invitado' : currentLang === 'it' ? 'Clicca per entrare come ospite' : 'Click to join as a guest'}
                 </button>
               )}       
               {/* STUDENT JOIN CARD */}
@@ -2765,7 +2757,7 @@ const handleClearChatMessages = async () => {
                       {currentLang === 'ar' ? 'حصتك المباشرة المعتمدة جاهزة للانضمام' : currentLang === 'fr' ? 'Votre classe en direct est prête' : currentLang === 'es' ? 'Tu aula en directo está lista' : currentLang === 'it' ? 'La tua aula dal vivo è pronta' : 'Your Enrolled Live Classroom is Ready'}
                     </span>
                     <h3 className="text-xl font-black text-white">
-                      {currentLang === 'ar' ? 'الأستاذ: ' : 'Educator: '}{studentPrimarySession.educatorName}
+                      {currentLang === 'ar' ? 'الأستاذ: ' : currentLang === 'fr' ? 'Éducateur : ' : currentLang === 'es' ? 'Educador: ' : currentLang === 'it' ? 'Educatore: ' : 'Educator: '}{studentPrimarySession.educatorName}
                     </h3>
                     <p className="text-xs text-slate-300 font-semibold">
                       {selectedGrade.name[currentLang]} • {studentPrimarySession.subject}
@@ -2778,7 +2770,7 @@ const handleClearChatMessages = async () => {
                     className="bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black px-6 py-3.5 rounded-2xl transition cursor-pointer text-sm shadow-xl flex items-center gap-2 transform hover:scale-105 active:scale-95"
                   >
                     <Video className="w-5 h-5 text-slate-950" />
-                    <span>{currentLang === 'ar' ? 'اضغط هنا للدخول إلى الصف (Join Class Now)' : 'Click to Join Class Now'}</span>
+                    <span>{currentLang === 'ar' ? 'اضغط هنا للدخول إلى الصف' : currentLang === 'fr' ? 'Cliquez pour rejoindre le cours' : currentLang === 'es' ? 'Haz clic para entrar en clase' : currentLang === 'it' ? 'Clicca per entrare in classe' : 'Click to Join Class Now'}</span>
                   </button>
                 </div>
               )}
@@ -2793,6 +2785,9 @@ const handleClearChatMessages = async () => {
                       alert(
                         currentLang === 'ar'
                           ? 'يرجى تسجيل الدخول بحساب الأستاذ.'
+                          : currentLang === 'fr' ? 'Veuillez vous connecter avec votre compte éducateur.'
+                          : currentLang === 'es' ? 'Inicia sesión con tu cuenta de educador.'
+                          : currentLang === 'it' ? 'Accedi con il tuo account educatore.'
                           : 'Please sign in with your educator account.'
                       );
                       return;
@@ -2803,6 +2798,9 @@ const handleClearChatMessages = async () => {
                       alert(
                         currentLang === 'ar'
                           ? 'حسابك غير مفعل أو انتهت صلاحيته. يرجى مراجعة الإدارة لتفعيل حسابك.'
+                          : currentLang === 'fr' ? 'Votre compte éducateur n’est pas activé ou a expiré. Contactez le Directeur.'
+                          : currentLang === 'es' ? 'Tu cuenta de educador no está activada o ha caducado. Contacta con el Director.'
+                          : currentLang === 'it' ? 'Il tuo account educatore non è attivato o è scaduto. Contatta il Direttore.'
                           : 'Your educator account is not activated or has expired. Please contact the Director to activate your account.'
                       );
                       return;
@@ -2827,22 +2825,26 @@ const handleClearChatMessages = async () => {
                     <div className="flex items-center gap-2">
                       <Radio className="w-5 h-5 text-rose-500 animate-pulse" />
                       <h3 className="font-black text-base">
-                        {currentLang === 'ar'
-                          ? 'بدء الحصة المباشرة'
-                          : 'Start Live Session'}
+                        {currentLang === 'ar' ? 'بدء الحصة المباشرة' : currentLang === 'fr' ? 'Démarrer le cours en direct' : currentLang === 'es' ? 'Iniciar sesión en directo' : currentLang === 'it' ? 'Avvia lezione dal vivo' : 'Start Live Session'}
                       </h3>
                     </div>
 
                     <p className="text-xs text-slate-300 mt-2">
                       {currentLang === 'ar'
                         ? `اضغط هنا لفتح صفك المباشر وبدء البث في مادة (${educatorSubject})`
-                        : `Click here to open your live classroom and start broadcasting ${educatorSubject}.`}
+                        : currentLang === 'fr'
+                          ? `Cliquez pour ouvrir votre classe et démarrer la diffusion de ${educatorSubject}.`
+                          : currentLang === 'es'
+                            ? `Haz clic para abrir tu aula e iniciar la emisión de ${educatorSubject}.`
+                            : currentLang === 'it'
+                              ? `Clicca per aprire la tua aula e avviare la trasmissione di ${educatorSubject}.`
+                              : `Click here to open your live classroom and start broadcasting ${educatorSubject}.`}
                     </p>
                   </div>
 
                   <span className="flex items-center gap-2 bg-rose-600 hover:bg-rose-700 text-white font-black text-xs px-5 py-3 rounded-xl shadow-md">
                     <Video className="w-4 h-4" />
-                    {currentLang === 'ar' ? 'افتح الحصة الآن' : 'OPEN LIVE CLASS'}
+                    {currentLang === 'ar' ? 'افتح الحصة الآن' : currentLang === 'fr' ? 'OUVRIR LE COURS' : currentLang === 'es' ? 'ABRIR CLASE' : currentLang === 'it' ? 'APRI LEZIONE' : 'OPEN LIVE CLASS'}
                   </span>
                 </button>
               )}
@@ -2854,15 +2856,11 @@ const handleClearChatMessages = async () => {
                   <Radio className="w-8 h-8 text-slate-400 mx-auto mb-3" />
 
                   <h3 className="text-sm font-black text-slate-800">
-                    {currentLang === 'ar'
-                      ? 'لا يوجد أساتذة يبثون مباشرة حالياً'
-                      : 'No educators are broadcasting right now'}
+                    {currentLang === 'ar' ? 'لا يوجد أساتذة يبثون مباشرة حالياً' : currentLang === 'fr' ? 'Aucun éducateur ne diffuse actuellement.' : currentLang === 'es' ? 'Ningún educador está transmitiendo ahora.' : currentLang === 'it' ? 'Nessun educatore sta trasmettendo in questo momento.' : 'No educators are broadcasting right now'}
                   </h3>
 
                   <p className="text-xs text-slate-500 mt-2">
-                    {currentLang === 'ar'
-                      ? 'سيتم تحديث قائمة الأساتذة تلقائياً.'
-                      : 'The live educator directory refreshes automatically.'}
+                    {currentLang === 'ar' ? 'سيتم تحديث قائمة الأساتذة تلقائياً.' : currentLang === 'fr' ? 'La liste des éducateurs en direct s’actualise automatiquement.' : currentLang === 'es' ? 'El directorio de educadores en directo se actualiza automáticamente.' : currentLang === 'it' ? 'L’elenco degli educatori in diretta si aggiorna automaticamente.' : 'The live educator directory refreshes automatically.'}
                   </p>
                 </div>
               ) : (
