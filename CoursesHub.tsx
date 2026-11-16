@@ -137,7 +137,7 @@ export const CoursesHub: React.FC<CoursesHubProps> = ({
         Boolean(accountGrade) &&
         (
           gradeId === accountGrade ||
-          gradeName.includes(accountGrade)
+          gradeName?.includes(accountGrade) ?? false
         )
       );
     });
@@ -431,7 +431,7 @@ const updateAccount = async (
             <th className="px-3 py-3 text-left font-black text-slate-700">{t.expiryDate}</th>
             <th className="px-3 py-3 text-left font-black text-slate-700">{currentLang === 'ar' ? 'مفعّل' : currentLang === 'fr' ? 'Activé' : currentLang === 'es' ? 'Activado' : currentLang === 'it' ? 'Attivato' : 'Activated'}</th>
             <th className="px-3 py-3 text-left font-black text-slate-700">{currentLang === 'ar' ? 'مدفوع' : currentLang === 'fr' ? 'Payé' : currentLang === 'es' ? 'Pagado' : currentLang === 'it' ? 'Pagato' : 'Paid'}</th>
-            <th className="px-3 py-3 text-center font-black text-rose-700">{t.delete}</th>
+            <th className="px-3 py-3 text-center font-black text-rose-700">{currentLang === 'ar' ? 'حذف' : currentLang === 'fr' ? 'Supprimer' : currentLang === 'es' ? 'Eliminar' : currentLang === 'it' ? 'Elimina' : 'Delete'}</th>
           </tr>
         </thead>
         <tbody>
@@ -563,10 +563,10 @@ const updateAccount = async (
                   type="button"
                   onClick={() => void deleteAccount(row)}
                   className="inline-flex items-center gap-1 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 px-2.5 py-1.5 text-[11px] font-black transition cursor-pointer border border-rose-200 shadow-2xs"
-                  title={t.delete}
+                  title={currentLang === 'ar' ? 'حذف' : currentLang === 'fr' ? 'Supprimer' : currentLang === 'es' ? 'Eliminar' : currentLang === 'it' ? 'Elimina' : 'Delete'}
                 >
                   <Trash2 className="w-3.5 h-3.5" />
-                  <span>{t.delete}</span>
+                  <span>{currentLang === 'ar' ? 'حذف' : currentLang === 'fr' ? 'Supprimer' : currentLang === 'es' ? 'Eliminar' : currentLang === 'it' ? 'Elimina' : 'Delete'}</span>
                 </button>
               </td>
             </tr>
