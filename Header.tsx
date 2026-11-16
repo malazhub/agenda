@@ -136,7 +136,7 @@ export const Header: React.FC<HeaderProps> = ({
                   await navigator.clipboard.writeText(shareUrl);
                   alert(
                     currentLang === 'ar'
-                      ? 'تم نسخ رابط المنصة: https://malazhub.github.io/agenda/'
+                      ? `تم نسخ رابط المدرسة: ${shareUrl}`
                       : currentLang === 'fr'
                       ? 'Lien de l’établissement copié.'
                       : currentLang === 'es' ? 'Enlace de la escuela copiado.' : currentLang === 'it' ? 'Link della scuola copiato.' : 'School link copied.'
