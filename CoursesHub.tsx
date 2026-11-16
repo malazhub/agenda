@@ -4,17 +4,17 @@ import { translations } from '../translations';
 import { LEBANESE_GRADE_LEVELS } from '../data/mockGradesAndSessions';
 import { GradeSessionsView } from './GradeSessionsView';
 import { DirectorSessionsPanel } from './DirectorSessionsPanel';
-import { LiveBroadcastHost } from './LiveBroadcastHost';
 import { 
-  getDirectorAccounts, 
+  getDirectorAccounts,
   getDirectorProfile,
-  getRegistrationSessions, 
-  loginAccount, 
-  setupLiveStream, 
+  getRegistrationSessions,
+  getSchools,
+  loginAccount,
+  updateDirectorProfile,
   updateDirectorAccount,
   deleteDirectorAccount 
 } from '../services/cloudflareApi';
-import type { CloudflareAccount, LiveStreamSetup, RegistrationSession } from '../services/cloudflareApi';
+import type { CloudflareAccount, DirectorProfile, RegistrationSession, SchoolRecord } from '../services/cloudflareApi';
 import {
   Clock,
   ShieldCheck,
@@ -36,6 +36,7 @@ interface CoursesHubProps {
   registeredAccount: CloudflareAccount | null;
   schoolId: string;
   sessionToken: string;
+  onSchoolBrandChange: (schoolId: string, schoolName: string) => void;
   onRegisterSignOutCleanup?: (
     cleanup: (() => Promise<void>) | null
   ) => void;
@@ -49,7 +50,8 @@ export const CoursesHub: React.FC<CoursesHubProps> = ({
   registeredAccount,
   schoolId,
   sessionToken,
-    onShowMessage,
+  onSchoolBrandChange,
+  onShowMessage,
   onEnterLiveClassroom,
   onRegisterSignOutCleanup,
 }) => {
@@ -66,6 +68,13 @@ export const CoursesHub: React.FC<CoursesHubProps> = ({
     typeof window === 'undefined' ? '' : window.sessionStorage.getItem('agenda-director-token') || ''
   );
   const [directorSchoolId, setDirectorSchoolId] = useState('');
+  const [directorProfile, setDirectorProfile] = useState<DirectorProfile | null>(null);
+  const [directorSchools, setDirectorSchools] = useState<SchoolRecord[]>([]);
+  const [settingsSchoolId, setSettingsSchoolId] = useState('');
+  const [settingsSchoolName, setSettingsSchoolName] = useState('');
+  const [settingsUsername, setSettingsUsername] = useState('');
+  const [settingsPassword, setSettingsPassword] = useState('');
+  const [settingsSaving, setSettingsSaving] = useState(false);
   const [studentRows, setStudentRows] = useState<DirectorRow[]>([]);
   const [educatorRows, setEducatorRows] = useState<DirectorRow[]>([]);
   const [registrationSessions, setRegistrationSessions] = useState<RegistrationSession[]>([]);
@@ -73,9 +82,6 @@ export const CoursesHub: React.FC<CoursesHubProps> = ({
   const [directorDataError, setDirectorDataError] = useState('');
   const [directorMessage, setDirectorMessage] = useState('');
   const [directorTab, setDirectorTab] = useState<'accounts' | 'sessions'>('accounts');
-  const [streamSetup, setStreamSetup] = useState<LiveStreamSetup | null>(null);
-  const [streamSetupError, setStreamSetupError] = useState('');
-  const [streamSetupLoading, setStreamSetupLoading] = useState(false);
 
     useEffect(() => {
     if (directorLoginRequest > 0) {
@@ -89,9 +95,15 @@ export const CoursesHub: React.FC<CoursesHubProps> = ({
       return;
     }
     let active = true;
-    getDirectorProfile(directorToken)
-      .then(({ profile }) => {
-        if (active) setDirectorSchoolId(profile.schoolId);
+    Promise.all([getDirectorProfile(directorToken), getSchools()])
+      .then(([{ profile }, { schools }]) => {
+        if (!active) return;
+        setDirectorProfile(profile);
+        setDirectorSchoolId(profile.schoolId);
+        setSettingsSchoolId(profile.schoolId);
+        setSettingsSchoolName(profile.schoolName);
+        setSettingsUsername(profile.username);
+        setDirectorSchools(schools);
       })
       .catch((profileError) => {
         if (active) setDirectorDataError(profileError instanceof Error ? profileError.message : 'Unable to load Director school profile.');
@@ -195,6 +207,45 @@ export const CoursesHub: React.FC<CoursesHubProps> = ({
     }
   };
 
+  const handleSaveDirectorSettings = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!directorToken || !settingsSchoolId) return;
+    setSettingsSaving(true);
+    setDirectorDataError('');
+    setDirectorMessage('');
+    try {
+      const input = {
+        schoolId: settingsSchoolId,
+        schoolName: settingsSchoolName.trim(),
+        username: settingsUsername.trim(),
+        ...(settingsPassword ? { password: settingsPassword } : {}),
+      };
+      const { profile, token } = await updateDirectorProfile(directorToken, input);
+      sessionStorage.setItem('agenda-director-token', token);
+      setDirectorToken(token);
+      setDirectorProfile(profile);
+      setDirectorSchoolId(profile.schoolId);
+      setSettingsSchoolId(profile.schoolId);
+      setSettingsSchoolName(profile.schoolName);
+      setSettingsUsername(profile.username);
+      setSettingsPassword('');
+      const { schools } = await getSchools();
+      setDirectorSchools(schools);
+      onSchoolBrandChange(profile.schoolId, profile.schoolName);
+      setDirectorMessage(
+        currentLang === 'ar'
+          ? 'تم حفظ اسم المدرسة وبيانات المدير وتحديث اسم المنصة.'
+          : currentLang === 'fr'
+            ? 'Le nom de l’établissement et les identifiants du directeur ont été enregistrés.'
+            : 'School name and Director credentials saved. The main header is updated.'
+      );
+    } catch (error) {
+      setDirectorDataError(error instanceof Error ? error.message : 'Unable to save Director settings.');
+    } finally {
+      setSettingsSaving(false);
+    }
+  };
+
   
 const updateAccount = async (
   account: DirectorRow,
@@ -290,19 +341,6 @@ const updateAccount = async (
       return;
     }
     void updateAccount(account, { password });
-  };
-
-  const handleStreamSetup = async () => {
-    if (!directorToken) return;
-    setStreamSetupLoading(true);
-    setStreamSetupError('');
-    try {
-      setStreamSetup(await setupLiveStream(directorToken));
-    } catch (error) {
-      setStreamSetupError(error instanceof Error ? error.message : t.liveBroadcastSetupRequired);
-    } finally {
-      setStreamSetupLoading(false);
-    }
   };
 
         // Open Broadcast Room for both signed-in users and guests.
@@ -673,20 +711,105 @@ const updateAccount = async (
           </button>
         </div>
 
-        <section className="rounded-2xl border border-rose-200 bg-white p-4 space-y-3">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <h3 className="font-black text-slate-900">{t.liveBroadcast}</h3>
-            <button type="button" onClick={() => void handleStreamSetup()} disabled={streamSetupLoading} className="rounded-xl bg-rose-600 px-4 py-2 text-xs font-black text-white disabled:opacity-60 cursor-pointer">
-              {streamSetupLoading ? '…' : t.setupLiveBroadcast}
-            </button>
+        <section className="rounded-2xl border border-indigo-200 bg-white p-5 sm:p-6 space-y-4">
+          <div>
+            <h3 className="text-base font-black text-slate-900">
+              {currentLang === 'ar' ? 'إعدادات المدرسة والمدير' : currentLang === 'fr' ? 'Établissement et compte directeur' : 'School & Director Settings'}
+            </h3>
+            <p className="mt-1 text-xs text-slate-500">
+              {currentLang === 'ar'
+                ? 'اختر مدرسة موجودة أو أنشئ مدرسة جديدة. سيظهر اسم المدرسة المحفوظ في عنوان المنصة.'
+                : currentLang === 'fr'
+                  ? 'Choisissez un établissement ou créez-en un. Son nom sera affiché dans l’en-tête de la plateforme.'
+                  : 'Select an existing school or create a new one. The saved school name becomes the platform header.'}
+            </p>
           </div>
-          {streamSetupError && <p role="alert" className="text-xs text-red-700">{streamSetupError}</p>}
-          {streamSetup && (
-            <div className="space-y-3 text-xs text-slate-700">
-              <p>{t.liveWaiting}</p>
-              <LiveBroadcastHost currentLang={currentLang} stream={streamSetup} directorToken={directorToken} />
+          <form className="grid gap-4 md:grid-cols-2" onSubmit={handleSaveDirectorSettings}>
+            <label className="block space-y-1.5">
+              <span className="text-xs font-bold text-slate-700">
+                {currentLang === 'ar' ? 'المدرسة' : currentLang === 'fr' ? 'Établissement' : 'School'}
+              </span>
+              <select
+                required
+                value={settingsSchoolId}
+                onChange={(event) => {
+                  const nextId = event.target.value;
+                  setSettingsSchoolId(nextId);
+                  const selected = directorSchools.find((school) => school.id === nextId);
+                  setSettingsSchoolName(selected?.name || '');
+                }}
+                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-sm text-slate-800"
+              >
+                {directorSchools.map((school) => (
+                  <option key={school.id} value={school.id}>{school.name}</option>
+                ))}
+                <option value="__new__">
+                  {currentLang === 'ar' ? '+ إضافة مدرسة جديدة' : currentLang === 'fr' ? '+ Ajouter un établissement' : '+ Add a new school'}
+                </option>
+              </select>
+            </label>
+            <label className="block space-y-1.5">
+              <span className="text-xs font-bold text-slate-700">
+                {settingsSchoolId === '__new__'
+                  ? (currentLang === 'ar' ? 'اسم المدرسة الجديدة' : currentLang === 'fr' ? 'Nom du nouvel établissement' : 'New school name')
+                  : (currentLang === 'ar' ? 'اسم المدرسة / اسم المنصة' : currentLang === 'fr' ? 'Nom de l’établissement / plateforme' : 'School name / platform title')}
+              </span>
+              <input
+                required
+                maxLength={160}
+                value={settingsSchoolName}
+                onChange={(event) => setSettingsSchoolName(event.target.value)}
+                placeholder="Example Agenda"
+                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-sm text-slate-800"
+              />
+            </label>
+            <label className="block space-y-1.5">
+              <span className="text-xs font-bold text-slate-700">
+                {currentLang === 'ar' ? 'اسم مستخدم المدير' : currentLang === 'fr' ? 'Nom d’utilisateur du directeur' : 'Director username'}
+              </span>
+              <input
+                required
+                minLength={3}
+                maxLength={32}
+                pattern="[a-zA-Z0-9._-]{3,32}"
+                autoComplete="username"
+                value={settingsUsername}
+                onChange={(event) => setSettingsUsername(event.target.value)}
+                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-sm text-slate-800"
+              />
+            </label>
+            <label className="block space-y-1.5">
+              <span className="text-xs font-bold text-slate-700">
+                {currentLang === 'ar' ? 'كلمة مرور جديدة (اختياري)' : currentLang === 'fr' ? 'Nouveau mot de passe (facultatif)' : 'New password (optional)'}
+              </span>
+              <input
+                type="password"
+                minLength={1}
+                maxLength={1024}
+                autoComplete="new-password"
+                value={settingsPassword}
+                onChange={(event) => setSettingsPassword(event.target.value)}
+                placeholder={currentLang === 'ar' ? 'اتركه فارغاً للإبقاء على الحالية' : 'Leave blank to keep current password'}
+                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-sm text-slate-800"
+              />
+            </label>
+            <div className="md:col-span-2 flex flex-wrap items-center justify-between gap-3">
+              <p className="text-[11px] text-slate-500">
+                {currentLang === 'ar'
+                  ? 'سيتم حفظ الإعدادات على الخادم وتطبيقها على رأس الصفحة للزوار والمستخدمين.'
+                  : 'Settings are saved on the server and applied to the public header for guests and signed-in users.'}
+              </p>
+              <button
+                type="submit"
+                disabled={settingsSaving || !settingsSchoolName.trim() || !settingsUsername.trim()}
+                className="rounded-xl bg-indigo-700 px-5 py-3 text-xs font-black text-white transition hover:bg-indigo-800 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {settingsSaving
+                  ? '…'
+                  : currentLang === 'ar' ? 'حفظ الإعدادات' : currentLang === 'fr' ? 'Enregistrer' : 'Save school & Director settings'}
+              </button>
             </div>
-          )}
+          </form>
         </section>
 
         {directorDataError && (
