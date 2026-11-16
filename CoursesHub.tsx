@@ -137,7 +137,7 @@ export const CoursesHub: React.FC<CoursesHubProps> = ({
         Boolean(accountGrade) &&
         (
           gradeId === accountGrade ||
-          gradeName.includes(accountGrade)
+          gradeName.includes(accountGrade ?? '')
         )
       );
     });
@@ -390,7 +390,7 @@ const updateAccount = async (
           Boolean(accountGrade) &&
           (
             gradeId === accountGrade ||
-            gradeName.includes(accountGrade)
+            gradeName.includes(accountGrade ?? '')
           )
         );
       }) || LEBANESE_GRADE_LEVELS[0];
