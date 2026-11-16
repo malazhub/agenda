@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Language, GradeLevelDef } from '../types';
-import { deleteDirectorSession, getDirectorSessions, createDirectorSession } from '../services/cloudflareApi';
+import { deleteDirectorSession, getDirectorSessions, createDirectorSession, updateDirectorSessionLive } from '../services/cloudflareApi';
 import type { SessionInput, StoredSessionRecord } from '../services/cloudflareApi';
 import { Plus, RefreshCw, Trash2, Video, Radio, Eye } from 'lucide-react';
 
@@ -120,17 +120,7 @@ export const DirectorSessionsPanel: React.FC<DirectorSessionsPanelProps> = ({
     setError('');
     setMessage('');
     try {
-      await createDirectorSession(token, {
-        id: session.id,
-        gradeId: session.gradeId,
-        subject: session.subject,
-        title: session.title,
-        teacherName: session.teacherName,
-        sourceName: session.sourceName,
-        sourceUrl: session.sourceUrl,
-        playbackUrl: session.playbackUrl,
-        isLive: !session.isLive,
-      });
+      await updateDirectorSessionLive(token, session.id, !session.isLive);
       await loadSessions();
     } catch (toggleError) {
       setError(toggleError instanceof Error ? toggleError.message : 'Unable to update live status.');
