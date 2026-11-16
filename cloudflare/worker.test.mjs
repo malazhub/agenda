@@ -74,7 +74,6 @@ function fakeEnvironment() {
           item.registered_session_id === sessionId &&
           item.school_id === schoolId
         );
-        console.log('TEST assigned educator lookup', { values: this.values, sessionId, schoolId, sessionSchool: session?.school_id, educatorFound: Boolean(educator) });
         return session && session.school_id === schoolId && educator
           ? { id: session.id, grade_id: session.grade_id }
           : null;
