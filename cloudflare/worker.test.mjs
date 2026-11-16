@@ -15,12 +15,21 @@ function fakeEnvironment() {
   const accounts = new Map();
   const attempts = [];
   const sessions = new Map();
+  const schools = new Map([
+    ['default-agenda-school', { id: 'default-agenda-school', name: 'Agenda' }],
+    ['other-school', { id: 'other-school', name: 'Other School' }],
+  ]);
+  const lessons = new Map();
+  const classroomMessages = [];
+  const bucketObjects = new Map();
+
   sessions.set('test-registration-session', {
     id: 'test-registration-session',
+    school_id: 'default-agenda-school',
     grade_id: 'eb8',
     subject: 'Mathematics',
     title: 'Registered algebra session',
-    teacher_name: '',
+    teacher_name: 'Assigned Educator',
     source_name: 'Agenda',
     source_url: 'https://example.org/session',
     playback_url: 'https://example.org/session/video',
@@ -32,6 +41,7 @@ function fakeEnvironment() {
   class Statement {
     constructor(sql) {
       this.sql = sql;
+      this.normalized = sql.replace(/\\s+/g, ' ').trim().toLowerCase();
       this.values = [];
     }
 
@@ -41,91 +51,317 @@ function fakeEnvironment() {
     }
 
     async first() {
-      if (this.sql.includes('SELECT id FROM accounts WHERE username')) {
-        const account = [...accounts.values()].find((item) => item.username.toLowerCase() === this.values[0].toLowerCase());
+      const q = this.normalized;
+      const v = this.values;
+
+      if (q.includes('from schools where id = ?')) {
+        return schools.get(v[0]) || null;
+      }
+      if (q.includes('from schools where name = ?')) {
+        return [...schools.values()].find(
+          (school) => school.name.toLowerCase() === String(v[0]).toLowerCase() &&
+            school.id !== v[1]
+        ) || null;
+      }
+      if (q.includes('select id from accounts where username')) {
+        const account = [...accounts.values()].find(
+          (item) => item.username.toLowerCase() === String(v[0]).toLowerCase()
+        );
         return account ? { id: account.id } : null;
       }
-      if (this.sql.includes('SELECT COUNT(*) AS count FROM login_attempts')) {
-        const recent = attempts.filter((item) => item.username === this.values[0].toLowerCase() && !item.succeeded);
+      if (q.includes('select * from accounts where username')) {
+        return [...accounts.values()].find(
+          (item) => item.username.toLowerCase() === String(v[0]).toLowerCase()
+        ) || null;
+      }
+      if (q.includes('select count(*) as count from login_attempts')) {
+        const recent = attempts.filter(
+          (item) => item.username === String(v[0]).toLowerCase() && !item.succeeded
+        );
         return { count: recent.length };
       }
-      if (this.sql.includes('SELECT * FROM accounts WHERE username')) {
-        return [...accounts.values()].find((item) => item.username.toLowerCase() === this.values[0].toLowerCase()) || null;
+      if (q.includes('from accounts educator')) {
+        const session = sessions.get(v[0]);
+        if (!session || session.school_id !== v[1]) return null;
+        const educator = [...accounts.values()].find(
+          (item) =>
+            item.role === 'educator' &&
+            item.registered_session_id === session.id &&
+            item.school_id === v[2]
+        );
+        return educator ? { id: session.id, grade_id: session.grade_id } : null;
       }
-      if (this.sql.includes('FROM accounts WHERE id')) return accounts.get(this.values[0]) || null;
-      if (this.sql.includes('SELECT id, grade_id FROM sessions WHERE id')) {
-        const session = sessions.get(this.values[0]);
+      if (q.includes('from sessions s inner join accounts educator')) {
+        const session = sessions.get(v[0]);
+        if (!session || session.school_id !== v[1]) return null;
+        const educator = [...accounts.values()].find(
+          (item) =>
+            item.role === 'educator' &&
+            item.registered_session_id === session.id &&
+            item.school_id === v[2]
+        );
+        return educator ? { id: session.id, grade_id: session.grade_id } : null;
+      }
+      if (q.includes('select school_id from sessions where id = ?')) {
+        const session = sessions.get(v[0]);
+        return session ? { school_id: session.school_id } : null;
+      }
+      if (q.includes('from sessions where media_key = ?')) {
+        const session = [...sessions.values()].find(
+          (item) => item.media_key === v[0] && item.school_id === v[1]
+        );
+        return session ? { id: session.id } : null;
+      }
+      if (q.includes('from educator_lessons') && q.includes('where id = ?')) {
+        const lesson = lessons.get(v[0]);
+        if (!lesson) return null;
+        if (q.includes('school_id = ?') && lesson.school_id !== v[1]) return null;
+        if (q.includes('educator_id = ?') && lesson.educator_id !== v[q.includes('school_id = ?') ? 2 : 1]) return null;
+        if (q.includes('media_key is not null') && !lesson.media_key) return null;
+        return { ...lesson };
+      }
+      if (q.includes('from educator_lessons') && q.includes('where educator_id = ?')) {
+        const lesson = [...lessons.values()].find(
+          (item) => item.educator_id === v[0] && item.school_id === v[1] && item.media_key
+        );
+        return lesson ? { media_key: lesson.media_key, media_name: lesson.media_name, media_type: lesson.media_type } : null;
+      }
+      if (q.includes('from schools')) {
+        return [...schools.values()][0] || null;
+      }
+      if (q.includes('from accounts where id')) {
+        const account = accounts.get(v[0]);
+        if (!account) return null;
+        if (q.includes('school_id = ?') && account.school_id !== v[v.length - 1]) return null;
+        const roleMatch = q.match(/role = '([^']+)'/);
+        if (roleMatch && account.role !== roleMatch[1]) return null;
+        if (q.includes("role in ('student', 'educator')") && !['student', 'educator'].includes(account.role)) return null;
+        return { ...account };
+      }
+      if (q.includes('from sessions where id = ?')) {
+        const session = sessions.get(v[0]);
+        if (!session) return null;
+        if (q.includes('school_id = ?') && session.school_id !== v[1]) return null;
+        if (q.includes('is_live = 1') && !session.is_live) return null;
+        return { ...session };
+      }
+      if (q.includes('select id, grade_id from sessions where id = ?')) {
+        const session = sessions.get(v[0]);
         return session ? { id: session.id, grade_id: session.grade_id } : null;
       }
-      if (this.sql.includes('SELECT grade_id FROM sessions WHERE grade_id')) {
-        return [...sessions.values()].some((item) => item.grade_id === this.values[0])
-          ? { grade_id: this.values[0] }
+      if (q.includes('select grade_id from sessions where grade_id')) {
+        return [...sessions.values()].some((item) => item.grade_id === v[0])
+          ? { grade_id: v[0] }
           : null;
       }
-      if (this.sql.includes('SELECT * FROM sessions WHERE id = ? AND is_live = 1')) {
-        const session = sessions.get(this.values[0]);
-        return session?.is_live ? session : null;
+      if (q.includes('from sessions where id = ? and grade_id = ?')) {
+        const session = sessions.get(v[0]);
+        return session && session.grade_id === v[1] && session.school_id === v[2]
+          ? { ...session }
+          : null;
+      }
+      if (q.includes('select id from sessions where id = ?')) {
+        const session = sessions.get(v[0]);
+        return session ? { id: session.id } : null;
+      }
+      if (q.includes('select id from accounts where role')) {
+        return null;
       }
       return null;
     }
 
     async all() {
-      if (this.sql.includes('SELECT DISTINCT grade_id FROM sessions')) {
+      const q = this.normalized;
+      const v = this.values;
+
+      if (q.includes('from schools')) {
+        return { results: [...schools.values()].map((school) => ({ ...school })) };
+      }
+      if (q.includes('from educator_lessons')) {
+        let result = [...lessons.values()];
+        if (q.includes('school_id = ?')) result = result.filter((item) => item.school_id === v[0]);
+        if (q.includes('educator_id = ?')) {
+          const educatorIndex = q.includes('school_id = ?') ? 1 : 0;
+          result = result.filter((item) => item.educator_id === v[educatorIndex]);
+        }
+        return { results: result.sort((a, b) => a.slot - b.slot).map((item) => ({ ...item })) };
+      }
+      if (q.includes('from classroom_messages')) {
+        let result = [...classroomMessages];
+        if (q.includes('educator_id = ?')) result = result.filter((item) => item.educator_id === v[0]);
+        if (q.includes('student_id = ?')) result = result.filter((item) => item.student_id === v[0]);
+        return { results: result.filter((item) => item.attachment_key).map((item) => ({ attachment_key: item.attachment_key })) };
+      }
+      if (q.includes('from accounts a left join sessions s')) {
+        const schoolId = v[0];
+        return {
+          results: [...accounts.values()]
+            .filter((item) => item.role === 'educator' && item.school_id === schoolId)
+            .map((educator) => {
+              const session = sessions.get(educator.registered_session_id);
+              return {
+                id: educator.id,
+                full_name: educator.full_name,
+                school_or_subject: educator.school_or_subject,
+                grade_id: educator.grade_id,
+                registered_session_id: educator.registered_session_id,
+                assigned_session_id: session?.id || null,
+                assigned_grade_id: session?.grade_id || null,
+                assigned_subject: session?.subject || null,
+              };
+            }),
+        };
+      }
+      if (q.includes('from accounts where role')) {
+        const role = q.match(/role = '([^']+)'/)?.[1];
+        let result = [...accounts.values()].filter((item) => !role || item.role === role);
+        if (q.includes('school_id = ?')) result = result.filter((item) => item.school_id === v[0]);
+        return { results: result.map((item) => ({ ...item })) };
+      }
+      if (q.includes('from sessions') && q.includes('school_id = ?')) {
+        const schoolId = v.find((value) => schools.has(value));
+        let result = [...sessions.values()].filter((item) => item.school_id === schoolId);
+        if (q.includes('grade_id = ?')) {
+          const gradeId = v[0];
+          result = result.filter((item) => item.grade_id === gradeId);
+        }
+        if (q.includes('is_live = 0')) result = result.filter((item) => !item.is_live);
+        if (q.includes('is_live = 1')) result = result.filter((item) => Boolean(item.is_live));
+        return { results: result.map((item) => ({ ...item })) };
+      }
+      if (q.includes('from sessions where grade_id')) {
+        const gradeId = v[0];
+        const liveOnly = q.includes('is_live = 1');
+        return {
+          results: [...sessions.values()].filter(
+            (item) => item.grade_id === gradeId && Boolean(item.is_live) === liveOnly
+          ),
+        };
+      }
+      if (q.includes('select distinct grade_id from sessions')) {
         return { results: [...new Set([...sessions.values()].map((item) => item.grade_id))].map((grade_id) => ({ grade_id })) };
       }
-      if (this.sql.includes('SELECT id, grade_id, subject, title FROM sessions')) {
+      if (q.includes('select id, grade_id, subject, title from sessions')) {
         return { results: [...sessions.values()] };
-      }
-      if (this.sql.includes('FROM sessions ORDER BY')) return { results: [...sessions.values()] };
-      if (this.sql.includes('FROM accounts WHERE role')) {
-        const role = this.sql.match(/role = '([^']+)'/)?.[1];
-        return { results: [...accounts.values()].filter((item) => item.role === role) };
-      }
-      if (this.sql.includes('FROM sessions WHERE grade_id')) {
-        const gradeId = this.values[0];
-        const liveOnly = this.sql.includes('is_live = 1');
-        return {
-          results: [...sessions.values()].filter((item) => item.grade_id === gradeId && Boolean(item.is_live) === liveOnly),
-        };
       }
       return { results: [] };
     }
 
     async run() {
-      if (this.sql.startsWith('INSERT INTO accounts')) {
-        const [id, username, password_hash, role, full_name, email, phone, school_or_subject, grade_id, registered_session_id] = this.values;
+      const q = this.normalized;
+      const v = this.values;
+
+      if (q.startsWith('insert into accounts')) {
+        const [id, username, password_hash, role, full_name, email, phone, school_or_subject, grade_id, registered_session_id, school_id] = v;
         if ([...accounts.values()].some((item) => item.username.toLowerCase() === username.toLowerCase())) {
           throw new Error('UNIQUE constraint failed: accounts.username');
         }
         accounts.set(id, {
-          id, username, password_hash, role, full_name, email, phone, school_or_subject, grade_id, registered_session_id,
-          created_at: '2026-11-03 10:00:00', expires_at: '2026-12-03 10:00:00', activated: 0, paid: 0,
+          id, username, password_hash, role, full_name, email, phone, school_or_subject,
+          grade_id, registered_session_id, school_id,
+          created_at: '2026-11-03 10:00:00',
+          expires_at: '2026-12-03 10:00:00',
+          activated: 0,
+          paid: 0,
         });
         return { meta: { changes: 1 } };
       }
-      if (this.sql.includes('INSERT INTO login_attempts')) {
-        attempts.push({ username: this.values[0].toLowerCase(), succeeded: Boolean(this.values[1]) });
-        return { meta: { changes: 1 } };
-      }
-      if (this.sql.startsWith('DELETE FROM login_attempts')) {
-        return { meta: { changes: 1 } };
-      }
-      if (this.sql.startsWith('DELETE FROM sessions WHERE id')) {
-        return { meta: { changes: sessions.delete(this.values[0]) ? 1 : 0 } };
-      }
-      if (this.sql.startsWith('UPDATE accounts SET')) {
-        const id = this.values[this.values.length - 1];
-        const account = accounts.get(id);
-        if (!account || account.role === 'director') return { meta: { changes: 0 } };
-        let valueIndex = 0;
-        if (this.sql.includes('activated = ?')) account.activated = this.values[valueIndex++];
-        if (this.sql.includes('paid = ?')) account.paid = this.values[valueIndex++];
-        if (this.sql.includes('registered_session_id = ?')) {
-          account.registered_session_id = this.values[valueIndex++];
-          account.grade_id = this.values[valueIndex++];
+      if (q.startsWith('insert or ignore into educator_lessons')) {
+        const [id, school_id, educator_id, slot] = v;
+        if (![...lessons.values()].some((item) => item.educator_id === educator_id && item.slot === slot)) {
+          lessons.set(id, {
+            id, school_id, educator_id, slot, title: '', subject: '', description: '',
+            media_key: null, media_name: null, media_type: null, media_size: 0,
+            updated_at: '2026-11-03 10:00:00',
+          });
         }
-        if (this.sql.includes('password_hash = ?')) account.password_hash = this.values[valueIndex++];
-        if (this.sql.includes("expires_at = datetime('now', '+1 month')")) account.expires_at = '2026-12-03 10:00:00';
+        return { meta: { changes: 1 } };
+      }
+      if (q.startsWith('insert or replace into sessions')) {
+        const [id, school_id, grade_id, subject, title, teacher_name, source_name, source_url, playback_url, media_key, is_live, live_starts_at] = v;
+        sessions.set(id, { id, school_id, grade_id, subject, title, teacher_name, source_name, source_url, playback_url, media_key, is_live, live_starts_at });
+        return { meta: { changes: 1 } };
+      }
+      if (q.includes('insert into login_attempts')) {
+        attempts.push({ username: String(v[0]).toLowerCase(), succeeded: Boolean(v[1]) });
+        return { meta: { changes: 1 } };
+      }
+      if (q.startsWith('delete from login_attempts')) {
+        return { meta: { changes: 1 } };
+      }
+      if (q.startsWith('update schools set name = ?')) {
+        const school = schools.get(v[1]);
+        if (!school) return { meta: { changes: 0 } };
+        school.name = v[0];
+        return { meta: { changes: 1 } };
+      }
+      if (q.startsWith('update educator_lessons')) {
+        const lesson = lessons.get(v[v.length - 3]);
+        if (!lesson) return { meta: { changes: 0 } };
+        const [title, subject, description, media_key, media_name, media_type, media_size] = v;
+        Object.assign(lesson, { title, subject, description, media_key, media_name, media_type, media_size, updated_at: '2026-11-03 10:00:00' });
+        return { meta: { changes: 1 } };
+      }
+      if (q.startsWith('update sessions set is_live')) {
+        const session = sessions.get(v[2]);
+        if (!session || session.school_id !== v[3]) return { meta: { changes: 0 } };
+        session.is_live = v[0];
+        session.live_starts_at = v[1];
+        return { meta: { changes: 1 } };
+      }
+      if (q.startsWith('update accounts set')) {
+        let accountId = v[v.length - 1];
+        let schoolId = null;
+        if (q.includes('and school_id = ?')) {
+          schoolId = v[v.length - 1];
+          accountId = v[v.length - 2];
+        }
+        const account = accounts.get(accountId);
+        if (!account || account.role === 'director' && !q.includes("role = 'director'")) return { meta: { changes: 0 } };
+        if (schoolId && account.school_id !== schoolId) return { meta: { changes: 0 } };
+
+        let index = 0;
+        if (q.includes('activated = ?')) account.activated = v[index++];
+        if (q.includes('paid = ?')) account.paid = v[index++];
+        if (q.includes('registered_session_id = ?')) {
+          account.registered_session_id = v[index++];
+          account.grade_id = v[index++];
+        }
+        if (q.includes('password_hash = ?')) {
+          account.password_hash = v[index++];
+        }
+        if (q.includes('username = ?')) {
+          account.username = v[index++];
+        }
+        if (q.includes("expires_at = datetime('now', '+1 month')")) account.expires_at = '2026-12-03 10:00:00';
+        return { meta: { changes: 1 } };
+      }
+      if (q.startsWith('delete from educator_lessons')) {
+        const educatorId = v[0];
+        const schoolId = v[1];
+        let changes = 0;
+        for (const [id, lesson] of lessons.entries()) {
+          if (lesson.educator_id === educatorId && lesson.school_id === schoolId) {
+            lessons.delete(id);
+            changes++;
+          }
+        }
+        return { meta: { changes } };
+      }
+      if (q.startsWith('delete from classroom_messages')) {
+        const key = q.includes('educator_id = ?') ? 'educator_id' : 'student_id';
+        return { meta: { changes: classroomMessages.filter((item) => item[key] === v[0]).length } };
+      }
+      if (q.startsWith('delete from sessions where id')) {
+        const session = sessions.get(v[0]);
+        if (!session || (v.length > 1 && session.school_id !== v[1])) return { meta: { changes: 0 } };
+        sessions.delete(v[0]);
+        return { meta: { changes: 1 } };
+      }
+      if (q.startsWith('delete from accounts where id')) {
+        const account = accounts.get(v[0]);
+        if (!account || account.school_id !== v[1]) return { meta: { changes: 0 } };
+        accounts.delete(v[0]);
         return { meta: { changes: 1 } };
       }
       return { meta: { changes: 0 } };
@@ -137,15 +373,11 @@ function fakeEnvironment() {
       return new Statement(sql);
     },
     async batch(statements) {
+      const results = [];
       for (const statement of statements) {
-        const values = statement.values;
-        const [id, grade_id, subject, title, teacher_name, source_name, source_url, playback_url, media_key, is_live, live_starts_at] = values;
-        sessions.set(id, {
-          id, grade_id, subject, title, teacher_name, source_name, source_url, playback_url, is_live, live_starts_at,
-          media_key,
-        });
+        results.push(await statement.run());
       }
-      return [];
+      return results;
     },
   };
 
@@ -163,15 +395,63 @@ function fakeEnvironment() {
     school_or_subject: '',
     grade_id: '',
     registered_session_id: null,
+    school_id: 'default-agenda-school',
     created_at: '2026-11-03 09:00:00',
     expires_at: null,
     activated: 1,
     paid: 1,
   });
 
+  const educatorSalt = randomBytes(16);
+  const educatorHash = pbkdf2Sync('SeedEducatorPassword#2026', educatorSalt, 100000, 32, 'sha256');
+  accounts.set('seed-educator-account-0000000000000', {
+    id: 'seed-educator-account-0000000000000',
+    username: 'assigned.educator',
+    password_hash: `pbkdf2_sha256$100000$${educatorSalt.toString('base64url')}$${educatorHash.toString('base64url')}`,
+    role: 'educator',
+    full_name: 'Assigned Educator',
+    email: 'assigned@example.com',
+    phone: '',
+    school_or_subject: 'Mathematics',
+    grade_id: 'eb8',
+    registered_session_id: 'test-registration-session',
+    school_id: 'default-agenda-school',
+    created_at: '2026-11-03 08:00:00',
+    expires_at: null,
+    activated: 1,
+    paid: 1,
+  });
+
+  const SESSION_MEDIA_BUCKET = {
+    async put(key, value, options = {}) {
+      const bytes = value instanceof ArrayBuffer
+        ? new Uint8Array(value)
+        : new Uint8Array(await value.arrayBuffer());
+      bucketObjects.set(key, { bytes, contentType: options.httpMetadata?.contentType || 'application/octet-stream' });
+    },
+    async get(key) {
+      const stored = bucketObjects.get(key);
+      if (!stored) return null;
+      return {
+        body: new Response(stored.bytes).body,
+        httpEtag: '"test-etag"',
+        writeHttpMetadata(headers) {
+          headers.set('content-type', stored.contentType);
+        },
+      };
+    },
+    async delete(key) {
+      bucketObjects.delete(key);
+    },
+    async head(key) {
+      return bucketObjects.has(key) ? { key } : null;
+    },
+  };
+
   return {
     env: {
       DB,
+      SESSION_MEDIA_BUCKET,
       SESSION_SIGNING_KEY: signingKey,
       ALLOWED_ORIGINS: 'https://malazhub.github.io',
       STREAM_VIDEO_API_KEY: 'test-stream-video-key',
@@ -179,8 +459,24 @@ function fakeEnvironment() {
     },
     accounts,
     sessions,
+    schools,
+    lessons,
+    bucketObjects,
     password,
   };
+}
+
+async function send(env, path, { method = 'GET', body, token, origin } = {}) {
+  const headers = new Headers();
+  const isFormData = typeof FormData !== 'undefined' && body instanceof FormData;
+  if (body !== undefined && !isFormData) headers.set('content-type', 'application/json');
+  if (token) headers.set('authorization', `Bearer ${token}`);
+  if (origin) headers.set('origin', origin);
+  return worker.fetch(new Request(`https://agenda-api.test${path}`, {
+    method,
+    headers,
+    body: body === undefined ? undefined : isFormData ? body : JSON.stringify(body),
+  }), env);
 }
 
 async function send(env, path, { method = 'GET', body, token, origin } = {}) {
