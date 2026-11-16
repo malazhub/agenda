@@ -589,7 +589,13 @@ export const VirtualClassroom: React.FC<VirtualClassroomProps> = ({
               <span>
                 {currentLang === 'ar'
                   ? `أنت مسجل رسمياً مع الأستاذ: ${myAssignedEducator} (${myRegisteredGrade || 'صفك الأكاديمي'})`
-                  : `You are officially registered with: ${myAssignedEducator} (${myRegisteredGrade || 'Your Grade'})`}
+                  : currentLang === 'fr'
+                    ? `Vous êtes inscrit auprès de : ${myAssignedEducator} (${myRegisteredGrade || 'Votre classe'})`
+                    : currentLang === 'es'
+                      ? `Estás registrado con: ${myAssignedEducator} (${myRegisteredGrade || 'Tu curso'})`
+                      : currentLang === 'it'
+                        ? `Sei registrato con: ${myAssignedEducator} (${myRegisteredGrade || 'La tua classe'})`
+                        : `You are officially registered with: ${myAssignedEducator} (${myRegisteredGrade || 'Your Grade'})`}
               </span>
               <span className="bg-emerald-200 text-emerald-900 px-2.5 py-0.5 rounded-md text-[10px] uppercase font-black">
                 {currentLang === 'ar' ? 'صفك المعتمد' : currentLang === 'fr' ? 'Votre classe inscrite' : currentLang === 'es' ? 'Tu curso asignado' : currentLang === 'it' ? 'La tua classe assegnata' : 'Your Enrolled Class'}
@@ -843,7 +849,7 @@ export const VirtualClassroom: React.FC<VirtualClassroomProps> = ({
                   <Lock className="w-4 h-4 text-amber-300 shrink-0" />
                   <div className="text-xs">
                     <span className="font-black text-white">
-                      {currentLang === 'ar' ? 'جلسة فردية منفصلة 1-on-1 نشطة الآن:' : 'Private 1-on-1 Breakout Room Active:'}
+                      {currentLang === 'ar' ? 'جلسة فردية منفصلة 1-on-1 نشطة الآن:' : currentLang === 'fr' ? 'Salle privée individuelle active :' : currentLang === 'es' ? 'Sala privada individual activa:' : currentLang === 'it' ? 'Aula privata individuale attiva:' : 'Private 1-on-1 Breakout Room Active:'}
                     </span>
                     <span className="text-amber-200 font-semibold ml-1">
                       الأستاذ في خلوة متابعة خاصة مع الطالب [{breakoutStudent.name}].
@@ -1297,9 +1303,9 @@ export const VirtualClassroom: React.FC<VirtualClassroomProps> = ({
             >
               <Sparkles className="w-4 h-4 text-amber-300" />
               <span>
-                {isSubmittingExercise 
-                  ? 'جارٍ التحليل بالذكاء الاصطناعي والإرسال للأستاذ...' 
-                  : (currentLang === 'ar' ? 'إرسال للأستاذ وحل بالذكاء الاصطناعي' : 'Submit & Solve with AI')}
+                {isSubmittingExercise
+                  ? currentLang === 'ar' ? 'جارٍ التحليل بالذكاء الاصطناعي والإرسال للأستاذ...' : currentLang === 'fr' ? 'Analyse IA et envoi à l’éducateur...' : currentLang === 'es' ? 'Analizando con IA y enviando al educador...' : currentLang === 'it' ? 'Analisi IA e invio all’educatore...' : 'Analyzing with AI and sending to educator...'
+                  : currentLang === 'ar' ? 'إرسال للأستاذ وحل بالذكاء الاصطناعي' : currentLang === 'fr' ? 'Envoyer et résoudre avec l’IA' : currentLang === 'es' ? 'Enviar y resolver con IA' : currentLang === 'it' ? 'Invia e risolvi con IA' : 'Submit & Solve with AI'}
               </span>
             </button>
           </div>
