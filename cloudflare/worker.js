@@ -938,9 +938,12 @@ async function getCurrentAccount(request, env) {
 async function directorAccounts(request, env) {
   const director = await authenticate(request, env, "director");
   if (!director) return json({ error: "Director authentication required." }, 401);
+  const schoolId = await getDirectorSchoolId(env, director);
+  if (!schoolId) return json({ error: "Director school not found." }, 403);
+
   const [students, educators] = await Promise.all([
-    env.DB.prepare("SELECT * FROM accounts WHERE role = 'student' ORDER BY created_at DESC").all(),
-    env.DB.prepare("SELECT * FROM accounts WHERE role = 'educator' ORDER BY created_at DESC").all(),
+    env.DB.prepare("SELECT * FROM accounts WHERE role = 'student' AND school_id = ? ORDER BY created_at DESC").bind(schoolId).all(),
+    env.DB.prepare("SELECT * FROM accounts WHERE role = 'educator' AND school_id = ? ORDER BY created_at DESC").bind(schoolId).all(),
   ]);
   return json({
     students: (students.results || []).map(publicAccount),
@@ -948,25 +951,23 @@ async function directorAccounts(request, env) {
   });
 }
 
-
 async function updateAccount(request, env, accountId) {
   const director = await authenticate(request, env, "director");
-  if (!director) {
-    return json({ error: "Director authentication required." }, 401);
-  }
+  if (!director) return json({ error: "Director authentication required." }, 401);
 
+  const schoolId = await getDirectorSchoolId(env, director);
+  if (!schoolId) return json({ error: "Director school not found." }, 403);
   const body = await requestJson(request);
 
   const account = await env.DB.prepare(
-    `SELECT id, role, full_name, registered_session_id
+    `SELECT id, role, full_name, registered_session_id, school_id
      FROM accounts
      WHERE id = ?
+       AND school_id = ?
        AND role IN ('student', 'educator')`
-  ).bind(accountId).first();
+  ).bind(accountId, schoolId).first();
 
-  if (!account) {
-    return json({ error: "Account not found." }, 404);
-  }
+  if (!account) return json({ error: "Account not found." }, 404);
 
   const updates = [];
   const values = [];
@@ -976,101 +977,74 @@ async function updateAccount(request, env, accountId) {
     updates.push("activated = ?");
     values.push(Number(body.activated));
   }
-
   if (typeof body?.paid === "boolean") {
     updates.push("paid = ?");
     values.push(Number(body.paid));
   }
+
   if (typeof body?.educatorId === "string") {
     if (account.role !== "student") {
-      return json({
-        error: "Only student accounts can be assigned to an educator."
-      }, 400);
+      return json({ error: "Only student accounts can be assigned to an educator." }, 400);
     }
 
     const selectedEducator = await env.DB.prepare(
       `SELECT id, registered_session_id
        FROM accounts
        WHERE id = ?
-         AND role = 'educator'`
-    ).bind(body.educatorId).first();
+         AND role = 'educator'
+         AND school_id = ?`
+    ).bind(body.educatorId, schoolId).first();
 
     if (!selectedEducator || !selectedEducator.registered_session_id) {
-      return json({
-        error: "The selected educator does not have an assigned classroom."
-      }, 400);
+      return json({ error: "The selected educator does not have an assigned classroom in this school." }, 400);
     }
 
     const selectedEducatorSession = await env.DB.prepare(
-      "SELECT * FROM sessions WHERE id = ?"
-    ).bind(selectedEducator.registered_session_id).first();
+      "SELECT * FROM sessions WHERE id = ? AND school_id = ?"
+    ).bind(selectedEducator.registered_session_id, schoolId).first();
 
     if (!selectedEducatorSession) {
-      return json({
-        error: "The selected educator classroom could not be found."
-      }, 400);
+      return json({ error: "The selected educator classroom could not be found in this school." }, 400);
     }
 
-    updates.push(
-      "registered_session_id = ?",
-      "grade_id = ?"
-    );
-
-    values.push(
-      selectedEducatorSession.id,
-      selectedEducatorSession.grade_id
-    );
+    updates.push("registered_session_id = ?", "grade_id = ?");
+    values.push(selectedEducatorSession.id, selectedEducatorSession.grade_id);
   }
+
   if (typeof body?.registeredSessionId === "string") {
     const selectedSession = await env.DB.prepare(
-      "SELECT * FROM sessions WHERE id = ?"
-    ).bind(body.registeredSessionId).first();
+      "SELECT * FROM sessions WHERE id = ? AND school_id = ?"
+    ).bind(body.registeredSessionId, schoolId).first();
 
     if (!selectedSession) {
-      return json({
-        error: "Choose a valid registered session."
-      }, 400);
+      return json({ error: "Choose a valid registered session in this school." }, 400);
     }
 
     let assignedSessionId = selectedSession.id;
-
     if (account.role === "educator") {
       const anotherEducator = await env.DB.prepare(
         `SELECT id
          FROM accounts
          WHERE role = 'educator'
            AND registered_session_id = ?
+           AND school_id = ?
            AND id != ?
          LIMIT 1`
-      ).bind(selectedSession.id, account.id).first();
+      ).bind(selectedSession.id, schoolId, account.id).first();
 
       const alreadyOwnsThisRoom =
-        String(account.registered_session_id || "") ===
-        String(selectedSession.id);
+        String(account.registered_session_id || "") === String(selectedSession.id);
 
-      // Every educator must have an independent classroom.
-      // A new assignment gets a new classroom ID, even when
-      // the lesson, grade and subject are identical.
-      // An existing unique classroom is retained.
       if (!alreadyOwnsThisRoom || anotherEducator) {
         assignedSessionId = randomId();
-
         createClassroomStatement = env.DB.prepare(
           `INSERT INTO sessions (
-            id,
-            grade_id,
-            subject,
-            title,
-            teacher_name,
-            source_name,
-            source_url,
-            playback_url,
-            media_key,
-            is_live,
-            live_starts_at
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, NULL)`
+            id, school_id, grade_id, subject, title, teacher_name,
+            source_name, source_url, playback_url, media_key, is_live, live_starts_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, NULL)`
         ).bind(
           assignedSessionId,
+          schoolId,
           selectedSession.grade_id,
           selectedSession.subject,
           selectedSession.title,
@@ -1081,31 +1055,20 @@ async function updateAccount(request, env, accountId) {
           selectedSession.media_key
         );
       } else {
-        // Keep the educator's existing unique room.
         await env.DB.prepare(
-          `UPDATE sessions
-           SET teacher_name = ?
-           WHERE id = ?`
-        ).bind(
-          account.full_name,
-          selectedSession.id
-        ).run();
+          "UPDATE sessions SET teacher_name = ? WHERE id = ? AND school_id = ?"
+        ).bind(account.full_name, selectedSession.id, schoolId).run();
       }
     }
 
-    // Students keep the exact educator classroom they selected.
-    // Educators receive their own classroom ID.
     updates.push("registered_session_id = ?", "grade_id = ?");
     values.push(assignedSessionId, selectedSession.grade_id);
   }
 
   if (typeof body?.password === "string") {
     if (!body.password || body.password.length > MAX_PASSWORD_LENGTH) {
-      return json({
-        error: "A password must contain 1–1,024 characters."
-      }, 400);
+      return json({ error: "A password must contain 1–1,024 characters." }, 400);
     }
-
     updates.push("password_hash = ?");
     values.push(await hashPassword(body.password));
   }
@@ -1115,54 +1078,122 @@ async function updateAccount(request, env, accountId) {
   }
 
   if (!updates.length) {
-    return json({
-      error: "Provide at least one supported account update."
-    }, 400);
+    return json({ error: "Provide at least one supported account update." }, 400);
   }
 
-  values.push(accountId);
-
+  values.push(accountId, schoolId);
   const accountUpdateStatement = env.DB.prepare(
     `UPDATE accounts
      SET ${updates.join(", ")}
      WHERE id = ?
+       AND school_id = ?
        AND role IN ('student', 'educator')`
   ).bind(...values);
 
   let result;
-
   if (createClassroomStatement) {
-    // Create the classroom and assign it to the educator together.
-    const batchResults = await env.DB.batch([
-      createClassroomStatement,
-      accountUpdateStatement
-    ]);
-
+    const batchResults = await env.DB.batch([createClassroomStatement, accountUpdateStatement]);
     result = batchResults[1];
   } else {
     result = await accountUpdateStatement.run();
   }
 
-  if (!result.meta.changes) {
-    return json({ error: "Account not found." }, 404);
+  if (!result.meta.changes) return json({ error: "Account not found." }, 404);
+
+  if (account.role === "educator") {
+    await ensureEducatorLessonSlots(env, schoolId, account.id);
   }
 
   const savedAccount = await env.DB.prepare(
-    "SELECT * FROM accounts WHERE id = ?"
-  ).bind(accountId).first();
+    "SELECT * FROM accounts WHERE id = ? AND school_id = ?"
+  ).bind(accountId, schoolId).first();
 
-  return json({
-    account: publicAccount(savedAccount)
-  });
+  return json({ account: publicAccount(savedAccount) });
 }
 
+async function deleteDirectorAccount(request, env, accountId) {
+  const director = await authenticate(request, env, "director");
+  if (!director) return json({ error: "Director authentication required." }, 401);
+
+  const schoolId = await getDirectorSchoolId(env, director);
+  if (!schoolId) return json({ error: "Director school not found." }, 403);
+
+  const account = await env.DB.prepare(
+    `SELECT id, role, username, registered_session_id
+     FROM accounts
+     WHERE id = ?
+       AND school_id = ?
+       AND role IN ('student', 'educator')`
+  ).bind(accountId, schoolId).first();
+
+  if (!account) return json({ error: "Account not found." }, 404);
+
+  const attachments = await env.DB.prepare(
+    account.role === "educator"
+      ? "SELECT attachment_key FROM classroom_messages WHERE educator_id = ? AND attachment_key IS NOT NULL"
+      : "SELECT attachment_key FROM classroom_messages WHERE student_id = ? AND attachment_key IS NOT NULL"
+  ).bind(accountId).all();
+
+  const lessonMedia = account.role === "educator"
+    ? await env.DB.prepare(
+        "SELECT media_key FROM educator_lessons WHERE educator_id = ? AND school_id = ? AND media_key IS NOT NULL"
+      ).bind(accountId, schoolId).all()
+    : { results: [] };
+
+  const mediaKeys = [
+    ...(attachments.results || []).map((row) => row.attachment_key ? `classroom-chat/${row.attachment_key}` : null),
+    ...(lessonMedia.results || []).map((row) => row.media_key),
+  ].filter(Boolean);
+
+  try {
+    for (const key of mediaKeys) {
+      await env.SESSION_MEDIA_BUCKET.delete(key);
+    }
+  } catch (error) {
+    console.error("Unable to clean account media before deletion:", error);
+    return json({
+      error: "Account files could not all be removed. The account was kept so deletion can be retried.",
+      fileCleanupComplete: false,
+    }, 503);
+  }
+
+  const statements = [];
+  if (account.role === "educator") {
+    statements.push(
+      env.DB.prepare("DELETE FROM classroom_messages WHERE educator_id = ?").bind(accountId),
+      env.DB.prepare("DELETE FROM educator_lessons WHERE educator_id = ? AND school_id = ?").bind(accountId, schoolId)
+    );
+    if (account.registered_session_id) {
+      statements.push(
+        env.DB.prepare("DELETE FROM sessions WHERE id = ? AND school_id = ?").bind(account.registered_session_id, schoolId)
+      );
+    }
+  } else {
+    statements.push(
+      env.DB.prepare("DELETE FROM classroom_messages WHERE student_id = ?").bind(accountId)
+    );
+  }
+
+  statements.push(
+    env.DB.prepare("DELETE FROM login_attempts WHERE username = ? COLLATE NOCASE").bind(account.username),
+    env.DB.prepare("DELETE FROM accounts WHERE id = ? AND school_id = ? AND role IN ('student', 'educator')").bind(accountId, schoolId)
+  );
+
+  const results = await env.DB.batch(statements);
+  const deletion = results[results.length - 1];
+  if (!deletion?.meta?.changes) return json({ error: "Account could not be deleted." }, 404);
+
+  return json({ deleted: true, fileCleanupComplete: true });
+}
 
 async function directorSessions(request, env) {
   const director = await authenticate(request, env, "director");
   if (!director) return json({ error: "Director authentication required." }, 401);
+  const schoolId = await getDirectorSchoolId(env, director);
+  if (!schoolId) return json({ error: "Director school not found." }, 403);
   const result = await env.DB.prepare(
-    "SELECT * FROM sessions ORDER BY grade_id, subject, title LIMIT 1000",
-  ).all();
+    "SELECT * FROM sessions WHERE school_id = ? ORDER BY grade_id, subject, title LIMIT 1000",
+  ).bind(schoolId).all();
   return json({ sessions: (result.results || []).map(publicSession) });
 }
 
@@ -1185,7 +1216,9 @@ function publicSession(session) {
 async function deleteSession(request, env, sessionId) {
   const director = await authenticate(request, env, "director");
   if (!director) return json({ error: "Director authentication required." }, 401);
-  const result = await env.DB.prepare("DELETE FROM sessions WHERE id = ?").bind(sessionId).run();
+  const schoolId = await getDirectorSchoolId(env, director);
+  if (!schoolId) return json({ error: "Director school not found." }, 403);
+  const result = await env.DB.prepare("DELETE FROM sessions WHERE id = ? AND school_id = ?").bind(sessionId, schoolId).run();
   if (!result.meta.changes) return json({ error: "Session not found." }, 404);
   return json({ deleted: true });
 }
