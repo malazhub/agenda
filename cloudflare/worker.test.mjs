@@ -192,15 +192,22 @@ function fakeEnvironment() {
       return new Statement(sql);
     },
     async batch(statements) {
+      const results = [];
       for (const statement of statements) {
-        const values = statement.values;
-        const [id, school_id, grade_id, subject, title, teacher_name, source_name, source_url, playback_url, media_key, is_live, live_starts_at] = values;
-        sessions.set(id, {
-          id, school_id, grade_id, subject, title, teacher_name, source_name, source_url, playback_url, is_live, live_starts_at,
-          media_key,
-        });
+        if (statement.sql.includes("INTO sessions")) {
+          const [id, school_id, grade_id, subject, title, teacher_name, source_name, source_url, playback_url, media_key, is_live, live_starts_at] = statement.values;
+          sessions.set(id, {
+            id, school_id, grade_id, subject, title, teacher_name, source_name, source_url, playback_url, is_live, live_starts_at,
+            media_key,
+          });
+          results.push({ meta: { changes: 1 } });
+        } else if (statement.sql.startsWith("INSERT OR IGNORE INTO educator_lessons")) {
+          results.push({ meta: { changes: 1 } });
+        } else {
+          results.push(await statement.run());
+        }
       }
-      return [];
+      return results;
     },
   };
 
@@ -345,7 +352,7 @@ test('registration hashes credentials and rejects duplicate usernames', async ()
   await send(env, `/api/director/accounts/${result.account.id}`, {
     method: 'PATCH',
     token: directorToken,
-    body: { activated: true },
+    body: { activated: true, paid: true },
   });
   const login = await send(env, '/api/auth/login', {
     method: 'POST',
@@ -395,7 +402,7 @@ test('grade registration loads available grades and grants grade-scoped live acc
     token: directorToken,
     body: { activated: true },
   });
-  const liveStatus = await send(env, '/api/live-stream?gradeId=eb8', { token });
+  const liveStatus = await send(env, '/api/live-stream?sessionId=test-registration-session', { token });
   assert.equal(liveStatus.status, 200);
   assert.equal((await liveStatus.json()).status, 'waiting');
   sessions.get('test-registration-session').is_live = 1;
@@ -403,7 +410,7 @@ test('grade registration loads available grades and grants grade-scoped live acc
   assert.equal(liveCatalog.status, 200);
   assert.equal((await liveCatalog.json()).sessions[0].id, 'test-registration-session');
 
-  const wrongGrade = await send(env, '/api/live-stream?gradeId=eb7', { token });
+  const wrongGrade = await send(env, '/api/sessions?gradeId=eb7&live=true&sessionId=test-registration-session', { token });
   assert.equal(wrongGrade.status, 403);
 });
 
@@ -418,6 +425,7 @@ test('Director login reads persisted role tables and saves status updates', asyn
     phone: '',
     schoolOrSubject: 'Mathematics',
     registeredSessionId: 'test-registration-session',
+    gradeId: 'eb8',
   };
   await send(env, '/api/auth/register', { method: 'POST', body: registration });
 
@@ -526,7 +534,7 @@ test('Director can save a live session and the grade catalog returns its playbac
   await send(env, `/api/director/accounts/${account.id}`, {
     method: 'PATCH',
     token: directorToken,
-    body: { activated: true },
+    body: { activated: true, paid: true },
   });
   const anonymous = await send(env, '/api/sessions?gradeId=eb8&live=true&sessionId=live-eb8-math');
   assert.equal(anonymous.status, 401);
