@@ -35,6 +35,8 @@ export const DirectorSessionsPanel: React.FC<DirectorSessionsPanelProps> = ({
     sessionDeleted: currentLang === 'ar' ? 'تم حذف الحصة نهائياً.' : currentLang === 'fr' ? 'Cours supprimé définitivement.' : currentLang === 'es' ? 'Sesión eliminada definitivamente.' : currentLang === 'it' ? 'Lezione eliminata definitivamente.' : 'Session permanently deleted.',
     refresh: currentLang === 'ar' ? 'تحديث الحصص' : currentLang === 'fr' ? 'Actualiser les cours' : currentLang === 'es' ? 'Actualizar sesiones' : currentLang === 'it' ? 'Aggiorna lezioni' : 'Refresh sessions',
     monthlyRate: currentLang === 'ar' ? 'السعر الشهري (USD)' : currentLang === 'fr' ? 'Tarif mensuel (USD)' : currentLang === 'es' ? 'Tarifa mensual (USD)' : currentLang === 'it' ? 'Tariffa mensile (USD)' : 'Monthly rate (USD)',
+    saveRate: currentLang === 'ar' ? 'حفظ السعر فقط' : currentLang === 'fr' ? 'Enregistrer le tarif seul' : currentLang === 'es' ? 'Guardar solo la tarifa' : currentLang === 'it' ? 'Salva solo la tariffa' : 'Save rate only',
+    rateSaved: currentLang === 'ar' ? 'تم حفظ السعر الشهري لهذا الصف.' : currentLang === 'fr' ? 'Tarif mensuel enregistré pour cette classe.' : currentLang === 'es' ? 'Tarifa mensual guardada para este curso.' : currentLang === 'it' ? 'Tariffa mensile salvata per questa classe.' : 'Monthly rate saved for this grade.',
     title: currentLang === 'ar' ? 'تعيين وإضافة حصة للأستاذ' : currentLang === 'fr' ? 'Attribuer et ajouter un cours à un éducateur' : currentLang === 'es' ? 'Asignar y añadir una sesión al educador' : currentLang === 'it' ? 'Assegna e aggiungi una lezione all’educatore' : 'Assign & add educator session',
     subtitle: currentLang === 'ar' ? 'حدد الصف واسم الأستاذ والمادة والحد الأقصى للطلاب والسعر الشهري.' : currentLang === 'fr' ? 'Définissez la classe, l’éducateur, la matière, le nombre maximum d’élèves et le tarif mensuel.' : currentLang === 'es' ? 'Define el curso, el educador, la materia, el máximo de estudiantes y la tarifa mensual.' : currentLang === 'it' ? 'Imposta la classe, l’educatore, la materia, il numero massimo di studenti e la tariffa mensile.' : 'Set the grade, educator, subject, maximum students, and monthly rate.',
     educatorPrefix: currentLang === 'ar' ? 'الأستاذ: ' : currentLang === 'fr' ? 'Éducateur : ' : currentLang === 'es' ? 'Educador: ' : currentLang === 'it' ? 'Educatore: ' : 'Educator: ',
@@ -45,6 +47,7 @@ export const DirectorSessionsPanel: React.FC<DirectorSessionsPanelProps> = ({
   const [sessions, setSessions] = useState<StoredSessionRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [savingRate, setSavingRate] = useState(false);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   const [monthlyRateUsd, setMonthlyRateUsd] = useState(125);
@@ -81,6 +84,21 @@ export const DirectorSessionsPanel: React.FC<DirectorSessionsPanelProps> = ({
   }, [token, gradeId]);
 
   const gradeSessions = useMemo(() => sessions.filter((session) => session.gradeId === gradeId), [sessions, gradeId]);
+
+  const saveMonthlyRate = async () => {
+    setSavingRate(true);
+    setError('');
+    setMessage('');
+    try {
+      await updateDirectorGradePricing(token, gradeId, monthlyRateUsd);
+      setPricesByGrade((current) => ({ ...current, [gradeId]: monthlyRateUsd }));
+      setMessage(t.rateSaved);
+    } catch (rateError) {
+      setError(rateError instanceof Error ? rateError.message : 'Unable to save monthly rate.');
+    } finally {
+      setSavingRate(false);
+    }
+  };
 
   // Save session assigned by Grade, Educator Name, Subject, Max Students
   const saveSession = async (event: React.FormEvent) => {
@@ -226,6 +244,16 @@ export const DirectorSessionsPanel: React.FC<DirectorSessionsPanelProps> = ({
             {currentLang === 'ar' ? 'السعر الافتراضي 125 دولاراً شهرياً لكل طالب في هذا الصف.' : currentLang === 'fr' ? 'Valeur par défaut : 125 USD par mois et par élève pour cette classe.' : currentLang === 'es' ? 'Predeterminado: 125 USD al mes por estudiante en este curso.' : currentLang === 'it' ? 'Predefinito: 125 USD al mese per studente in questa classe.' : 'Default: 125 USD per month per student in this grade.'}
           </span>
         </label>
+        <div className="flex justify-start">
+          <button
+            type="button"
+            onClick={() => void saveMonthlyRate()}
+            disabled={savingRate}
+            className="rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-2 text-xs font-black text-indigo-700 hover:bg-indigo-100 disabled:opacity-60"
+          >
+            {savingRate ? '…' : t.saveRate}
+          </button>
+        </div>
         <div className="flex flex-wrap items-center justify-end gap-3 pt-2">
           {/* Save Session Card Button */}
           <button
