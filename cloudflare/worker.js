@@ -1090,8 +1090,9 @@ async function listSessions(url, env, request) {
   const gradeId = url.searchParams.get("gradeId") || "";
   const liveOnly = url.searchParams.get("live") === "true";
   const sessionId = url.searchParams.get("sessionId") || "";
+  const schoolId = url.searchParams.get("schoolId") || "";
 
-  if (!/^[a-z0-9_-]{1,40}$/.test(gradeId)) {
+  if (!schoolId || !/^[a-z0-9_-]{1,40}$/.test(gradeId)) {
     return json({ error: "A valid gradeId is required." }, 400);
   }
 
@@ -1103,14 +1104,14 @@ async function listSessions(url, env, request) {
     }
 
     const account = await env.DB.prepare(
-      `SELECT id, role, activated, paid, expires_at,
+      `SELECT id, role, school_id, activated, paid, expires_at,
               grade_id, registered_session_id
        FROM accounts
        WHERE id = ?`
     ).bind(claims.sub).first();
 
-    if (!account || claims.role !== account.role) {
-      return json({ error: "Account verification failed." }, 403);
+    if (!account || claims.role !== account.role || account.school_id !== schoolId) {
+      return json({ error: "Account verification failed for this school." }, 403);
     }
 
     const isActivated =
@@ -1175,10 +1176,12 @@ async function listSessions(url, env, request) {
       `SELECT *
        FROM sessions
        WHERE id = ?
+         AND school_id = ?
          AND grade_id = ?
          AND is_live = 1`
     ).bind(
       account.registered_session_id,
+      schoolId,
       gradeId
     ).first();
 
@@ -1192,10 +1195,10 @@ async function listSessions(url, env, request) {
   const result = await env.DB.prepare(
     `SELECT *
      FROM sessions
-     WHERE grade_id = ? AND is_live = 0
+     WHERE school_id = ? AND grade_id = ? AND is_live = 0
      ORDER BY RANDOM()
      LIMIT 20`
-  ).bind(gradeId).all();
+  ).bind(schoolId, gradeId).all();
 
   return json({
     sessions: (result.results || []).map(publicSession)
@@ -1220,7 +1223,7 @@ async function registeredLiveSession(request, env, sessionId) {
   }
 
   const account = await env.DB.prepare(
-    `SELECT id, role, full_name, activated, paid, expires_at,
+    `SELECT id, role, school_id, full_name, activated, paid, expires_at,
             registered_session_id, grade_id
      FROM accounts
      WHERE id = ?`
@@ -1273,11 +1276,11 @@ async function registeredLiveSession(request, env, sessionId) {
 // after the educator has marked the classroom live.
 const sessionQuery =
   claims.role === "educator"
-    ? "SELECT * FROM sessions WHERE id = ?"
-    : "SELECT * FROM sessions WHERE id = ? AND is_live = 1";
+    ? "SELECT * FROM sessions WHERE id = ? AND school_id = ?"
+    : "SELECT * FROM sessions WHERE id = ? AND school_id = ? AND is_live = 1";
 
 const session = await env.DB.prepare(sessionQuery)
-  .bind(sessionId)
+  .bind(sessionId, account.school_id)
   .first();
 
   if (!session) {
