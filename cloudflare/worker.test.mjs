@@ -65,6 +65,17 @@ function fakeEnvironment() {
         return [...accounts.values()].find((item) => item.username.toLowerCase() === this.values[0].toLowerCase()) || null;
       }
       if (this.sql.includes('FROM accounts WHERE id')) return accounts.get(this.values[0]) || null;
+      if (this.sql.includes('INNER JOIN accounts educator')) {
+        const session = sessions.get(this.values[0]);
+        const educator = [...accounts.values()].find((item) =>
+          item.role === 'educator' &&
+          item.registered_session_id === this.values[0] &&
+          item.school_id === this.values[2]
+        );
+        return session && session.school_id === this.values[1] && educator
+          ? { id: session.id, grade_id: session.grade_id }
+          : null;
+      }
       if (this.sql.includes('SELECT id, grade_id FROM sessions WHERE id')) {
         const session = sessions.get(this.values[0]);
         return session && (!this.values[1] || session.school_id === this.values[1]) ? { id: session.id, grade_id: session.grade_id } : null;
@@ -74,9 +85,10 @@ function fakeEnvironment() {
         return session && session.school_id === this.values[1] && (!this.sql.includes('is_live = 1') || Boolean(session.is_live)) ? session : null;
       }
       if (this.sql.includes('SELECT grade_id FROM sessions WHERE grade_id')) {
-        return [...sessions.values()].some((item) => item.grade_id === this.values[0])
-          ? { grade_id: this.values[0] }
-          : null;
+        const session = [...sessions.values()].find((item) =>
+          item.grade_id === this.values[0] && (!this.values[1] || item.school_id === this.values[1])
+        );
+        return session ? { grade_id: session.grade_id } : null;
       }
       if (this.sql.includes('SELECT * FROM sessions WHERE id = ? AND is_live = 1')) {
         const session = sessions.get(this.values[0]);
@@ -196,7 +208,7 @@ function fakeEnvironment() {
   accounts.set('director-account-0000000000000000', {
     id: 'director-account-0000000000000000',
     username: 'director',
-    password_hash: `pbkdf2_sha256$100000$${salt.toString('base64url')}$${hash.toString('base64url')}`,
+    password_hash: `pbkdf2_sha256$100000${salt.toString('base64url')}${hash.toString('base64url')}`,
     role: 'director',
     school_id: 'default-agenda-school',
     full_name: 'Director',
@@ -206,6 +218,24 @@ function fakeEnvironment() {
     grade_id: '',
     registered_session_id: null,
     created_at: '2026-11-03 09:00:00',
+    expires_at: null,
+    activated: 1,
+    paid: 1,
+  });
+
+  accounts.set('assigned-educator', {
+    id: 'assigned-educator',
+    username: 'assigned.educator',
+    password_hash: 'unused',
+    role: 'educator',
+    school_id: 'default-agenda-school',
+    full_name: 'Assigned Educator',
+    email: 'assigned@example.com',
+    phone: '',
+    school_or_subject: 'Mathematics',
+    grade_id: 'eb8',
+    registered_session_id: 'test-registration-session',
+    created_at: '2026-11-03 09:00:30',
     expires_at: null,
     activated: 1,
     paid: 1,
@@ -346,12 +376,13 @@ test('grade registration loads available grades and grants grade-scoped live acc
       phone: '+1 555 0100',
       schoolOrSubject: 'Grade 8',
       gradeId: 'eb8',
+      registeredSessionId: 'test-registration-session',
     },
   });
   assert.equal(registration.status, 201);
   const { account, token } = await registration.json();
   assert.equal(account.gradeId, 'eb8');
-  assert.equal(account.registeredSessionId, null);
+  assert.equal(account.registeredSessionId, 'test-registration-session');
   assert.equal(accounts.get(account.id).grade_id, 'eb8');
 
   const directorLogin = await send(env, '/api/auth/login', {
@@ -399,7 +430,7 @@ test('Director login reads persisted role tables and saves status updates', asyn
   const dashboard = await send(env, '/api/director/accounts', { token });
   const lists = await dashboard.json();
   assert.equal(lists.students.length, 0);
-  assert.equal(lists.educators.length, 1);
+  assert.equal(lists.educators.length, 2);
 
   const updated = await send(env, `/api/director/accounts/${lists.educators[0].id}`, {
     method: 'PATCH',
@@ -455,6 +486,25 @@ test('Director can save a live session and the grade catalog returns its playbac
   });
   assert.equal(saved.status, 201);
 
+  env.DB; // The fake environment shares the mutable account map used by the Worker.
+  const liveEducator = {
+    id: 'live-session-educator',
+    username: 'live.educator',
+    password_hash: 'unused',
+    role: 'educator',
+    school_id: 'default-agenda-school',
+    full_name: 'Live Educator',
+    email: 'live.educator@example.com',
+    phone: '',
+    school_or_subject: 'Mathematics',
+    grade_id: 'eb8',
+    registered_session_id: 'live-eb8-math',
+    created_at: '2026-11-03 09:03:00',
+    expires_at: null,
+    activated: 1,
+    paid: 1,
+  };
+  env.__unused = undefined;
   const registration = await send(env, '/api/auth/register', {
     method: 'POST',
     body: {
