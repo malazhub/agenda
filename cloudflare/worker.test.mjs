@@ -66,13 +66,15 @@ function fakeEnvironment() {
       }
       if (this.sql.includes('FROM accounts WHERE id')) return accounts.get(this.values[0]) || null;
       if (this.sql.includes('INNER JOIN accounts educator')) {
-        const session = sessions.get(this.values[0]);
+        const sessionId = this.values[0];
+        const session = sessions.get(sessionId);
+        const schoolId = this.values.slice(1).find((value) => schools.has(value));
         const educator = [...accounts.values()].find((item) =>
           item.role === 'educator' &&
-          item.registered_session_id === this.values[0] &&
-          item.school_id === this.values[2]
+          item.registered_session_id === sessionId &&
+          item.school_id === schoolId
         );
-        return session && session.school_id === this.values[1] && educator
+        return session && session.school_id === schoolId && educator
           ? { id: session.id, grade_id: session.grade_id }
           : null;
       }
