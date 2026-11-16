@@ -53,7 +53,7 @@ function fakeEnvironment() {
   class Statement {
     constructor(sql) {
       this.sql = sql;
-      this.normalized = sql.replace(/\\s+/g, ' ').trim().toLowerCase();
+      this.normalized = sql.replace(/\s+/g, ' ').trim().toLowerCase();
       this.values = [];
     }
 
