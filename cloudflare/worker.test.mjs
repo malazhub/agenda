@@ -483,7 +483,7 @@ test('Director login reads persisted role tables and saves status updates', asyn
 });
 
 test('Director can save a live session and the grade catalog returns its playback URL', async () => {
-  const { env, accounts, sessions } = fakeEnvironment();
+  const { env, accounts, sessions: sessionMap } = fakeEnvironment();
   const login = await send(env, '/api/auth/login', {
     method: 'POST',
     body: { username: 'director', password: 'DirectorPassword#2026' },
@@ -552,7 +552,7 @@ test('Director can save a live session and the grade catalog returns its playbac
   });
   const anonymous = await send(env, '/api/sessions?gradeId=eb8&live=true&sessionId=live-eb8-math');
   assert.equal(anonymous.status, 401);
-  sessions.get('test-registration-session').is_live = 1;
+  sessionMap.get('test-registration-session').is_live = 1;
   const wrongSession = await send(env, '/api/sessions?gradeId=eb8&live=true&sessionId=test-registration-session', { token });
   assert.equal(wrongSession.status, 403);
 
