@@ -1,7 +1,6 @@
 import React from 'react';
 import { Language, UserProfile } from '../types';
 import { translations } from '../translations';
-import type { SchoolRecord } from '../services/cloudflareApi';
 import { UserPlus, LogOut, Share2 } from 'lucide-react';
 
 interface HeaderProps {
@@ -14,9 +13,6 @@ interface HeaderProps {
   onOpenRegister: () => void;
   signedInName?: string;
   schoolName?: string;
-  schools?: SchoolRecord[];
-  selectedSchoolId?: string;
-  onSchoolChange?: (schoolId: string) => void;
   onOpenArchiveSessions?: () => void;
   onSignOut?: () => void;
 }
@@ -28,9 +24,6 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenRegister,
   signedInName,
   schoolName,
-  schools = [],
-  selectedSchoolId = '',
-  onSchoolChange,
   onSignOut,
 }) => {
   const t = translations[currentLang];
@@ -41,20 +34,11 @@ export const Header: React.FC<HeaderProps> = ({
         <div className="grid grid-cols-1 md:grid-cols-3 items-center gap-3">
           {/* Left Side: Register OR Sign Out action */}
           <div className="flex flex-wrap items-center gap-2 justify-start order-2 md:order-1">
-            {signedInName ? (
+            {signedInName && (
               <span className="max-w-48 truncate rounded-xl bg-indigo-50 px-3 py-2 text-xs font-bold text-indigo-700" title={schoolName}>
                 {schoolName || 'School'}
               </span>
-            ) : schools.length > 0 ? (
-              <select
-                aria-label="Select school"
-                value={selectedSchoolId}
-                onChange={(event) => onSchoolChange?.(event.target.value)}
-                className="max-w-56 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700"
-              >
-                {schools.map((school) => <option key={school.id} value={school.id}>{school.name}</option>)}
-              </select>
-            ) : null}
+            )}
             {signedInName ? (
               /* Sign Out Card (Displayed when user is signed in) */
               <div className="flex items-center gap-2 bg-slate-100 border border-slate-200 rounded-xl px-3 py-1.5 shadow-xs">
@@ -91,7 +75,7 @@ export const Header: React.FC<HeaderProps> = ({
           >
             <div className="text-center">
               <span className="text-2xl font-black tracking-tight text-slate-900 block leading-tight">
-                Agenda
+                {schoolName || 'Agenda'}
               </span>
                             {/* Subtitle follows the selected language; keep the original colors. */}
               <span className="text-xs sm:text-sm font-black tracking-wide inline-block leading-snug">
@@ -126,7 +110,7 @@ export const Header: React.FC<HeaderProps> = ({
               onClick={async () => {
                 const shareUrl = 'https://malazhub.github.io/agenda/';
                 const shareData = {
-                  title: 'Agenda',
+                  title: schoolName || 'Agenda',
                   text: currentLang === 'ar' ? 'منصة Agenda للتعليم والدروس الخصوصية' : 'Agenda Educational Platform',
                   url: shareUrl,
                 };
