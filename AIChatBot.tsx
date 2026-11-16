@@ -67,7 +67,7 @@ export const AIChatBot: React.FC<AIChatBotProps> = ({ currentLang, schoolId, sch
 
     if (monthlyPriceQuestion) {
       const priceMap = new Map(prices.map((price) => [price.gradeId, price.monthlyRateUsd]));
-      const gradeNumber = q.match(/(?:grade|grado|curso|classe|class)\\s*(\\d{1,2})/)?.[1];
+      const gradeNumber = q.match(/(?:grade|grado|curso|classe|class)\s*(\d{1,2})/)?.[1];
       const relevantGrades = gradeNumber
         ? LEBANESE_GRADE_LEVELS.filter((grade) =>
             [grade.name.en, grade.name.fr, grade.name.it, grade.name.es]
