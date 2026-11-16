@@ -36,7 +36,7 @@ export const LiveVideoPlayer: React.FC<LiveVideoPlayerProps> = ({ currentLang, s
           tokenProvider: async () => (await (directorToken ? getDirectorLiveStream(directorToken, gradeId) : getLiveStreamStatus(sessionToken, gradeId))).token,
           user: { id: stream.userId, name: stream.userName },
         });
-        const call = client.call('livestream', stream.callId);
+        const call = client.call(directorToken ? 'default' : 'livestream', stream.callId);
         subscription = call.state.egress$.subscribe((egress) => {
           if (active) {
             setError('');
