@@ -868,6 +868,21 @@ async function deleteSession(request, env, sessionId) {
   return json({ deleted: true });
 }
 
+async function updateDirectorSessionLive(request, env, sessionId) {
+  const director = await authenticate(request, env, "director");
+  if (!director) return json({ error: "Director authentication required." }, 401);
+  const schoolId = await getDirectorSchoolId(env, director);
+  if (!schoolId) return json({ error: "Director school is not configured." }, 403);
+  const body = await requestJson(request);
+  if (typeof body?.isLive !== "boolean") return json({ error: "isLive must be a boolean." }, 400);
+  const result = await env.DB.prepare(
+    "UPDATE sessions SET is_live = ?, live_starts_at = CASE WHEN ? = 1 THEN datetime('now') ELSE NULL END WHERE id = ? AND school_id = ?"
+  ).bind(Number(body.isLive), Number(body.isLive), sessionId, schoolId).run();
+  if (!result.meta.changes) return json({ error: "Session not found." }, 404);
+  const session = await env.DB.prepare("SELECT * FROM sessions WHERE id = ? AND school_id = ?").bind(sessionId, schoolId).first();
+  return json({ session: publicSession(session) });
+}
+
 async function listSessions(url, env, request) {
   const gradeId = url.searchParams.get("gradeId") || "";
   const liveOnly = url.searchParams.get("live") === "true";
@@ -2430,6 +2445,7 @@ async function handle(request, env) {
 
   const sessionMatch = path.match(/^\/api\/director\/sessions\/([a-zA-Z0-9_-]{1,100})$/);
   if (request.method === "DELETE" && sessionMatch) return deleteSession(request, env, sessionMatch[1]);
+  if (request.method === "PATCH" && sessionMatch) return updateDirectorSessionLive(request, env, sessionMatch[1]);
 
   const uploadMatch = path.match(/^\/api\/director\/media\/(.+)$/);
   if (request.method === "PUT" && uploadMatch) return uploadMedia(request, env, uploadMatch[1]);
