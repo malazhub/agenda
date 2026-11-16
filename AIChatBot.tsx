@@ -29,6 +29,41 @@ export const AIChatBot: React.FC<AIChatBotProps> = ({ currentLang, schoolId, sch
   const [inputText, setInputText] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const previousLanguageRef = useRef<Language>(currentLang);
+  const languageNames: Record<Language, string> = {
+    ar: 'Arabic',
+    en: 'English',
+    fr: 'French',
+    es: 'Spanish',
+    it: 'Italian',
+  };
+  const chatLocale: Record<Language, string> = {
+    ar: 'ar',
+    en: 'en',
+    fr: 'fr',
+    es: 'es',
+    it: 'it',
+  };
+  const assistantBadge = currentLang === 'ar' ? 'مساعد' : currentLang === 'en' ? 'AI' : 'IA';
+  const formatChatTime = () => new Date().toLocaleTimeString(chatLocale[currentLang], {
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+  const chatLabels = {
+    close: currentLang === 'ar' ? 'إغلاق المحادثة' : currentLang === 'fr' ? 'Fermer la conversation' : currentLang === 'es' ? 'Cerrar conversación' : currentLang === 'it' ? 'Chiudi la conversazione' : 'Close chat',
+    send: currentLang === 'ar' ? 'إرسال السؤال' : currentLang === 'fr' ? 'Envoyer la question' : currentLang === 'es' ? 'Enviar pregunta' : currentLang === 'it' ? 'Invia domanda' : 'Send question',
+    input: currentLang === 'ar' ? 'اكتب سؤالك' : currentLang === 'fr' ? 'Saisissez votre question' : currentLang === 'es' ? 'Escribe tu pregunta' : currentLang === 'it' ? 'Scrivi la tua domanda' : 'Enter your question',
+    thinking: currentLang === 'ar' ? 'المساعد يكتب...' : currentLang === 'fr' ? 'L’assistant rédige...' : currentLang === 'es' ? 'El asistente está escribiendo...' : currentLang === 'it' ? 'L’assistente sta scrivendo...' : 'Assistant is typing...',
+    responseLanguage: currentLang === 'ar' ? 'ستكون الإجابات باللغة المحددة' : currentLang === 'fr' ? 'Les réponses suivent la langue sélectionnée' : currentLang === 'es' ? 'Las respuestas estarán en el idioma seleccionado' : currentLang === 'it' ? 'Le risposte saranno nella lingua selezionata' : 'Replies follow your selected language',
+  };
+
+  // Keep the conversation consistent when the visitor changes the app language.
+  useEffect(() => {
+    if (previousLanguageRef.current === currentLang) return;
+    previousLanguageRef.current = currentLang;
+    setMessages([]);
+    setInputText('');
+  }, [currentLang]);
 
   // Blank chat: Starts with no initial pre-canned text as requested
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -157,7 +192,7 @@ export const AIChatBot: React.FC<AIChatBotProps> = ({ currentLang, schoolId, sch
       return `School: ${context?.schoolName || schoolName || 'Agenda'}\nApproved monthly rates by grade:\n${rateLines}\nThe default rate for a grade without a custom price is 125 USD per month. These prices belong to this school.`;
     }
 
-    const registrationQuestion = ['register', 'registration', 'sign up', 'create account', 'inscrire', 'inscription', 'registrar', 'registro', 'registrazione', 'تسجيل', 'سجل'].some((keyword) => q.includes(keyword));
+    const registrationQuestion = ['register', 'registration', 'sign up', 'create account', 'inscrire', 'inscription', 'créer un compte', 'm’inscrire', 'registrar', 'registro', 'registración', 'inscripción', 'crear cuenta', 'registrarme', 'registrazione', 'registrarmi', 'creare account', 'crea un account', 'تسجيل', 'سجل', 'التسجيل', 'إنشاء حساب', 'انشاء حساب'].some((keyword) => q.includes(keyword));
     if (registrationQuestion) {
       if (currentLang === 'ar') return 'للتسجيل: افتح رابط المدرسة الصحيح، اختر طالباً أو معلماً، أدخل الاسم والبريد الإلكتروني واسم المستخدم وكلمة المرور، ثم اختر الصف والأستاذ/الحصة المتاحة. بعد التسجيل ينتظر الحساب موافقة المدير وتفعيله.';
       if (currentLang === 'fr') return "Pour vous inscrire : ouvrez le lien de votre établissement, choisissez Élève ou Éducateur, saisissez vos coordonnées, créez un nom d’utilisateur et un mot de passe, puis choisissez la classe et l’éducateur disponibles. Le Directeur doit ensuite activer le compte.";
@@ -166,7 +201,7 @@ export const AIChatBot: React.FC<AIChatBotProps> = ({ currentLang, schoolId, sch
       return 'To register: open your school-specific link, choose Student or Educator, enter your details, create a username and password, and select an available grade and educator/session. The Director must activate the account after registration.';
     }
 
-    const signInQuestion = ['password', 'username', 'sign in', 'login', 'mot de passe', 'identifiant', 'contraseña', 'usuario', 'password', 'accedi', 'nome utente', 'كلمة المرور', 'اسم المستخدم', 'دخول'].some((keyword) => q.includes(keyword));
+    const signInQuestion = ['password', 'username', 'sign in', 'sign-in', 'login', 'log in', 'mot de passe', 'identifiant', 'connexion', 'se connecter', 'contraseña', 'usuario', 'iniciar sesión', 'iniciar sesion', 'acceso', 'accedi', 'accesso', 'nome utente', 'effettua il login', 'كلمة المرور', 'اسم المستخدم', 'دخول', 'تسجيل الدخول', 'نسيت كلمة المرور', 'نسيت كلمة السر'].some((keyword) => q.includes(keyword));
     if (signInQuestion) {
       if (currentLang === 'ar') return 'لتسجيل الدخول، استخدم اسم المستخدم وكلمة المرور اللذين أنشأتهما عند التسجيل. إذا نسيت كلمة المرور، تواصل مع مدير مدرستك ليعيد تعيينها. لا تشارك كلمة المرور مع أي شخص.';
       if (currentLang === 'fr') return "Pour vous connecter, utilisez le nom d’utilisateur et le mot de passe créés lors de l’inscription. En cas d’oubli, contactez le Directeur de votre établissement pour réinitialiser le mot de passe. Ne partagez jamais votre mot de passe.";
@@ -175,7 +210,7 @@ export const AIChatBot: React.FC<AIChatBotProps> = ({ currentLang, schoolId, sch
       return 'Sign in with the username and password you created during registration. If you forget them, contact your school Director to reset the password. Never share your password.';
     }
 
-    const lessonQuestion = ['saved lesson', 'recording', 'lesson', 'archive', 'ressource', 'leçon', 'lecon', 'clase guardada', 'lección', 'lezione', 'registrazione', 'دروس محفوظة', 'درس', 'أرشيف'].some((keyword) => q.includes(keyword));
+    const lessonQuestion = ['saved lesson', 'saved lessons', 'recording', 'lesson', 'archive', 'ressource', 'ressources', 'leçon', 'lecon', 'cours enregistré', 'cours enregistrés', 'leçons enregistrées', 'clase guardada', 'clases guardadas', 'lección', 'lecciones guardadas', 'recursos guardados', 'lezione', 'lezioni salvate', 'lezioni registrate', 'risorse salvate', 'registrazione', 'دروس محفوظة', 'الدروس المحفوظة', 'درس', 'أرشيف', 'استرجاع الدروس'].some((keyword) => q.includes(keyword));
     if (lessonQuestion) {
       if (currentLang === 'ar') return 'لاسترجاع الدروس المحفوظة، سجّل الدخول وافتح غرفة الصف ثم اختر «الموارد التعليمية». اختر الأستاذ لعرض خانات الدروس والملفات التي نشرها. يمكن للمدرس تعديل موارده الخاصة فقط.';
       if (currentLang === 'fr') return "Pour retrouver les leçons enregistrées, connectez-vous, ouvrez la salle de classe puis choisissez « Ressources pédagogiques ». Sélectionnez l’éducateur pour consulter les leçons et fichiers publiés. Chaque éducateur ne peut modifier que ses propres ressources.";
@@ -184,7 +219,7 @@ export const AIChatBot: React.FC<AIChatBotProps> = ({ currentLang, schoolId, sch
       return 'To retrieve saved lessons, sign in, open the classroom, and select Learning Resources. Choose the educator to view published lesson slots and files. Each educator can edit only their own resources.';
     }
 
-    const liveQuestion = ['live', 'broadcast', 'join class', 'classroom', 'direct', 'en direct', 'en vivo', 'aula', 'diretta', 'بث', 'صف مباشر', 'غرفة الصف'].some((keyword) => q.includes(keyword));
+    const liveQuestion = ['live', 'broadcast', 'join class', 'join the class', 'classroom', 'direct', 'en direct', 'cours en direct', 'salle de diffusion', 'rejoindre le cours', 'en vivo', 'aula en vivo', 'clase en directo', 'unirse a la clase', 'diretta', 'lezione dal vivo', 'sala trasmissione', 'partecipa alla lezione', 'بث', 'مباشر', 'صف مباشر', 'الصف المباشر', 'غرفة الصف', 'غرفة البث', 'الانضمام للحصة'].some((keyword) => q.includes(keyword));
     if (liveQuestion) {
       if (currentLang === 'ar') return 'للدخول إلى الصف المباشر، سجّل الدخول بالحساب المفعّل والمسدد والمسجل في حصة الأستاذ نفسها. افتح «البث المباشر» واختر صفك. يبدأ الأستاذ البث أولاً، ويمكن للمدير مراقبة أي صف من لوحة التحكم ← إدارة الحصص.';
       if (currentLang === 'fr') return "Pour rejoindre un cours en direct, connectez-vous avec un compte activé, payé et inscrit à la même séance que l’éducateur. Ouvrez « Diffusion en direct » et choisissez votre classe. L’éducateur démarre la diffusion. Le Directeur peut surveiller toute classe depuis Tableau de bord → Gestion des cours.";
@@ -193,7 +228,7 @@ export const AIChatBot: React.FC<AIChatBotProps> = ({ currentLang, schoolId, sch
       return 'To join a live class, sign in with an activated, paid account assigned to the same educator session. Open Broadcast Room and choose your grade. The educator starts the broadcast. The Director can monitor any class from Dashboard → Manage Sessions.';
     }
 
-    const architectureQuestion = ['school', 'director', 'separate', 'data', 'privacy', 'educator', 'student', 'tenant', 'architecture', 'école', 'directeur', 'datos', 'escuela', 'scuola', 'direttore', 'مدرسة', 'مدير', 'طلاب', 'معلمين', 'خصوصية'].some((keyword) => q.includes(keyword));
+    const architectureQuestion = ['school', 'director', 'separate', 'data', 'privacy', 'educator', 'student', 'tenant', 'architecture', 'école', 'établissement', 'directeur', 'élève', 'éducateur', 'données', 'confidentialité', 'datos', 'escuela', 'estudiante', 'educador', 'privacidad', 'scuola', 'direttore', 'studente', 'educatore', 'privacy', 'مدرسة', 'مدير', 'طلاب', 'معلمين', 'خصوصية', 'بيانات', 'مدرستي'].some((keyword) => q.includes(keyword));
     if (architectureQuestion) {
       if (currentLang === 'ar') return 'تعمل المنصة بنظام مدارس مستقلة: لكل مدير مدرسة خاصة به ومعرّف مدرسة مستقل، وطلاب ومدرسون وحصص وموارد تعليمية وأسعار منفصلة. لا يستطيع مدير الوصول إلى حسابات أو ملفات مدرسة أخرى. استخدم رابط المدرسة الخاص بها لتسجيل الطلاب والمدرسين.';
       if (currentLang === 'fr') return "La plateforme fonctionne avec des établissements séparés : chaque Directeur possède son propre établissement et identifiant, ses élèves, éducateurs, cours, ressources et tarifs. Un Directeur ne peut pas accéder aux comptes ni aux fichiers d’un autre établissement. Utilisez le lien propre à votre établissement pour les inscriptions.";
@@ -207,20 +242,51 @@ export const AIChatBot: React.FC<AIChatBotProps> = ({ currentLang, schoolId, sch
 
   const handleSend = async (textToSend?: string) => {
     const text = (textToSend || inputText).trim();
-    if (!text) return;
+    if (!text || isTyping) return;
 
+    const apiKey = (typeof process !== 'undefined' && process.env?.GEMINI_API_KEY) ||
+      (typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_GEMINI_API_KEY) || '';
+    const ai = apiKey ? new GoogleGenAI({ apiKey }) : null;
+    const userMessageId = `user_${Date.now()}`;
     const userMsg: ChatMessage = {
-      id: `user_${Date.now()}`,
+      id: userMessageId,
       sender: 'user',
       text,
-      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      time: formatChatTime(),
     };
 
     setMessages(prev => [...prev, userMsg]);
     setInputText('');
     setIsTyping(true);
 
-    // 1. Check if user is asking about price or timing (strictly return saved facts)
+    // Translate the incoming question to the app's selected language.
+    let selectedLanguageQuestion = text;
+    if (ai) {
+      try {
+        const translation = await ai.models.generateContent({
+          model: 'gemini-3.8-flash',
+          contents: [{
+            text: `Translate the user question below into ${languageNames[currentLang]}.
+Return ONLY the translation: no explanation, no answer, no quotes, and no language label.
+Preserve proper names, school names, usernames, numbers, prices, grade identifiers, and technical product names exactly.
+If the question is already in ${languageNames[currentLang]}, return it unchanged.
+Question: ${JSON.stringify(text)}`,
+          }],
+        });
+        const translated = translation.text?.trim().replace(/^["']|["']$/g, '');
+        if (translated) selectedLanguageQuestion = translated;
+      } catch (translationError) {
+        console.warn('Unable to translate the submitted AI question.', translationError);
+      }
+    }
+
+    setMessages(prev => prev.map((message) =>
+      message.id === userMessageId
+        ? { ...message, text: selectedLanguageQuestion }
+        : message
+    ));
+
+    // Load the current school's authoritative configuration.
     let currentSchoolContext = schoolContext;
     if (schoolId) {
       try {
@@ -230,7 +296,8 @@ export const AIChatBot: React.FC<AIChatBotProps> = ({ currentLang, schoolId, sch
         // Retain the most recently loaded school context if the API is temporarily unavailable.
       }
     }
-    const savedAnswer = getSavedResponse(text, currentSchoolContext);
+    const savedAnswer = getSavedResponse(selectedLanguageQuestion, currentSchoolContext) ||
+      (selectedLanguageQuestion !== text ? getSavedResponse(text, currentSchoolContext) : null);
     if (savedAnswer) {
       await new Promise(r => setTimeout(r, 350));
       setMessages(prev => [
@@ -239,7 +306,7 @@ export const AIChatBot: React.FC<AIChatBotProps> = ({ currentLang, schoolId, sch
           id: `bot_${Date.now()}`,
           sender: 'assistant',
           text: savedAnswer,
-          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          time: formatChatTime()
         }
       ]);
       setIsTyping(false);
@@ -248,12 +315,8 @@ export const AIChatBot: React.FC<AIChatBotProps> = ({ currentLang, schoolId, sch
 
     // 2. For all other questions, use Gemini AI
     let reply = '';
-    const apiKey = (typeof process !== 'undefined' && process.env?.GEMINI_API_KEY) || 
-      (typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_GEMINI_API_KEY) || '';
-
-    if (apiKey) {
+    if (ai) {
       try {
-        const ai = new GoogleGenAI({ apiKey });
         const response = await ai.models.generateContent({
           model: 'gemini-3.8-flash',
           contents: [
@@ -263,8 +326,15 @@ Platform constraints:
 - Use the selected school's live configuration for all monthly rates, educators, sessions, and school identity.
 - Do not claim a fixed platform-wide price or timetable. Do not invent payment methods, schedules, account credentials, or school records.
 - Explain academic concepts, official Lebanese curriculum, homework, camera exercise submissions, and classroom navigation.
-Required response language: ${({ ar: 'Arabic', en: 'English', fr: 'French', it: 'Italian', es: 'Spanish' } as Record<Language, string>)[currentLang]}.
-LANGUAGE RULE (mandatory): Write the complete answer in this selected language only. Do not switch to English or mix languages just because the question or school data contains another language. Translate explanations, headings, steps, and ordinary descriptions into the selected language. Keep only proper names, product names, URLs, code, and standard technical terms unchanged when necessary.
+REQUIRED OUTPUT LANGUAGE: ${languageNames[currentLang]}.
+MANDATORY LANGUAGE POLICY:
+- The user's visible question has already been translated into ${languageNames[currentLang]}.
+- Answer in ${languageNames[currentLang]} only, using natural, fluent, complete sentences.
+- Do not answer in the source language of the original question.
+- Do not mix English with the selected language. Translate explanations, headings, lists, UI navigation names, examples, and ordinary text.
+- Keep only proper names, school names, usernames, URLs, code, and standard technical product terms unchanged where translation would be incorrect.
+- Do not quote or restate the question in its original language.
+- Before sending, check that every sentence is in ${languageNames[currentLang]} and rewrite any sentence that is not.
 Authoritative school configuration (use current values, never invent a rate):
 ${JSON.stringify(currentSchoolContext || { schoolName: schoolName || 'Agenda', defaultMonthlyRateUsd: 125, prices: [], sessions: [], educators: [] })}
 Platform architecture and navigation:
@@ -278,12 +348,12 @@ Platform architecture and navigation:
 - An independent Agenda copy is available to any user for USD 150. The purchaser becomes the Director of that independent copy and can manage their own school's name, educators, students, classes, saved lessons, monthly grade pricing, and classroom monitoring/delivery. Each copy remains isolated from other schools. Explain this price when users ask about obtaining, buying, or owning their own copy; do not confuse it with monthly school fees.
 - To rename a school, the Director signs in from the Director Login card on the main screen, opens Director Dashboard > Accounts, edits the School name field, and saves. The new name updates the platform branding.
 - Explain the current school's prices, educators, grades and sessions using the supplied school configuration. Do not expose private account data, passwords, or other schools' information.
-User question: "${text}"`
+User question (translated to the selected language): "${selectedLanguageQuestion}"`
             }
           ]
         });
 
-        reply = response.text || '';
+        reply = response.text?.trim() || '';
       } catch (e) {
         console.warn('Gemini chat error:', e);
       }
@@ -312,7 +382,7 @@ User question: "${text}"`
         id: `bot_${Date.now()}`,
         sender: 'assistant',
         text: reply,
-        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        time: formatChatTime()
       }
     ]);
   };
@@ -349,11 +419,15 @@ User question: "${text}"`
                   </h4>
                   <span className="w-2 h-2 rounded-full bg-emerald-400" />
                 </div>
+                <p className="text-[10px] text-indigo-200 mt-0.5">{chatLabels.responseLanguage}</p>
               </div>
             </div>
 
             <button
+              type="button"
               onClick={() => setIsOpen(false)}
+              title={chatLabels.close}
+              aria-label={chatLabels.close}
               className="p-1.5 text-slate-300 hover:text-white rounded-lg hover:bg-white/10 transition cursor-pointer"
             >
               <X className="w-5 h-5" />
@@ -393,12 +467,14 @@ User question: "${text}"`
                 className={`flex gap-2.5 ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}
               >
                 {msg.sender === 'assistant' && (
-                  <div className="w-7 h-7 rounded-lg bg-indigo-600 text-white flex items-center justify-center shrink-0 mt-0.5 text-xs shadow-xs font-bold">
-                    AI
+                  <div aria-label={currentLang === 'ar' ? 'المساعد' : currentLang === 'en' ? 'AI assistant' : 'Assistant IA'} className="w-7 h-7 rounded-lg bg-indigo-600 text-white flex items-center justify-center shrink-0 mt-0.5 text-[10px] shadow-xs font-bold">
+                    {assistantBadge}
                   </div>
                 )}
 
                 <div
+                  lang={chatLocale[currentLang]}
+                  dir={currentLang === 'ar' ? 'rtl' : 'auto'}
                   className={`max-w-[85%] p-3 rounded-2xl text-xs sm:text-[13px] leading-relaxed ${
                     msg.sender === 'user'
                       ? 'bg-indigo-600 text-white rounded-br-none shadow-xs font-medium'
@@ -419,10 +495,10 @@ User question: "${text}"`
 
             {isTyping && (
               <div className="flex gap-2.5 justify-start">
-                <div className="w-7 h-7 rounded-lg bg-indigo-600 text-white flex items-center justify-center shrink-0 text-xs shadow-xs">
-                  AI
+                <div aria-label={chatLabels.thinking} className="w-7 h-7 rounded-lg bg-indigo-600 text-white flex items-center justify-center shrink-0 text-[10px] shadow-xs font-bold">
+                  {assistantBadge}
                 </div>
-                <div className="bg-white text-slate-500 border border-slate-200 p-3 rounded-2xl text-xs rounded-bl-none shadow-xs flex items-center gap-1.5">
+                <div role="status" aria-label={chatLabels.thinking} className="bg-white text-slate-500 border border-slate-200 p-3 rounded-2xl text-xs rounded-bl-none shadow-xs flex items-center gap-1.5">
                   <span className="w-2 h-2 rounded-full bg-indigo-400 animate-bounce" />
                   <span className="w-2 h-2 rounded-full bg-indigo-400 animate-bounce delay-150" />
                   <span className="w-2 h-2 rounded-full bg-indigo-400 animate-bounce delay-300" />
@@ -456,11 +532,16 @@ User question: "${text}"`
                         ? 'Scrivi qui la tua domanda...'
                         : 'Type your question here...'
               }
+              aria-label={chatLabels.input}
+              lang={chatLocale[currentLang]}
+              dir={currentLang === 'ar' ? 'rtl' : 'auto'}
               className="flex-1 text-xs sm:text-sm p-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-indigo-600 font-medium"
             />
             <button
               type="submit"
-              disabled={!inputText.trim()}
+              disabled={!inputText.trim() || isTyping}
+              title={chatLabels.send}
+              aria-label={chatLabels.send}
               className="bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 text-white p-2.5 rounded-xl transition shadow-xs cursor-pointer shrink-0"
             >
               <Send className="w-4 h-4" />
