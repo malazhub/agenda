@@ -759,7 +759,7 @@ async function getDirectorLiveStream(request, env) {
     `https://video.stream-io-api.com/api/v2/users?api_key=${encodeURIComponent(stream.apiKey)}`,
     { method: "POST", headers, body: JSON.stringify({ users: { [director.sub]: { id: director.sub, name: director.username || "Director" } } }) }
   );
-  if (!userResponse.ok) return json({ error: "Could not register the Director with Stream Video." }, 502);
+  if (!userResponse.ok && userResponse.status !== 409) return json({ error: "Could not register the Director with Stream Video." }, 502);
 
   const callUrl = `https://video.stream-io-api.com/api/v2/video/call/default/${encodeURIComponent(stream.callId)}?api_key=${encodeURIComponent(stream.apiKey)}`;
   const existingCall = await fetch(callUrl, { headers });
