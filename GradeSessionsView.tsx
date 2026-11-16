@@ -1,8 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
-
 import { Language, GradeLevelDef } from '../types';
 import { translations } from '../translations';
-
+import { LearningResourcesView } from './LearningResourcesView';
 import {
   OwnCapability,
   type Call,
@@ -53,6 +52,7 @@ import {
 interface GradeSessionsViewProps {
   currentLang: Language;
   selectedGrade: GradeLevelDef;
+  schoolId: string;
   initialTab?: 'stored' | 'live';
   autoOpenLiveClassroom?: boolean;
   registeredAccount: CloudflareAccount | null;
@@ -134,6 +134,7 @@ const StreamParticipantAudio: React.FC<{
 export const GradeSessionsView: React.FC<GradeSessionsViewProps> = ({
   currentLang,
   selectedGrade,
+  schoolId,
   initialTab = 'stored',
   autoOpenLiveClassroom = false,
   registeredAccount,
@@ -274,7 +275,9 @@ const containerRef = useRef<HTMLDivElement>(null);
 
     const loadLiveSessions = async () => {
       try {
-        const { educators } = await getLiveEducators(sessionToken);
+                const { educators } = await getLiveEducators(
+          schoolId || registeredAccount?.schoolId || ''
+        );
 
         if (!active) return;
 
@@ -311,60 +314,8 @@ const containerRef = useRef<HTMLDivElement>(null);
       active = false;
       window.clearInterval(refreshInterval);
     };
-  }, [sessionToken, reloadKey]);
-
-    // Load stored learning resources only after sign-in.
-  useEffect(() => {
-    let active = true;
-
-    if (activeTab === 'stored') {
-      if (!registeredAccount || !sessionToken) {
-        setStoredSessions([]);
-        setIsLoading(false);
-        setError(null);
-
-        return () => {
-          active = false;
-        };
-      }
-
-      setIsLoading(true);
-      setError(null);
-
-      getGradeSessions(selectedGrade.id)
-        .then(({ sessions: loadedSessions }) => {
-          if (!active) return;
-
-          setStoredSessions(loadedSessions);
-        })
-        .catch((requestError) => {
-          if (active) {
-            setError(
-              requestError instanceof Error
-                ? requestError.message
-                : 'Unable to load sessions.'
-            );
-          }
-        })
-        .finally(() => {
-          if (active) {
-            setIsLoading(false);
-          }
-        });
-    }
-
-    return () => {
-      active = false;
-    };
-  }, [
-    selectedGrade.id,
-    activeTab,
-    reloadKey,
-    sessionToken,
-    registeredAccount?.id
-  ]);
-
-  // 45-minute countdown timer
+    }, [schoolId, registeredAccount?.schoolId, reloadKey]);
+    // 45-minute countdown timer
   useEffect(() => {
     let interval: any = null;
     if (timerRunning && timeLeft > 0) {
@@ -2698,20 +2649,7 @@ const handleClearChatMessages = async () => {
             <div className="flex items-center gap-2 bg-slate-100 p-1.5 rounded-2xl border border-slate-200/80">
                <button
                 type="button"
-                onClick={() => {
-                  if (!registeredAccount || !sessionToken) {
-                    onShowMessage(
-                      currentLang === 'ar'
-                        ? 'تسجيل الدخول'
-                        : currentLang === 'fr'
-                          ? 'Se connecter'
-                          : 'Sign in'
-                    );
-                    return;
-                  }
-
-                  setActiveTab('stored');
-                }}
+               onClick={() => setActiveTab('stored')}
                 className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-black transition cursor-pointer ${
                   activeTab === 'stored'
                     ? 'bg-white text-indigo-700 shadow-sm'
@@ -2845,11 +2783,11 @@ const handleClearChatMessages = async () => {
                       isLive: true,
                     };
                     
-                    handleEducatorOpenRoom(mySession);
-                    disabled={isLoading}
+                                        handleEducatorOpenRoom(mySession);
                   }}
+                  disabled={isLoading}
                   className="w-full text-start bg-slate-900 hover:bg-indigo-950 text-white rounded-3xl p-5 border-2 border-slate-800 hover:border-indigo-400 flex flex-wrap items-center justify-between gap-3 shadow-md transition-all cursor-pointer active:scale-[0.99]"
-                >
+                  >
                   <div>
                     <div className="flex items-center gap-2">
                       <Radio className="w-5 h-5 text-rose-500 animate-pulse" />
