@@ -2464,16 +2464,16 @@ async function handle(request, env) {
   if (request.method === "POST" && path === "/api/auth/register") return handleRegister(request, env);
   if (request.method === "POST" && path === "/api/auth/login") return handleLogin(request, env);
   if (request.method === "GET" && path === "/api/auth/me") return getCurrentAccount(request, env);
-    const schoolEducatorsMatch = path.match(/^\\/api\\/schools\\/([^/]+)\\/educators$/);
+    const schoolEducatorsMatch = path.match(/^\/api\/schools\/([^/]+)\/educators$/);
   if (request.method === "GET" && schoolEducatorsMatch) {
     return schoolEducators(env, decodeURIComponent(schoolEducatorsMatch[1]));
   }
-  const lessonReadMatch = path.match(/^\\/api\\/learning\\/educators\\/([^/]+)\\/lessons$/);
+  const lessonReadMatch = path.match(/^\/api\/learning\/educators\/([^/]+)\/lessons$/);
   if (request.method === "GET" && lessonReadMatch) {
     const requestedSchoolId = url.searchParams.get("schoolId") || "";
     return educatorLessons(env, requestedSchoolId, decodeURIComponent(lessonReadMatch[1]));
   }
-  const lessonWriteMatch = path.match(/^\\/api\\/learning\\/lessons\\/([a-zA-Z0-9_-]{1,100})$/);
+  const lessonWriteMatch = path.match(/^\/api\/learning\/lessons\/([a-zA-Z0-9_-]{1,100})$/);
   if (lessonWriteMatch && request.method === "PUT") return updateEducatorLesson(request, env, lessonWriteMatch[1]);
   if (lessonWriteMatch && request.method === "DELETE") return updateEducatorLesson(request, env, lessonWriteMatch[1], true);
   if (request.method === "GET" && path === "/api/schools") {
