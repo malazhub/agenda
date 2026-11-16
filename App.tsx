@@ -9,8 +9,8 @@ import {
 } from './types';
 import { translations } from './translations';
 import { MOCK_TEACHERS } from './data/mockTeachers';
-import { getCurrentAccount } from './services/cloudflareApi';
-import type { CloudflareAccount } from './services/cloudflareApi';
+import { getCurrentAccount, getSchools } from './services/cloudflareApi';
+import type { CloudflareAccount, DirectorProfile, SchoolRecord } from './services/cloudflareApi';
 
 import { Header } from './components/Header';
 import { CoursesHub } from './components/CoursesHub';
@@ -58,6 +58,19 @@ export default function App() {
   const [directorLoginRequest, setDirectorLoginRequest] = useState(0);
   const [registeredAccount, setRegisteredAccount] = useState<CloudflareAccount | null>(null);
   const [sessionToken, setSessionToken] = useState('');
+  const [schools, setSchools] = useState<SchoolRecord[]>([]);
+  const [schoolsLoaded, setSchoolsLoaded] = useState(false);
+  const [selectedSchoolId, setSelectedSchoolId] = useState(() => {
+    try {
+      return localStorage.getItem('agenda-selected-school') || 'default-agenda-school';
+    } catch {
+      return 'default-agenda-school';
+    }
+  });
+  const [isDirectorSession, setIsDirectorSession] = useState(() =>
+    typeof window !== 'undefined' &&
+    Boolean(window.sessionStorage.getItem('agenda-director-token'))
+  );
   const signOutCleanupRef = useRef<(() => Promise<void>) | null>(null);
 
 const registerSignOutCleanup = useCallback(
@@ -77,6 +90,74 @@ const registerSignOutCleanup = useCallback(
 
   const t = translations[currentLang];
   const isRTL = currentLang === 'ar';
+  const activeSchoolId =
+    registeredAccount?.schoolId ||
+    selectedSchoolId ||
+    schools[0]?.id ||
+    'default-agenda-school';
+  const activeSchoolName =
+    schools.find((school) => school.id === activeSchoolId)?.name ||
+    'Agenda';
+
+  const handleSchoolChange = (schoolId: string) => {
+    setSelectedSchoolId(schoolId);
+    const selectedSchool = schools.find((school) => school.id === schoolId);
+    if (selectedSchool) {
+      setUserProfile((previous) => ({
+        ...previous,
+        schoolName: selectedSchool.name,
+      }));
+    }
+  };
+
+  const handleSchoolProfileUpdated = useCallback((profile: DirectorProfile) => {
+    setSchools((current) => {
+      const exists = current.some((school) => school.id === profile.schoolId);
+      return exists
+        ? current.map((school) =>
+            school.id === profile.schoolId
+              ? { ...school, name: profile.schoolName }
+              : school
+          )
+        : [...current, { id: profile.schoolId, name: profile.schoolName }];
+    });
+    setSelectedSchoolId(profile.schoolId);
+    setUserProfile((previous) => ({
+      ...previous,
+      schoolName: profile.schoolName,
+    }));
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    getSchools()
+      .then(({ schools: loadedSchools }) => {
+        if (!active) return;
+        const list = loadedSchools || [];
+        setSchools(list);
+        setSelectedSchoolId((current) =>
+          list.some((school) => school.id === current)
+            ? current
+            : list[0]?.id || 'default-agenda-school'
+        );
+      })
+      .catch((error) => console.error('Unable to load schools.', error))
+      .finally(() => {
+        if (active) setSchoolsLoaded(true);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!schoolsLoaded || registeredAccount?.schoolId) return;
+    try {
+      localStorage.setItem('agenda-selected-school', selectedSchoolId);
+    } catch {
+      // Local storage may be unavailable in restricted browser contexts.
+    }
+  }, [schoolsLoaded, selectedSchoolId, registeredAccount?.schoolId]);
 
   useEffect(() => {
     document.documentElement.dir = isRTL ? 'rtl' : 'ltr';
@@ -96,6 +177,7 @@ const registerSignOutCleanup = useCallback(
         const { account } = await getCurrentAccount(sessionToken);
         if (!active) return;
         setRegisteredAccount(account);
+        setSelectedSchoolId(account.schoolId);
         setUserProfile((previous) => ({
           ...previous,
           name: account.fullName,
@@ -166,6 +248,7 @@ const registerSignOutCleanup = useCallback(
     sessionStorage.setItem('agenda-session-token', token);
     setSessionToken(token);
     setRegisteredAccount(account);
+    setSelectedSchoolId(account.schoolId);
     setUserProfile(prev => ({ ...prev, name: account.fullName, email: account.email, role }));
     showToast(`${account.fullName}: ${account.activated ? t.accountSignedIn : t.registrationPendingActivation}`);
   };
@@ -231,6 +314,11 @@ const registerSignOutCleanup = useCallback(
         signedInName={registeredAccount?.fullName}
         onOpenArchiveSessions={() => setIsArchiveSessionsOpen(true)}
         onSignOut={handleSignOut}
+        schoolName={activeSchoolName}
+        schools={schools}
+        selectedSchoolId={activeSchoolId}
+        onSchoolChange={handleSchoolChange}
+        hideSchoolSelector={isDirectorSession}
       />
 
       {/* Main Content: Courses Hub or Live Classroom */}
@@ -246,6 +334,9 @@ const registerSignOutCleanup = useCallback(
         ) : (
                     <CoursesHub
             currentLang={currentLang}
+            schoolId={activeSchoolId}
+            onSchoolProfileUpdated={handleSchoolProfileUpdated}
+            onDirectorSessionChange={setIsDirectorSession}
             directorLoginRequest={directorLoginRequest}
             registeredAccount={registeredAccount}
             sessionToken={sessionToken}
@@ -282,6 +373,7 @@ const registerSignOutCleanup = useCallback(
         isOpen={isRegisterOpen}
         onClose={() => setIsRegisterOpen(false)}
         currentLang={currentLang}
+        schoolId={activeSchoolId}
         onRegisterSuccess={handleRegisterSuccess}
       />
 
