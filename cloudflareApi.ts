@@ -590,12 +590,14 @@ export function setEducatorLiveSession(
 
 export function getGradeSessions(
   gradeId: string,
+  schoolId: string,
   live = false,
   token?: string,
   sessionId?: string,
 ): Promise<{ sessions: StoredSessionRecord[] }> {
   const query = new URLSearchParams({
     gradeId,
+    schoolId,
     ...(live ? { live: 'true', ...(sessionId ? { sessionId } : {}) } : {}),
   });
   return request<{ sessions: StoredSessionRecord[] }>(`/api/sessions?${query.toString()}`, {
