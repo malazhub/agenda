@@ -138,8 +138,9 @@ export const AIChatBot: React.FC<AIChatBotProps> = ({ currentLang, schoolId, sch
       'mi propia copia', 'obtener una copia', 'comprar una copia', 'precio de una copia',
       'presentazione', 'informazioni su agenda', 'come navigare', 'cambiare il nome della scuola',
       'la mia copia', 'ottenere una copia', 'acquistare una copia', 'prezzo di una copia',
-      'شرح التطبيق', 'نبذة عن التطبيق', 'ما هو أجندة', 'كيف أتنقل', 'كيفية التنقل',
-      'تغيير اسم المدرسة', 'تغيير اسم مدرستي', 'نسختي الخاصة', 'نسخة خاصة', 'شراء نسخة', 'سعر النسخة', 'ثمن النسخة'
+      'شرح التطبيق', 'نبذة عن التطبيق', 'نبذة عن', 'تطبيق agenda', 'ما هو أجندة', 'كيف أتنقل', 'كيفية التنقل',
+      'تغيير اسم المدرسة', 'تغيير اسم مدرستي', 'اسم مدرستي', 'نسختي الخاصة', 'الحصول على نسختي', 'الحصول على نسخة',
+      'نسخة خاصة', 'شراء نسخة', 'سعر النسخة', 'ثمن النسخة'
     ].some((keyword) => q.includes(keyword));
 
     if (applicationOverviewQuestion) {
