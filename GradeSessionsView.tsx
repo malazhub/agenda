@@ -2682,87 +2682,71 @@ const handleClearChatMessages = async () => {
                 <span>{currentLang === 'ar' ? 'رجوع' : 'Back'}</span>
               </button>
 
-                            <div className="space-y-1">
-                {registeredAccount && sessionToken ? (
-                  <>
-                    <div className="flex items-center gap-2">
-                      <span className="text-[10px] font-black uppercase tracking-wider bg-indigo-50 text-indigo-700 px-2.5 py-0.5 rounded-md border border-indigo-100">
-                        {selectedGrade.cycle[currentLang]}
-                      </span>
-
-                      <span className="text-xs font-bold text-slate-500">
-                        {currentLang === 'ar'
-                          ? 'منهاج رسمي لبناني معتمد'
-                          : 'Certified Official Curriculum'}
-                      </span>
-                    </div>
-
-                    <h2 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
-                      {selectedGrade.name[currentLang]}
-                    </h2>
-                  </>
-                ) : (
-                  <>
-                    <span className="text-[10px] font-black uppercase tracking-wider bg-indigo-50 text-indigo-700 px-2.5 py-0.5 rounded-md border border-indigo-100">
-                      {currentLang === 'ar'
-                        ? 'غرفة البث'
-                        : currentLang === 'fr'
-                          ? 'Salle de diffusion'
-                          : 'Broadcast Room'}
-                    </span>
-
-                    <h2 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
-                      {currentLang === 'ar'
-                        ? 'اختر القسم الذي تريده'
-                        : currentLang === 'fr'
-                          ? 'Choisissez une section'
-                          : 'Choose a section'}
-                    </h2>
-                  </>
-                )}
+                 <div className="space-y-1">
+                <h2 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
+                  {registeredAccount && sessionToken
+                    ? selectedGrade.name[currentLang]
+                    : currentLang === 'ar'
+                      ? 'اختر القسم الذي تريده'
+                      : currentLang === 'fr'
+                        ? 'Choisissez une section'
+                        : 'Choose a section'}
+                </h2>
               </div>
             </div>
 
             <div className="flex items-center gap-2 bg-slate-100 p-1.5 rounded-2xl border border-slate-200/80">
-                            <button
+               <button
                 type="button"
                 onClick={() => {
-                  setActiveTab('stored');
-
                   if (!registeredAccount || !sessionToken) {
-                    onRequestSignIn?.();
+                    onShowMessage(
+                      currentLang === 'ar'
+                        ? 'تسجيل الدخول'
+                        : currentLang === 'fr'
+                          ? 'Se connecter'
+                          : 'Sign in'
+                    );
+                    return;
                   }
+
+                  setActiveTab('stored');
                 }}
                 className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-black transition cursor-pointer ${
-                  activeTab === 'stored' ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-600 hover:text-slate-900'
+                  activeTab === 'stored'
+                    ? 'bg-white text-indigo-700 shadow-sm'
+                    : 'text-slate-600 hover:text-slate-900'
                 }`}
               >
                 <FileText className="w-4 h-4" />
-                <span>{currentLang === 'ar' ? 'الموارد التعليمية' : 'Learning resources'}</span>
+                <span>
+                  {currentLang === 'ar'
+                    ? 'الموارد التعليمية'
+                    : 'Learning resources'}
+                </span>
               </button>
-
-                            <button
+                <button
                 type="button"
-                onClick={() => {
-                  setActiveTab('live');
-
-                  if (!registeredAccount || !sessionToken) {
-                    onRequestSignIn?.();
-                  }
-                }}
+                onClick={() => setActiveTab('live')}
                 className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-black transition cursor-pointer ${
-                  activeTab === 'live' ? 'bg-rose-600 text-white shadow-sm' : 'text-slate-600 hover:text-slate-900'
+                  activeTab === 'live'
+                    ? 'bg-rose-600 text-white shadow-sm'
+                    : 'text-slate-600 hover:text-slate-900'
                 }`}
               >
                 <span className="w-2 h-2 rounded-full bg-rose-400 animate-ping inline-block" />
                 <Video className="w-4 h-4" />
-                <span>{currentLang === 'ar' ? 'الحصص المباشرة' : 'Live Sessions'}</span>
+                <span>
+                  {currentLang === 'ar'
+                    ? 'الحصص المباشرة'
+                    : 'Live Sessions'}
+                </span>
               </button>
             </div>
           </div>
 
           {/* TAB 1: LIVE SESSIONS */}
-                    {!registeredAccount || !sessionToken ? (             <div className="rounded-3xl border border-indigo-200 bg-white p-8 sm:p-12 text-center shadow-sm">               <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-indigo-50">                 <Lock className="h-7 w-7 text-indigo-600" />               </div>                <h3 className="text-lg font-black text-slate-900">                 {currentLang === 'ar'                   ? 'يرجى تسجيل الدخول للمتابعة'                   : currentLang === 'fr'                     ? 'Connectez-vous pour continuer'                     : 'Sign in to continue'}               </h3>                <p className="mx-auto mt-2 max-w-lg text-sm text-slate-500">                 {currentLang === 'ar'                   ? 'سجّل الدخول للوصول إلى الموارد التعليمية والحصص المباشرة.'                   : currentLang === 'fr'                     ? 'Connectez-vous pour accéder aux ressources pédagogiques et aux sessions en direct.'                     : 'Sign in to access Learning Resources and Live Sessions.'}               </p>                <button                 type="button"                 onClick={() => onRequestSignIn?.()}                 className="mt-6 inline-flex items-center justify-center rounded-xl bg-indigo-600 px-6 py-3 text-sm font-black text-white transition hover:bg-indigo-700 cursor-pointer"               >                 {currentLang === 'ar'                   ? 'تسجيل الدخول'                   : currentLang === 'fr'                     ? 'Se connecter'                     : 'Sign In'}               </button>             </div>           ) : activeTab === 'live' ? (
+                     : activeTab === 'live' ? (
   <div className="space-y-4">
 
     {cameraError && (
@@ -2784,7 +2768,21 @@ const handleClearChatMessages = async () => {
           : 'Opening live classroom...'}
       </div>
     )}
-              
+                    {/* Guest test room — shown only to visitors who are not signed in. */}
+              {(!registeredAccount || !sessionToken) && (
+                <button
+                  type="button"
+                  onClick={() => void startGuestLiveCall()}
+                  disabled={isLoading}
+                  className="w-full rounded-3xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-black text-sm sm:text-base py-5 px-6 shadow-xl transition cursor-pointer disabled:cursor-not-allowed"
+                >
+                  {currentLang === 'ar'
+                    ? 'انقر للانضمام كضيف'
+                    : currentLang === 'fr'
+                      ? 'Cliquer pour rejoindre en tant qu’invité'
+                      : 'Click to join as a guest'}
+                </button>
+              )}       
               {/* STUDENT JOIN CARD */}
               {!isEducator && studentPrimarySession && (
                 <div className="bg-linear-to-r from-emerald-950 via-slate-900 to-indigo-950 border-2 border-emerald-400 p-5 rounded-3xl shadow-xl flex flex-wrap items-center justify-between gap-4 text-white">
