@@ -5,6 +5,18 @@ import worker from './worker.js';
 
 const signingKey = 'test-session-signing-key-with-enough-entropy';
 
+const originalFetch = globalThis.fetch;
+globalThis.fetch = async (input, init) => {
+  const url = new URL(typeof input === 'string' ? input : input.url);
+  if (url.hostname === 'video.stream-io-api.com') {
+    return new Response('{}', {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    });
+  }
+  return originalFetch(input, init);
+};
+
 function hashPassword(password) {
   const salt = randomBytes(16);
   const hash = pbkdf2Sync(password, salt, 100000, 32, 'sha256');
@@ -15,12 +27,21 @@ function fakeEnvironment() {
   const accounts = new Map();
   const attempts = [];
   const sessions = new Map();
+  const schools = new Map([
+    ['default-agenda-school', { id: 'default-agenda-school', name: 'Agenda' }],
+    ['other-school', { id: 'other-school', name: 'Other School' }],
+  ]);
+  const lessons = new Map();
+  const classroomMessages = [];
+  const bucketObjects = new Map();
+
   sessions.set('test-registration-session', {
     id: 'test-registration-session',
+    school_id: 'default-agenda-school',
     grade_id: 'eb8',
     subject: 'Mathematics',
     title: 'Registered algebra session',
-    teacher_name: '',
+    teacher_name: 'Assigned Educator',
     source_name: 'Agenda',
     source_url: 'https://example.org/session',
     playback_url: 'https://example.org/session/video',
@@ -32,6 +53,7 @@ function fakeEnvironment() {
   class Statement {
     constructor(sql) {
       this.sql = sql;
+      this.normalized = sql.replace(/\s+/g, ' ').trim().toLowerCase();
       this.values = [];
     }
 
@@ -41,91 +63,340 @@ function fakeEnvironment() {
     }
 
     async first() {
-      if (this.sql.includes('SELECT id FROM accounts WHERE username')) {
-        const account = [...accounts.values()].find((item) => item.username.toLowerCase() === this.values[0].toLowerCase());
+      const q = this.normalized;
+      const v = this.values;
+
+      if (q.includes('from schools where id = ?')) {
+        return schools.get(v[0]) || null;
+      }
+      if (q.includes('from schools where name = ?')) {
+        return [...schools.values()].find(
+          (school) => school.name.toLowerCase() === String(v[0]).toLowerCase() &&
+            school.id !== v[1]
+        ) || null;
+      }
+      if (q.includes('select id from accounts where username')) {
+        const account = [...accounts.values()].find(
+          (item) => item.username.toLowerCase() === String(v[0]).toLowerCase()
+        );
         return account ? { id: account.id } : null;
       }
-      if (this.sql.includes('SELECT COUNT(*) AS count FROM login_attempts')) {
-        const recent = attempts.filter((item) => item.username === this.values[0].toLowerCase() && !item.succeeded);
+      if (q.includes('select * from accounts where username')) {
+        return [...accounts.values()].find(
+          (item) => item.username.toLowerCase() === String(v[0]).toLowerCase()
+        ) || null;
+      }
+      if (q.includes('select count(*) as count from login_attempts')) {
+        const recent = attempts.filter(
+          (item) => item.username === String(v[0]).toLowerCase() && !item.succeeded
+        );
         return { count: recent.length };
       }
-      if (this.sql.includes('SELECT * FROM accounts WHERE username')) {
-        return [...accounts.values()].find((item) => item.username.toLowerCase() === this.values[0].toLowerCase()) || null;
+      if (q.includes('from accounts educator')) {
+        const session = sessions.get(v[0]);
+        if (!session || session.school_id !== v[1]) return null;
+        const educator = [...accounts.values()].find(
+          (item) =>
+            item.role === 'educator' &&
+            item.registered_session_id === session.id &&
+            item.school_id === v[2]
+        );
+        return educator ? { id: session.id, grade_id: session.grade_id } : null;
       }
-      if (this.sql.includes('FROM accounts WHERE id')) return accounts.get(this.values[0]) || null;
-      if (this.sql.includes('SELECT id, grade_id FROM sessions WHERE id')) {
-        const session = sessions.get(this.values[0]);
+      if (q.includes('from sessions s inner join accounts educator')) {
+        const session = sessions.get(v[0]);
+        if (!session || session.school_id !== v[1]) return null;
+        const educator = [...accounts.values()].find(
+          (item) =>
+            item.role === 'educator' &&
+            item.registered_session_id === session.id &&
+            item.school_id === v[2]
+        );
+        return educator ? { id: session.id, grade_id: session.grade_id } : null;
+      }
+      if (q.includes('select school_id from sessions where id = ?')) {
+        const session = sessions.get(v[0]);
+        return session ? { school_id: session.school_id } : null;
+      }
+      if (q.includes('from sessions where media_key = ?')) {
+        const session = [...sessions.values()].find(
+          (item) => item.media_key === v[0] && item.school_id === v[1]
+        );
+        return session ? { id: session.id } : null;
+      }
+      if (q.includes('from educator_lessons') && q.includes('where id = ?')) {
+        const lesson = lessons.get(v[0]);
+        if (!lesson) return null;
+        if (q.includes('school_id = ?') && lesson.school_id !== v[1]) return null;
+        if (q.includes('educator_id = ?') && lesson.educator_id !== v[q.includes('school_id = ?') ? 2 : 1]) return null;
+        if (q.includes('media_key is not null') && !lesson.media_key) return null;
+        return { ...lesson };
+      }
+      if (q.includes('from educator_lessons') && q.includes('where educator_id = ?')) {
+        const lesson = [...lessons.values()].find(
+          (item) => item.educator_id === v[0] && item.school_id === v[1] && item.media_key
+        );
+        return lesson ? { media_key: lesson.media_key, media_name: lesson.media_name, media_type: lesson.media_type } : null;
+      }
+      if (q.includes('from schools')) {
+        return [...schools.values()][0] || null;
+      }
+      if (q.includes('from accounts where id')) {
+        const account = accounts.get(v[0]);
+        if (!account) return null;
+        if (q.includes('school_id = ?') && account.school_id !== v[v.length - 1]) return null;
+        const roleMatch = q.match(/role = '([^']+)'/);
+        if (roleMatch && account.role !== roleMatch[1]) return null;
+        if (q.includes("role in ('student', 'educator')") && !['student', 'educator'].includes(account.role)) return null;
+        return { ...account };
+      }
+      if (q.includes('from sessions where id = ?')) {
+        const session = sessions.get(v[0]);
+        if (!session) return null;
+        if (q.includes('school_id = ?') && session.school_id !== v[1]) return null;
+        if (q.includes('is_live = 1') && !session.is_live) return null;
+        return { ...session };
+      }
+      if (q.includes('select id, grade_id from sessions where id = ?')) {
+        const session = sessions.get(v[0]);
         return session ? { id: session.id, grade_id: session.grade_id } : null;
       }
-      if (this.sql.includes('SELECT grade_id FROM sessions WHERE grade_id')) {
-        return [...sessions.values()].some((item) => item.grade_id === this.values[0])
-          ? { grade_id: this.values[0] }
+      if (q.includes('select grade_id from sessions where grade_id')) {
+        return [...sessions.values()].some((item) => item.grade_id === v[0])
+          ? { grade_id: v[0] }
           : null;
       }
-      if (this.sql.includes('SELECT * FROM sessions WHERE id = ? AND is_live = 1')) {
-        const session = sessions.get(this.values[0]);
-        return session?.is_live ? session : null;
+      if (q.includes('from sessions where id = ? and grade_id = ?')) {
+        const session = sessions.get(v[0]);
+        return session && session.grade_id === v[1] && session.school_id === v[2]
+          ? { ...session }
+          : null;
+      }
+      if (q.includes('select id from sessions where id = ?')) {
+        const session = sessions.get(v[0]);
+        return session ? { id: session.id } : null;
+      }
+      if (q.includes('select id from accounts where role')) {
+        return null;
       }
       return null;
     }
 
     async all() {
-      if (this.sql.includes('SELECT DISTINCT grade_id FROM sessions')) {
+      const q = this.normalized;
+      const v = this.values;
+
+      if (q.includes('from schools')) {
+        return { results: [...schools.values()].map((school) => ({ ...school })) };
+      }
+      if (q.includes('from educator_lessons')) {
+        let result = [...lessons.values()];
+        if (q.includes('school_id = ?')) result = result.filter((item) => item.school_id === v[0]);
+        if (q.includes('educator_id = ?')) {
+          const educatorIndex = q.includes('school_id = ?') ? 1 : 0;
+          result = result.filter((item) => item.educator_id === v[educatorIndex]);
+        }
+        return { results: result.sort((a, b) => a.slot - b.slot).map((item) => ({ ...item })) };
+      }
+      if (q.includes('from classroom_messages')) {
+        let result = [...classroomMessages];
+        if (q.includes('educator_id = ?')) result = result.filter((item) => item.educator_id === v[0]);
+        if (q.includes('student_id = ?')) result = result.filter((item) => item.student_id === v[0]);
+        return { results: result.filter((item) => item.attachment_key).map((item) => ({ attachment_key: item.attachment_key })) };
+      }
+      if (q.includes('from accounts a left join sessions s')) {
+        const schoolId = v[0];
+        return {
+          results: [...accounts.values()]
+            .filter((item) => item.role === 'educator' && item.school_id === schoolId)
+            .map((educator) => {
+              const session = sessions.get(educator.registered_session_id);
+              return {
+                id: educator.id,
+                full_name: educator.full_name,
+                school_or_subject: educator.school_or_subject,
+                grade_id: educator.grade_id,
+                registered_session_id: educator.registered_session_id,
+                assigned_session_id: session?.id || null,
+                assigned_grade_id: session?.grade_id || null,
+                assigned_subject: session?.subject || null,
+              };
+            }),
+        };
+      }
+      if (q.includes('from accounts where role')) {
+        const role = q.match(/role = '([^']+)'/)?.[1];
+        let result = [...accounts.values()].filter((item) => !role || item.role === role);
+        if (q.includes('school_id = ?')) result = result.filter((item) => item.school_id === v[0]);
+        return { results: result.map((item) => ({ ...item })) };
+      }
+      if (q.includes('from sessions') && q.includes('school_id = ?')) {
+        const schoolId = v.find((value) => schools.has(value));
+        let result = [...sessions.values()].filter((item) => item.school_id === schoolId);
+        if (q.includes('grade_id = ?')) {
+          const gradeId = v[0];
+          result = result.filter((item) => item.grade_id === gradeId);
+        }
+        if (q.includes('is_live = 0')) result = result.filter((item) => !item.is_live);
+        if (q.includes('is_live = 1')) result = result.filter((item) => Boolean(item.is_live));
+        return { results: result.map((item) => ({ ...item })) };
+      }
+      if (q.includes('from sessions where grade_id')) {
+        const gradeId = v[0];
+        const liveOnly = q.includes('is_live = 1');
+        return {
+          results: [...sessions.values()].filter(
+            (item) => item.grade_id === gradeId && Boolean(item.is_live) === liveOnly
+          ),
+        };
+      }
+      if (q.includes('select distinct grade_id from sessions')) {
         return { results: [...new Set([...sessions.values()].map((item) => item.grade_id))].map((grade_id) => ({ grade_id })) };
       }
-      if (this.sql.includes('SELECT id, grade_id, subject, title FROM sessions')) {
+      if (q.includes('select id, grade_id, subject, title from sessions')) {
         return { results: [...sessions.values()] };
-      }
-      if (this.sql.includes('FROM sessions ORDER BY')) return { results: [...sessions.values()] };
-      if (this.sql.includes('FROM accounts WHERE role')) {
-        const role = this.sql.match(/role = '([^']+)'/)?.[1];
-        return { results: [...accounts.values()].filter((item) => item.role === role) };
-      }
-      if (this.sql.includes('FROM sessions WHERE grade_id')) {
-        const gradeId = this.values[0];
-        const liveOnly = this.sql.includes('is_live = 1');
-        return {
-          results: [...sessions.values()].filter((item) => item.grade_id === gradeId && Boolean(item.is_live) === liveOnly),
-        };
       }
       return { results: [] };
     }
 
     async run() {
-      if (this.sql.startsWith('INSERT INTO accounts')) {
-        const [id, username, password_hash, role, full_name, email, phone, school_or_subject, grade_id, registered_session_id] = this.values;
+      const q = this.normalized;
+      const v = this.values;
+
+      if (q.startsWith('insert into accounts')) {
+        const [id, username, password_hash, role, full_name, email, phone, school_or_subject, grade_id, registered_session_id, school_id] = v;
         if ([...accounts.values()].some((item) => item.username.toLowerCase() === username.toLowerCase())) {
           throw new Error('UNIQUE constraint failed: accounts.username');
         }
         accounts.set(id, {
-          id, username, password_hash, role, full_name, email, phone, school_or_subject, grade_id, registered_session_id,
-          created_at: '2026-11-03 10:00:00', expires_at: '2026-12-03 10:00:00', activated: 0, paid: 0,
+          id, username, password_hash, role, full_name, email, phone, school_or_subject,
+          grade_id, registered_session_id, school_id,
+          created_at: '2026-11-03 10:00:00',
+          expires_at: '2026-12-03 10:00:00',
+          activated: 0,
+          paid: 0,
         });
         return { meta: { changes: 1 } };
       }
-      if (this.sql.includes('INSERT INTO login_attempts')) {
-        attempts.push({ username: this.values[0].toLowerCase(), succeeded: Boolean(this.values[1]) });
-        return { meta: { changes: 1 } };
-      }
-      if (this.sql.startsWith('DELETE FROM login_attempts')) {
-        return { meta: { changes: 1 } };
-      }
-      if (this.sql.startsWith('DELETE FROM sessions WHERE id')) {
-        return { meta: { changes: sessions.delete(this.values[0]) ? 1 : 0 } };
-      }
-      if (this.sql.startsWith('UPDATE accounts SET')) {
-        const id = this.values[this.values.length - 1];
-        const account = accounts.get(id);
-        if (!account || account.role === 'director') return { meta: { changes: 0 } };
-        let valueIndex = 0;
-        if (this.sql.includes('activated = ?')) account.activated = this.values[valueIndex++];
-        if (this.sql.includes('paid = ?')) account.paid = this.values[valueIndex++];
-        if (this.sql.includes('registered_session_id = ?')) {
-          account.registered_session_id = this.values[valueIndex++];
-          account.grade_id = this.values[valueIndex++];
+      if (q.startsWith('insert or ignore into educator_lessons')) {
+        const [id, school_id, educator_id, slot] = v;
+        if (![...lessons.values()].some((item) => item.educator_id === educator_id && item.slot === slot)) {
+          lessons.set(id, {
+            id, school_id, educator_id, slot, title: '', subject: '', description: '',
+            media_key: null, media_name: null, media_type: null, media_size: 0,
+            updated_at: '2026-11-03 10:00:00',
+          });
         }
-        if (this.sql.includes('password_hash = ?')) account.password_hash = this.values[valueIndex++];
-        if (this.sql.includes("expires_at = datetime('now', '+1 month')")) account.expires_at = '2026-12-03 10:00:00';
+        return { meta: { changes: 1 } };
+      }
+      if (q.startsWith('insert or replace into sessions') || q.startsWith('insert into sessions')) {
+        const [id, school_id, grade_id, subject, title, teacher_name, source_name, source_url, playback_url, media_key] = v;
+        const is_live = q.includes('is_live, live_starts_at') ? Number(v[10] || 0) : 0;
+        const live_starts_at = q.includes('is_live, live_starts_at') ? v[11] || null : null;
+        sessions.set(id, { id, school_id, grade_id, subject, title, teacher_name, source_name, source_url, playback_url, media_key, is_live, live_starts_at });
+        return { meta: { changes: 1 } };
+      }
+      if (q.includes('insert into login_attempts')) {
+        attempts.push({ username: String(v[0]).toLowerCase(), succeeded: Boolean(v[1]) });
+        return { meta: { changes: 1 } };
+      }
+      if (q.startsWith('delete from login_attempts')) {
+        return { meta: { changes: 1 } };
+      }
+      if (q.startsWith('update schools set name = ?')) {
+        const school = schools.get(v[1]);
+        if (!school) return { meta: { changes: 0 } };
+        school.name = v[0];
+        return { meta: { changes: 1 } };
+      }
+      if (q.startsWith("update accounts set registered_session_id = null")) {
+        const [schoolId, sessionId] = v;
+        let changes = 0;
+        for (const account of accounts.values()) {
+          if (
+            account.role === 'student' &&
+            account.school_id === schoolId &&
+            account.registered_session_id === sessionId
+          ) {
+            account.registered_session_id = null;
+            changes++;
+          }
+        }
+        return { meta: { changes } };
+      }
+      if (q.startsWith('update educator_lessons')) {
+        const lesson = lessons.get(v[v.length - 3]);
+        if (!lesson) return { meta: { changes: 0 } };
+        if (q.includes("set title = '', subject = '', description = ''")) {
+          if (lesson.school_id !== v[1] || lesson.educator_id !== v[2]) return { meta: { changes: 0 } };
+          Object.assign(lesson, {
+            title: '', subject: '', description: '',
+            media_key: null, media_name: null, media_type: null, media_size: 0,
+            updated_at: '2026-11-03 10:00:00',
+          });
+        } else {
+          const [title, subject, description, media_key, media_name, media_type, media_size] = v;
+          Object.assign(lesson, { title, subject, description, media_key, media_name, media_type, media_size, updated_at: '2026-11-03 10:00:00' });
+        }
+        return { meta: { changes: 1 } };
+      }
+      if (q.startsWith('update sessions set is_live')) {
+        const session = sessions.get(v[2]);
+        if (!session || session.school_id !== v[3]) return { meta: { changes: 0 } };
+        session.is_live = v[0];
+        session.live_starts_at = v[1];
+        return { meta: { changes: 1 } };
+      }
+      if (q.startsWith('update accounts set')) {
+        let accountId = v[v.length - 1];
+        let schoolId = null;
+        if (q.includes('and school_id = ?')) {
+          schoolId = v[v.length - 1];
+          accountId = v[v.length - 2];
+        }
+        const account = accounts.get(accountId);
+        if (!account || (account.role === 'director' && !q.includes("role = 'director'"))) return { meta: { changes: 0 } };
+        if (schoolId && account.school_id !== schoolId) return { meta: { changes: 0 } };
+
+        const setClause = q.split(' set ')[1].split(' where ')[0];
+        let index = 0;
+        for (const assignment of setClause.split(',')) {
+          if (assignment.includes('activated = ?')) account.activated = v[index++];
+          else if (assignment.includes('paid = ?')) account.paid = v[index++];
+          else if (assignment.includes('registered_session_id = ?')) account.registered_session_id = v[index++];
+          else if (assignment.includes('grade_id = ?')) account.grade_id = v[index++];
+          else if (assignment.includes('password_hash = ?')) account.password_hash = v[index++];
+          else if (assignment.includes('username = ?')) account.username = v[index++];
+          else if (assignment.includes("expires_at = datetime('now', '+1 month')")) account.expires_at = '2026-12-03 10:00:00';
+        }
+        return { meta: { changes: 1 } };
+      }
+      if (q.startsWith('delete from educator_lessons')) {
+        const educatorId = v[0];
+        const schoolId = v[1];
+        let changes = 0;
+        for (const [id, lesson] of lessons.entries()) {
+          if (lesson.educator_id === educatorId && lesson.school_id === schoolId) {
+            lessons.delete(id);
+            changes++;
+          }
+        }
+        return { meta: { changes } };
+      }
+      if (q.startsWith('delete from classroom_messages')) {
+        const key = q.includes('educator_id = ?') ? 'educator_id' : 'student_id';
+        return { meta: { changes: classroomMessages.filter((item) => item[key] === v[0]).length } };
+      }
+      if (q.startsWith('delete from sessions where id')) {
+        const session = sessions.get(v[0]);
+        if (!session || (v.length > 1 && session.school_id !== v[1])) return { meta: { changes: 0 } };
+        sessions.delete(v[0]);
+        return { meta: { changes: 1 } };
+      }
+      if (q.startsWith('delete from accounts where id')) {
+        const account = accounts.get(v[0]);
+        if (!account || account.school_id !== v[1]) return { meta: { changes: 0 } };
+        accounts.delete(v[0]);
         return { meta: { changes: 1 } };
       }
       return { meta: { changes: 0 } };
@@ -137,15 +408,11 @@ function fakeEnvironment() {
       return new Statement(sql);
     },
     async batch(statements) {
+      const results = [];
       for (const statement of statements) {
-        const values = statement.values;
-        const [id, grade_id, subject, title, teacher_name, source_name, source_url, playback_url, media_key, is_live, live_starts_at] = values;
-        sessions.set(id, {
-          id, grade_id, subject, title, teacher_name, source_name, source_url, playback_url, is_live, live_starts_at,
-          media_key,
-        });
+        results.push(await statement.run());
       }
-      return [];
+      return results;
     },
   };
 
@@ -163,15 +430,63 @@ function fakeEnvironment() {
     school_or_subject: '',
     grade_id: '',
     registered_session_id: null,
+    school_id: 'default-agenda-school',
     created_at: '2026-11-03 09:00:00',
     expires_at: null,
     activated: 1,
     paid: 1,
   });
 
+  const educatorSalt = randomBytes(16);
+  const educatorHash = pbkdf2Sync('SeedEducatorPassword#2026', educatorSalt, 100000, 32, 'sha256');
+  accounts.set('seed-educator-account-0000000000000', {
+    id: 'seed-educator-account-0000000000000',
+    username: 'assigned.educator',
+    password_hash: `pbkdf2_sha256$100000$${educatorSalt.toString('base64url')}$${educatorHash.toString('base64url')}`,
+    role: 'educator',
+    full_name: 'Assigned Educator',
+    email: 'assigned@example.com',
+    phone: '',
+    school_or_subject: 'Mathematics',
+    grade_id: 'eb8',
+    registered_session_id: 'test-registration-session',
+    school_id: 'default-agenda-school',
+    created_at: '2026-11-03 08:00:00',
+    expires_at: null,
+    activated: 1,
+    paid: 1,
+  });
+
+  const SESSION_MEDIA_BUCKET = {
+    async put(key, value, options = {}) {
+      const bytes = value instanceof ArrayBuffer
+        ? new Uint8Array(value)
+        : new Uint8Array(await value.arrayBuffer());
+      bucketObjects.set(key, { bytes, contentType: options.httpMetadata?.contentType || 'application/octet-stream' });
+    },
+    async get(key) {
+      const stored = bucketObjects.get(key);
+      if (!stored) return null;
+      return {
+        body: new Response(stored.bytes).body,
+        httpEtag: '"test-etag"',
+        writeHttpMetadata(headers) {
+          headers.set('content-type', stored.contentType);
+        },
+      };
+    },
+    async delete(key) {
+      bucketObjects.delete(key);
+    },
+    async head(key) {
+      return bucketObjects.has(key) ? { key } : null;
+    },
+  };
+
   return {
     env: {
       DB,
+      SESSION_MEDIA_BUCKET,
       SESSION_SIGNING_KEY: signingKey,
       ALLOWED_ORIGINS: 'https://malazhub.github.io',
       STREAM_VIDEO_API_KEY: 'test-stream-video-key',
@@ -179,20 +494,46 @@ function fakeEnvironment() {
     },
     accounts,
     sessions,
+    schools,
+    lessons,
+    bucketObjects,
     password,
   };
 }
 
 async function send(env, path, { method = 'GET', body, token, origin } = {}) {
   const headers = new Headers();
-  if (body !== undefined) headers.set('content-type', 'application/json');
+  const isFormData = typeof FormData !== 'undefined' && body instanceof FormData;
+  if (body !== undefined && !isFormData) headers.set('content-type', 'application/json');
   if (token) headers.set('authorization', `Bearer ${token}`);
   if (origin) headers.set('origin', origin);
+  return worker.fetch(new Request(`https://agenda-api.test${path}`, {
+    method,
+    headers,
+    body: body === undefined ? undefined : isFormData ? body : JSON.stringify(body),
+  }), env);
+}
+
+async function send(env, path, { method = 'GET', body, token, origin } = {}) {
+  const headers = new Headers();
+  const isFormData = typeof FormData !== 'undefined' && body instanceof FormData;
+
+  if (body !== undefined && !isFormData) {
+    headers.set('content-type', 'application/json');
+  }
+  if (token) headers.set('authorization', `Bearer ${token}`);
+  if (origin) headers.set('origin', origin);
+
   const request = new Request(`https://agenda-api.test${path}`, {
     method,
     headers,
-    body: body === undefined ? undefined : JSON.stringify(body),
+    body: body === undefined
+      ? undefined
+      : isFormData
+        ? body
+        : JSON.stringify(body),
   });
+
   return worker.fetch(request, env);
 }
 
@@ -208,11 +549,13 @@ test('health and CORS preflight are served', async () => {
   }), env);
   assert.equal(options.status, 204);
   assert.equal(options.headers.get('access-control-allow-origin'), 'https://malazhub.github.io');
+  assert.match(options.headers.get('access-control-allow-methods') || '', /DELETE/);
 });
 
 test('registration hashes credentials and rejects duplicate usernames', async () => {
   const { env, accounts } = fakeEnvironment();
   const registration = {
+    schoolId: 'default-agenda-school',
     username: 'learner.one',
     password: 'x !',
     role: 'student',
@@ -239,7 +582,7 @@ test('registration hashes credentials and rejects duplicate usernames', async ()
   assert.equal(invalidSession.status, 400);
   assert.match((await invalidSession.json()).error, /choose a valid session/i);
 
-  const registrationSessions = await send(env, '/api/registration/sessions');
+  const registrationSessions = await send(env, '/api/registration/sessions?schoolId=default-agenda-school');
   assert.equal(registrationSessions.status, 200);
   assert.ok((await registrationSessions.json()).sessions.some((session) => session.id === 'test-registration-session'));
 
@@ -265,7 +608,7 @@ test('registration hashes credentials and rejects duplicate usernames', async ()
   await send(env, `/api/director/accounts/${result.account.id}`, {
     method: 'PATCH',
     token: directorToken,
-    body: { activated: true },
+    body: { activated: true, paid: true },
   });
   const login = await send(env, '/api/auth/login', {
     method: 'POST',
@@ -281,9 +624,9 @@ test('registration hashes credentials and rejects duplicate usernames', async ()
 
 test('grade registration loads available grades and grants grade-scoped live access', async () => {
   const { env, accounts, sessions } = fakeEnvironment();
-  const grades = await send(env, '/api/registration/grades');
+  const grades = await send(env, '/api/registration/grades?schoolId=default-agenda-school');
   assert.equal(grades.status, 200);
-  assert.deepEqual(await grades.json(), { grades: ['eb8'] });
+  assert.ok((await grades.json()).grades.includes('eb8'));
 
   const registration = await send(env, '/api/auth/register', {
     method: 'POST',
@@ -291,6 +634,8 @@ test('grade registration loads available grades and grants grade-scoped live acc
       username: 'grade.student',
       password: 'no restrictions !',
       role: 'student',
+      schoolId: 'default-agenda-school',
+      registeredSessionId: 'test-registration-session',
       fullName: 'Grade Student',
       email: 'grade@example.com',
       phone: '+1 555 0100',
@@ -301,7 +646,7 @@ test('grade registration loads available grades and grants grade-scoped live acc
   assert.equal(registration.status, 201);
   const { account, token } = await registration.json();
   assert.equal(account.gradeId, 'eb8');
-  assert.equal(account.registeredSessionId, null);
+  assert.equal(account.registeredSessionId, 'test-registration-session');
   assert.equal(accounts.get(account.id).grade_id, 'eb8');
 
   const directorLogin = await send(env, '/api/auth/login', {
@@ -312,17 +657,17 @@ test('grade registration loads available grades and grants grade-scoped live acc
   await send(env, `/api/director/accounts/${account.id}`, {
     method: 'PATCH',
     token: directorToken,
-    body: { activated: true },
+    body: { activated: true, paid: true },
   });
-  const liveStatus = await send(env, '/api/live-stream?gradeId=eb8', { token });
+  sessions.get('test-registration-session').is_live = 1;
+  const liveStatus = await send(env, '/api/live-stream?sessionId=test-registration-session', { token });
   assert.equal(liveStatus.status, 200);
   assert.equal((await liveStatus.json()).status, 'waiting');
-  sessions.get('test-registration-session').is_live = 1;
   const liveCatalog = await send(env, '/api/sessions?gradeId=eb8&live=true&sessionId=test-registration-session', { token });
   assert.equal(liveCatalog.status, 200);
   assert.equal((await liveCatalog.json()).sessions[0].id, 'test-registration-session');
 
-  const wrongGrade = await send(env, '/api/live-stream?gradeId=eb7', { token });
+  const wrongGrade = await send(env, '/api/sessions?gradeId=eb7&live=true&sessionId=test-registration-session', { token });
   assert.equal(wrongGrade.status, 403);
 });
 
@@ -332,11 +677,12 @@ test('Director login reads persisted role tables and saves status updates', asyn
     username: 'educator.one',
     password: 'A-long-password-2026',
     role: 'educator',
+    schoolId: 'default-agenda-school',
     fullName: 'Educator One',
     email: 'educator@example.com',
     phone: '',
     schoolOrSubject: 'Mathematics',
-    registeredSessionId: 'test-registration-session',
+    gradeId: 'eb8',
   };
   await send(env, '/api/auth/register', { method: 'POST', body: registration });
 
@@ -349,9 +695,11 @@ test('Director login reads persisted role tables and saves status updates', asyn
   const dashboard = await send(env, '/api/director/accounts', { token });
   const lists = await dashboard.json();
   assert.equal(lists.students.length, 0);
-  assert.equal(lists.educators.length, 1);
+  assert.equal(lists.educators.length, 2);
+  const newEducator = lists.educators.find((item) => item.username === 'educator.one');
+  assert.ok(newEducator);
 
-  const updated = await send(env, `/api/director/accounts/${lists.educators[0].id}`, {
+  const updated = await send(env, `/api/director/accounts/${newEducator.id}`, {
     method: 'PATCH',
     token,
     body: { activated: false, paid: true, registeredSessionId: 'test-registration-session' },
@@ -360,7 +708,7 @@ test('Director login reads persisted role tables and saves status updates', asyn
   const { account } = await updated.json();
   assert.equal(account.activated, false);
   assert.equal(account.paid, true);
-  assert.equal(account.registeredSessionId, 'test-registration-session');
+  assert.notEqual(account.registeredSessionId, 'test-registration-session');
 
   const renewed = await send(env, `/api/director/accounts/${account.id}`, {
     method: 'PATCH',
@@ -411,6 +759,7 @@ test('Director can save a live session and the grade catalog returns its playbac
       username: 'live.student',
       password: 'live session password',
       role: 'student',
+      schoolId: 'default-agenda-school',
       fullName: 'Live Student',
       email: 'live@example.com',
       phone: '',
@@ -418,31 +767,70 @@ test('Director can save a live session and the grade catalog returns its playbac
       registeredSessionId: 'live-eb8-math',
     },
   });
-  assert.equal(registration.status, 201);
-  const { account, token } = await registration.json();
-  const blockedBeforeActivation = await send(env, '/api/sessions?gradeId=eb8&live=true&sessionId=live-eb8-math', { token });
+  assert.equal(registration.status, 400);
+  assert.match((await registration.json()).error, /educator classroom|valid educator classroom/i);
+
+  const seedEducatorId = 'seed-educator-account-0000000000000';
+  const assigned = await send(env, `/api/director/accounts/${seedEducatorId}`, {
+    method: 'PATCH',
+    token: directorToken,
+    body: { activated: true, paid: true, registeredSessionId: 'live-eb8-math' },
+  });
+  assert.equal(assigned.status, 200);
+  const assignedEducator = (await assigned.json()).account;
+  assert.notEqual(assignedEducator.registeredSessionId, 'live-eb8-math');
+
+  const educatorLogin = await send(env, '/api/auth/login', {
+    method: 'POST',
+    body: { username: 'assigned.educator', password: 'SeedEducatorPassword#2026' },
+  });
+  const { token: educatorToken } = await educatorLogin.json();
+  const started = await send(env, '/api/educator/live-session', {
+    method: 'PATCH',
+    token: educatorToken,
+    body: { isLive: true },
+  });
+  assert.equal(started.status, 200);
+
+  const studentRegistration = await send(env, '/api/auth/register', {
+    method: 'POST',
+    body: {
+      username: 'live.student',
+      password: 'live session password',
+      role: 'student',
+      schoolId: 'default-agenda-school',
+      fullName: 'Live Student',
+      email: 'live@example.com',
+      phone: '',
+      schoolOrSubject: 'Grade 8',
+      registeredSessionId: assignedEducator.registeredSessionId,
+    },
+  });
+  assert.equal(studentRegistration.status, 201);
+  const { account, token } = await studentRegistration.json();
+  const blockedBeforeActivation = await send(env, `/api/sessions?gradeId=eb8&live=true&sessionId=${assignedEducator.registeredSessionId}`, { token });
   assert.equal(blockedBeforeActivation.status, 403);
 
   await send(env, `/api/director/accounts/${account.id}`, {
     method: 'PATCH',
     token: directorToken,
-    body: { activated: true },
+    body: { activated: true, paid: true },
   });
   const anonymous = await send(env, '/api/sessions?gradeId=eb8&live=true&sessionId=live-eb8-math');
   assert.equal(anonymous.status, 401);
   const wrongSession = await send(env, '/api/sessions?gradeId=eb8&live=true&sessionId=test-registration-session', { token });
   assert.equal(wrongSession.status, 403);
 
-  const response = await send(env, '/api/sessions?gradeId=eb8&live=true&sessionId=live-eb8-math', { token });
+  const response = await send(env, `/api/sessions?gradeId=eb8&live=true&sessionId=${assignedEducator.registeredSessionId}`, { token });
   const { sessions } = await response.json();
   assert.equal(sessions.length, 1);
   assert.equal(sessions[0].isLive, true);
   assert.equal(sessions[0].playbackUrl, 'https://example.org/live/video');
-  const liveStatus = await send(env, '/api/live-stream?sessionId=live-eb8-math', { token });
+  const liveStatus = await send(env, `/api/live-stream?sessionId=${assignedEducator.registeredSessionId}`, { token });
   const liveCredentials = await liveStatus.json();
   assert.equal(liveStatus.status, 200);
   assert.equal(liveCredentials.status, 'waiting');
-    assert.equal(liveCredentials.callId, 'live-eb8-math');
+    assert.equal(liveCredentials.callId, assignedEducator.registeredSessionId);
   assert.equal(liveCredentials.apiKey, 'test-stream-video-key');
 
   const videoTokenPayload = JSON.parse(
@@ -454,7 +842,7 @@ test('Director can save a live session and the grade catalog returns its playbac
 
   assert.deepEqual(
   videoTokenPayload.call_cids,
-  ['default:live-eb8-math']
+  [`default:${assignedEducator.registeredSessionId}`]
 );
   assert.equal('STREAM_VIDEO_API_SECRET' in liveCredentials, false);
   const [header, payload, signature] = liveCredentials.token.split('.');
@@ -533,4 +921,179 @@ test('live stream endpoint rejects users without an assigned activated session',
   const { env } = fakeEnvironment();
   const response = await send(env, '/api/live-stream?sessionId=test-registration-session');
   assert.equal(response.status, 401);
+});
+
+
+test('schools isolate educator directories and the ten permanent lesson slots', async () => {
+  const { env, accounts, lessons, bucketObjects } = fakeEnvironment();
+
+  const schoolsResponse = await send(env, '/api/schools');
+  assert.equal(schoolsResponse.status, 200);
+  const schoolList = await schoolsResponse.json();
+  assert.ok(schoolList.schools.some((school) => school.id === 'default-agenda-school'));
+  assert.ok(schoolList.schools.some((school) => school.id === 'other-school'));
+
+  const registration = await send(env, '/api/auth/register', {
+    method: 'POST',
+    body: {
+      schoolId: 'other-school',
+      username: 'other.educator',
+      password: 'OtherEducatorPassword#2026',
+      role: 'educator',
+      fullName: 'Other School Educator',
+      email: 'other.educator@example.com',
+      phone: '',
+      schoolOrSubject: 'Science',
+      gradeId: 'eb8',
+    },
+  });
+  assert.equal(registration.status, 201);
+  const { account, token } = await registration.json();
+  assert.equal(account.schoolId, 'other-school');
+  assert.equal(lessons.size, 10);
+
+  const otherDirectory = await send(env, '/api/schools/other-school/educators');
+  assert.equal(otherDirectory.status, 200);
+  assert.deepEqual(
+    (await otherDirectory.json()).educators.map((educator) => educator.id),
+    [account.id]
+  );
+
+  const defaultDirectory = await send(env, '/api/schools/default-agenda-school/educators');
+  assert.equal(defaultDirectory.status, 200);
+  assert.ok(
+    !(await defaultDirectory.json()).educators.some((educator) => educator.id === account.id)
+  );
+
+  const lessonList = await send(
+    env,
+    `/api/learning/educators/${account.id}/lessons?schoolId=other-school`
+  );
+  assert.equal(lessonList.status, 200);
+  const { lessons: educatorLessons } = await lessonList.json();
+  assert.equal(educatorLessons.length, 10);
+  assert.deepEqual(
+    educatorLessons.map((lesson) => lesson.slot),
+    [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+  );
+
+  const forbiddenLessonList = await send(
+    env,
+    `/api/learning/educators/${account.id}/lessons?schoolId=default-agenda-school`
+  );
+  assert.equal(forbiddenLessonList.status, 404);
+
+  const selectedLesson = educatorLessons[0];
+  const form = new FormData();
+  form.append('title', 'Cells and organisms');
+  form.append('subject', 'Science');
+  form.append('description', 'A lesson with an uploaded illustration.');
+  form.append('file', new Blob(['lesson image bytes'], { type: 'image/png' }), 'cells.png');
+
+  const saved = await send(env, `/api/learning/lessons/${selectedLesson.id}`, {
+    method: 'PUT',
+    token,
+    body: form,
+  });
+  assert.equal(saved.status, 200);
+  const savedLesson = (await saved.json()).lesson;
+  assert.equal(savedLesson.title, 'Cells and organisms');
+  assert.equal(savedLesson.subject, 'Science');
+  assert.equal(savedLesson.mediaName, 'cells.png');
+  assert.match(savedLesson.mediaUrl, /schoolId=other-school/);
+  assert.equal(bucketObjects.size, 1);
+
+  const media = await send(
+    env,
+    `/api/learning/lessons/${selectedLesson.id}/media?schoolId=other-school`
+  );
+  assert.equal(media.status, 200);
+  assert.equal(media.headers.get('content-type'), 'image/png');
+  assert.equal(await media.text(), 'lesson image bytes');
+
+  const wrongSchoolMedia = await send(
+    env,
+    `/api/learning/lessons/${selectedLesson.id}/media?schoolId=default-agenda-school`
+  );
+  assert.equal(wrongSchoolMedia.status, 404);
+
+  const deleted = await send(env, `/api/learning/lessons/${selectedLesson.id}`, {
+    method: 'DELETE',
+    token,
+  });
+  assert.equal(deleted.status, 200);
+  const clearedLesson = (await deleted.json()).lesson;
+  assert.equal(clearedLesson.slot, 1);
+  assert.equal(clearedLesson.title, '');
+  assert.equal(clearedLesson.mediaUrl, null);
+  assert.equal(bucketObjects.size, 0);
+  assert.equal(lessons.size, 10);
+
+  const defaultDirectorLogin = await send(env, '/api/auth/login', {
+    method: 'POST',
+    body: { username: 'director', password: 'DirectorPassword#2026' },
+  });
+  const { token: directorToken } = await defaultDirectorLogin.json();
+
+  const defaultDirectorAccounts = await send(env, '/api/director/accounts', {
+    token: directorToken,
+  });
+  const directorLists = await defaultDirectorAccounts.json();
+  assert.ok(!directorLists.educators.some((educator) => educator.id === account.id));
+
+  const crossSchoolDelete = await send(env, `/api/director/accounts/${account.id}`, {
+    method: 'DELETE',
+    token: directorToken,
+  });
+  assert.equal(crossSchoolDelete.status, 404);
+  assert.equal(accounts.has(account.id), true);
+});
+
+test('Director profile updates only the Director-owned school and username', async () => {
+  const { env, schools, accounts } = fakeEnvironment();
+  const login = await send(env, '/api/auth/login', {
+    method: 'POST',
+    body: { username: 'director', password: 'DirectorPassword#2026' },
+  });
+  assert.equal(login.status, 200);
+  const { token } = await login.json();
+
+  const initialProfile = await send(env, '/api/director/profile', { token });
+  assert.equal(initialProfile.status, 200);
+  assert.deepEqual(await initialProfile.json(), {
+    profile: {
+      schoolId: 'default-agenda-school',
+      schoolName: 'Agenda',
+      username: 'director',
+    },
+  });
+
+  const updated = await send(env, '/api/director/profile', {
+    method: 'PATCH',
+    token,
+    body: {
+      schoolName: 'Agenda Secondary School',
+      username: 'agenda.director',
+    },
+  });
+  assert.equal(updated.status, 200);
+  const result = await updated.json();
+  assert.equal(result.profile.schoolId, 'default-agenda-school');
+  assert.equal(result.profile.schoolName, 'Agenda Secondary School');
+  assert.equal(result.profile.username, 'agenda.director');
+  assert.ok(result.token);
+  assert.equal(schools.get('default-agenda-school').name, 'Agenda Secondary School');
+  assert.equal(accounts.get('director-account-0000000000000').username, 'director');
+
+  const refreshedProfile = await send(env, '/api/director/profile', {
+    token: result.token,
+  });
+  assert.equal(refreshedProfile.status, 200);
+  assert.equal((await refreshedProfile.json()).profile.schoolName, 'Agenda Secondary School');
+
+  const renamedLogin = await send(env, '/api/auth/login', {
+    method: 'POST',
+    body: { username: 'agenda.director', password: 'DirectorPassword#2026' },
+  });
+  assert.equal(renamedLogin.status, 200);
 });

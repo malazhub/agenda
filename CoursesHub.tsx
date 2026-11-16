@@ -6,14 +6,16 @@ import { GradeSessionsView } from './GradeSessionsView';
 import { DirectorSessionsPanel } from './DirectorSessionsPanel';
 import { LiveBroadcastHost } from './LiveBroadcastHost';
 import { 
-  getDirectorAccounts, 
-  getRegistrationSessions, 
+  getDirectorAccounts,
+  getDirectorProfile,
+  updateDirectorProfile,
+  getRegistrationSessions,
   loginAccount, 
   setupLiveStream, 
   updateDirectorAccount,
   deleteDirectorAccount 
 } from '../services/cloudflareApi';
-import type { CloudflareAccount, LiveStreamSetup, RegistrationSession } from '../services/cloudflareApi';
+import type { CloudflareAccount, DirectorProfile, LiveStreamSetup, RegistrationSession } from '../services/cloudflareApi';
 import {
   Clock,
   ShieldCheck,
@@ -26,6 +28,9 @@ import {
 
 interface CoursesHubProps {
   currentLang: Language;
+  schoolId: string;
+  onSchoolProfileUpdated?: (profile: DirectorProfile) => void;
+  onDirectorSessionChange?: (active: boolean) => void;
   onBookTeacher: (teacher: any, slot: string) => void;
   onSelectQuestionForBooking: (question: any, exam: any) => void;
   onStartPractice: (exam: any) => void;
@@ -43,6 +48,9 @@ type DirectorRow = CloudflareAccount;
 
 export const CoursesHub: React.FC<CoursesHubProps> = ({
   currentLang,
+  schoolId,
+  onSchoolProfileUpdated,
+  onDirectorSessionChange,
   directorLoginRequest,
   registeredAccount,
   sessionToken,
@@ -72,6 +80,11 @@ export const CoursesHub: React.FC<CoursesHubProps> = ({
   const [streamSetup, setStreamSetup] = useState<LiveStreamSetup | null>(null);
   const [streamSetupError, setStreamSetupError] = useState('');
   const [streamSetupLoading, setStreamSetupLoading] = useState(false);
+  const [directorProfile, setDirectorProfile] = useState<DirectorProfile | null>(null);
+  const [profileSchoolName, setProfileSchoolName] = useState('');
+  const [profileUsername, setProfileUsername] = useState('');
+  const [profilePassword, setProfilePassword] = useState('');
+  const [profileSaving, setProfileSaving] = useState(false);
 
     useEffect(() => {
     if (directorLoginRequest > 0) {
@@ -132,32 +145,51 @@ export const CoursesHub: React.FC<CoursesHubProps> = ({
     setDirectorToken('');
     setStudentRows([]);
     setEducatorRows([]);
+    setRegistrationSessions([]);
+    setDirectorProfile(null);
+    setProfilePassword('');
     setActiveGradeForSessions(null);
     setDirectorScreen('home');
+    onDirectorSessionChange?.(false);
   };
 
   useEffect(() => {
     if (directorScreen !== 'dashboard' || !directorToken) return;
+
     let active = true;
     setDirectorLoading(true);
     setDirectorDataError('');
-    Promise.all([getDirectorAccounts(directorToken), getRegistrationSessions()])
-      .then(([{ students, educators }, { sessions }]) => {
+
+    const loadDirectorDashboard = async () => {
+      try {
+        const [{ students, educators }, { profile }] = await Promise.all([
+          getDirectorAccounts(directorToken),
+          getDirectorProfile(directorToken),
+        ]);
+        const { sessions } = await getRegistrationSessions(profile.schoolId);
         if (!active) return;
+
         setStudentRows(students);
         setEducatorRows(educators);
+        setDirectorProfile(profile);
+        setProfileSchoolName(profile.schoolName);
+        setProfileUsername(profile.username);
         setRegistrationSessions(sessions);
-      })
-      .catch((error) => {
-        if (active) setDirectorDataError(error instanceof Error ? error.message : 'Unable to load registrations.');
-      })
-      .finally(() => {
+        onSchoolProfileUpdated?.(profile);
+      } catch (error) {
+        if (active) {
+          setDirectorDataError(
+            error instanceof Error ? error.message : 'Unable to load Director profile and registrations.'
+          );
+        }
+      } finally {
         if (active) setDirectorLoading(false);
-      });
-    return () => {
-      active = false;
+      }
     };
-  }, [directorScreen, directorToken]);
+
+    void loadDirectorDashboard();
+    return () => { active = false; };
+  }, [directorScreen, directorToken, onSchoolProfileUpdated]);
 
   const handleDirectorLogin = async () => {
     setDirectorError('');
@@ -166,7 +198,13 @@ export const CoursesHub: React.FC<CoursesHubProps> = ({
       if (account.role !== 'director') {
         throw new Error('This account does not have Director access.');
       }
+      const { profile } = await getDirectorProfile(token);
       sessionStorage.setItem('agenda-director-token', token);
+      setDirectorProfile(profile);
+      setProfileSchoolName(profile.schoolName);
+      setProfileUsername(profile.username);
+      onSchoolProfileUpdated?.(profile);
+      onDirectorSessionChange?.(true);
       setDirectorToken(token);
       setDirectorScreen('dashboard');
       setDirectorForm({ username: '', password: '' });
@@ -176,6 +214,48 @@ export const CoursesHub: React.FC<CoursesHubProps> = ({
   };
 
   
+const saveDirectorProfile = async (event: React.FormEvent) => {
+  event.preventDefault();
+
+  if (!directorToken || !profileSchoolName.trim() || !profileUsername.trim()) {
+    setDirectorDataError('Enter a school name and Director username.');
+    return;
+  }
+
+  setProfileSaving(true);
+  setDirectorDataError('');
+  setDirectorMessage('');
+
+  try {
+    const result = await updateDirectorProfile(directorToken, {
+      schoolName: profileSchoolName.trim(),
+      username: profileUsername.trim(),
+      ...(profilePassword ? { password: profilePassword } : {}),
+    });
+
+    sessionStorage.setItem('agenda-director-token', result.token);
+    setDirectorToken(result.token);
+    setDirectorProfile(result.profile);
+    setProfileSchoolName(result.profile.schoolName);
+    setProfileUsername(result.profile.username);
+    setProfilePassword('');
+    onSchoolProfileUpdated?.(result.profile);
+    setDirectorMessage(
+      currentLang === 'ar'
+        ? 'تم تحديث ملف المدرسة والمدير.'
+        : currentLang === 'fr'
+          ? 'Le profil de l’école et du directeur a été mis à jour.'
+          : 'School and Director profile updated.'
+    );
+  } catch (error) {
+    setDirectorDataError(
+      error instanceof Error ? error.message : 'Unable to update Director profile.'
+    );
+  } finally {
+    setProfileSaving(false);
+  }
+};
+
 const updateAccount = async (
   account: DirectorRow,
     update: {
@@ -214,7 +294,7 @@ const updateAccount = async (
     // Reload the room list because assigning an educator
     // may have created a new educator-specific classroom.
     if (typeof update.registeredSessionId === 'string') {
-      const { sessions } = await getRegistrationSessions();
+      const { sessions } = await getRegistrationSessions(directorProfile?.schoolId || schoolId);
       setRegistrationSessions(sessions);
     }
 
@@ -511,6 +591,7 @@ const updateAccount = async (
             <GradeSessionsView
         currentLang={currentLang}
         selectedGrade={activeGradeForSessions}
+        schoolId={schoolId}
         initialTab={activeGradeTab}
         autoOpenLiveClassroom={autoOpenLiveClassroom}
         registeredAccount={registeredAccount}
@@ -686,7 +767,34 @@ const updateAccount = async (
           </div>
         ) : (
           <div className="space-y-6">
-                        {renderDirectorTable(
+            <form onSubmit={saveDirectorProfile} className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5 space-y-3">
+              <div>
+                <h3 className="text-sm font-black text-slate-900">
+                  {currentLang === 'ar' ? 'ملف المدرسة والمدير' : currentLang === 'fr' ? 'Profil de l’école et du directeur' : 'School & Director Profile'}
+                </h3>
+                <p className="mt-1 text-xs text-slate-500">
+                  {currentLang === 'ar' ? 'تعديل اسم المدرسة واسم دخول المدير.' : currentLang === 'fr' ? 'Modifiez le nom de l’école et l’identifiant du directeur.' : 'Change the school name and Director sign-in username.'}
+                </p>
+              </div>
+              <div className="grid gap-3 md:grid-cols-3">
+                <label className="space-y-1">
+                  <span className="block text-xs font-bold text-slate-700">{currentLang === 'ar' ? 'اسم المدرسة' : currentLang === 'fr' ? 'Nom de l’école' : 'School name'}</span>
+                  <input required minLength={2} maxLength={100} value={profileSchoolName} onChange={(event) => setProfileSchoolName(event.target.value)} className="w-full rounded-xl border border-slate-300 bg-slate-50 p-2.5 text-sm" />
+                </label>
+                <label className="space-y-1">
+                  <span className="block text-xs font-bold text-slate-700">{currentLang === 'ar' ? 'اسم مستخدم المدير' : currentLang === 'fr' ? 'Identifiant du directeur' : 'Director username'}</span>
+                  <input required minLength={3} maxLength={32} pattern="[a-zA-Z0-9._-]+" value={profileUsername} onChange={(event) => setProfileUsername(event.target.value)} className="w-full rounded-xl border border-slate-300 bg-slate-50 p-2.5 text-sm" />
+                </label>
+                <label className="space-y-1">
+                  <span className="block text-xs font-bold text-slate-700">{currentLang === 'ar' ? 'كلمة مرور جديدة (اختياري)' : currentLang === 'fr' ? 'Nouveau mot de passe (facultatif)' : 'New password (optional)'}</span>
+                  <input type="password" minLength={12} maxLength={1024} autoComplete="new-password" value={profilePassword} onChange={(event) => setProfilePassword(event.target.value)} placeholder="Leave blank to keep current password" className="w-full rounded-xl border border-slate-300 bg-slate-50 p-2.5 text-sm" />
+                </label>
+              </div>
+              <button type="submit" disabled={profileSaving || !directorProfile} className="rounded-xl bg-indigo-700 px-4 py-2.5 text-xs font-black text-white disabled:opacity-60">
+                {profileSaving ? '…' : currentLang === 'ar' ? 'حفظ الملف' : currentLang === 'fr' ? 'Enregistrer le profil' : 'Save profile'}
+              </button>
+            </form>
+            {renderDirectorTable(
               currentLang === 'ar' ? 'الطلاب' : currentLang === 'fr' ? 'Étudiants' : 'Students',
               studentRows,
               true

@@ -18,26 +18,14 @@ interface RegisterModalProps {
   isOpen: boolean;
   onClose: () => void;
   currentLang: Language;
+  schoolId: string;
   onRegisterSuccess: (account: CloudflareAccount, token: string) => void;
-}
-export async function deleteDirectorAccount(token: string, accountId: string): Promise<void> {
-  const response = await fetch(`${API_BASE_URL}/api/director/accounts/${encodeURIComponent(accountId)}`, {
-    method: 'DELETE',
-    headers: {
-      Authorization: `Bearer ${token}`,
-      'Content-Type': 'application/json',
-    },
-  });
-
-  if (!response.ok) {
-    const errorData = await response.json().catch(() => ({}));
-    throw new Error(errorData.error || `Failed to delete account from Cloudflare (${response.status})`);
-  }
 }
 export const RegisterModal: React.FC<RegisterModalProps> = ({
   isOpen,
   onClose,
   currentLang,
+  schoolId,
   onRegisterSuccess
 }) => {
   const t = translations[currentLang];
@@ -103,7 +91,7 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
 
     setIsLoadingEducators(true);
 
-    getRegistrationEducators()
+    getRegistrationEducators(schoolId)
       .then(({ educators }) => {
         if (active) {
           setEducatorsList(educators || []);
@@ -129,13 +117,13 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
     return () => {
       active = false;
     };
-  }, [isOpen, t.registrationServiceUnavailable]);
+  }, [isOpen, schoolId, t.registrationServiceUnavailable]);
 
   useEffect(() => {
     if (!isOpen) return;
     let active = true;
     setIsLoadingGrades(true);
-    getRegistrationGrades()
+    getRegistrationGrades(schoolId)
       .then(({ grades }) => {
         if (active) setRegistrationGrades(grades);
       })
@@ -148,7 +136,7 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
     return () => {
       active = false;
     };
-  }, [isOpen, t.registrationServiceUnavailable]);
+  }, [isOpen, schoolId, t.registrationServiceUnavailable]);
 
   const handleClose = () => {
     setShowPayment(false);
@@ -161,6 +149,17 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
 
     const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (!isLogin && !schoolId) {
+      setError(
+        currentLang === 'ar'
+          ? 'يرجى اختيار المدرسة أولاً.'
+          : currentLang === 'fr'
+            ? 'Veuillez d’abord choisir une école.'
+            : 'Choose a school before registering.'
+      );
+      return;
+    }
 
     if (!isLogin && role === 'student') {
       if (!selectedEducator || !selectedEducator.hasAssignedClassroom) {
@@ -188,6 +187,7 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
             username,
             password,
             role,
+            schoolId,
             fullName: name,
             email,
             phone,

@@ -1,5 +1,6 @@
 import React from 'react';
 import { Language, UserProfile } from '../types';
+import type { SchoolRecord } from '../services/cloudflareApi';
 import { translations } from '../translations';
 import { UserPlus, LogOut, Share2 } from 'lucide-react';
 
@@ -14,6 +15,11 @@ interface HeaderProps {
   signedInName?: string;
   onOpenArchiveSessions?: () => void;
   onSignOut?: () => void;
+  schoolName?: string;
+  schools?: SchoolRecord[];
+  selectedSchoolId?: string;
+  onSchoolChange?: (schoolId: string) => void;
+  hideSchoolSelector?: boolean;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -23,6 +29,11 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenRegister,
   signedInName,
   onSignOut,
+  schoolName,
+  schools = [],
+  selectedSchoolId = '',
+  onSchoolChange,
+  hideSchoolSelector = false,
 }) => {
   const t = translations[currentLang];
 
@@ -68,7 +79,7 @@ export const Header: React.FC<HeaderProps> = ({
           >
             <div className="text-center">
               <span className="text-2xl font-black tracking-tight text-slate-900 block leading-tight">
-                Agenda
+                {schoolName || 'Agenda'}
               </span>
                             {/* Subtitle follows the selected language; keep the original colors. */}
               <span className="text-xs sm:text-sm font-black tracking-wide inline-block leading-snug">
@@ -92,6 +103,21 @@ export const Header: React.FC<HeaderProps> = ({
                   </>
                 )}
               </span>
+              {!signedInName && !hideSchoolSelector && schools.length > 1 && onSchoolChange && (
+                <label className="mt-2 inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-1.5 text-[11px] font-bold text-slate-600">
+                  <span>{currentLang === 'ar' ? 'المدرسة' : currentLang === 'fr' ? 'École' : 'School'}</span>
+                  <select
+                    aria-label={currentLang === 'ar' ? 'اختر المدرسة' : currentLang === 'fr' ? 'Choisir une école' : 'Choose school'}
+                    value={selectedSchoolId}
+                    onChange={(event) => onSchoolChange(event.target.value)}
+                    className="max-w-44 bg-transparent text-xs font-black text-slate-800 outline-none"
+                  >
+                    {schools.map((school) => (
+                      <option key={school.id} value={school.id}>{school.name}</option>
+                    ))}
+                  </select>
+                </label>
+              )}
             </div>
           </div>
 
