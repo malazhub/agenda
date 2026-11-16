@@ -69,7 +69,7 @@ export const AIChatBot: React.FC<AIChatBotProps> = ({ currentLang, schoolId, sch
         ? prices.map((price) => `${price.gradeId.toUpperCase()}: ${price.monthlyRateUsd} USD`).join('\n')
         : `${context?.defaultMonthlyRateUsd ?? 125} USD per month (default rate)`;
       if (currentLang === 'ar') return `المدرسة: ${context?.schoolName || schoolName || 'Agenda'}\nالأسعار الشهرية المعتمدة حسب الصف:\n${rateLines}\nالسعر الافتراضي للصف الذي لم يحدد المدير سعره هو 125 دولاراً شهرياً. هذه الأسعار خاصة بمدرستك.`;
-      if (currentLang === 'fr') return `Établissement : ${schoolContext?.schoolName || schoolName || 'Agenda'}\nTarifs mensuels par classe :\n${rateLines}\nLe tarif par défaut d'une classe sans prix personnalisé est de 125 USD par mois. Ces tarifs sont propres à votre établissement.`;
+      if (currentLang === 'fr') return `Établissement : ${context?.schoolName || schoolName || 'Agenda'}\nTarifs mensuels par classe :\n${rateLines}\nLe tarif par défaut d'une classe sans prix personnalisé est de 125 USD par mois. Ces tarifs sont propres à votre établissement.`;
       if (currentLang === 'es') return `Escuela: ${schoolContext?.schoolName || schoolName || 'Agenda'}\nTarifas mensuales por curso:\n${rateLines}\nEl precio predeterminado para un curso sin tarifa personalizada es de 125 USD al mes. Estas tarifas pertenecen a tu escuela.`;
       if (currentLang === 'it') return `Scuola: ${schoolContext?.schoolName || schoolName || 'Agenda'}\nTariffe mensili per classe:\n${rateLines}\nLa tariffa predefinita per una classe senza prezzo personalizzato è di 125 USD al mese. Queste tariffe appartengono alla tua scuola.`;
       return `School: ${schoolContext?.schoolName || schoolName || 'Agenda'}\nApproved monthly rates by grade:\n${rateLines}\nThe default rate for a grade without a custom price is 125 USD per month. These prices belong to this school.`;
@@ -178,9 +178,9 @@ export const AIChatBot: React.FC<AIChatBotProps> = ({ currentLang, schoolId, sch
             {
               text: `You are the AI academic assistant for Agenda (منصة الأجندة اللبنانية).
 Platform constraints:
-- Saved Price: 7 USD flat rate per 1-on-1 session with 3 free trials upon registration (Whish Money, OMT Cash, Fresh USD).
-- Saved Timing: Live sessions operate daily strictly from 4:00 PM to 8:00 PM (Beirut Time).
-- You can explain academic concepts, exercises, homework problems, official Lebanese curriculum (Brevet, Bac SG, SE, LH), camera exercise submissions with AI Barèmes, and educator breakout rooms.
+- Use the selected school's live configuration for all monthly rates, educators, sessions, and school identity.
+- Do not claim a fixed platform-wide price or timetable. Do not invent payment methods, schedules, account credentials, or school records.
+- Explain academic concepts, official Lebanese curriculum, homework, camera exercise submissions, and classroom navigation.
 Language to answer: ${({ ar: 'Arabic', en: 'English', fr: 'French', it: 'Italian', es: 'Spanish' } as Record<Language, string>)[currentLang]}.
 Authoritative school configuration (use current values, never invent a rate):
 ${JSON.stringify(currentSchoolContext || { schoolName: schoolName || 'Agenda', defaultMonthlyRateUsd: 125, prices: [], sessions: [], educators: [] })}
