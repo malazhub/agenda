@@ -24,6 +24,28 @@ interface ChatMessage {
   time: string;
 }
 
+/**
+ * Canonical product knowledge is included with every AI request. Keep this
+ * independent from transient chat state so the assistant never relies on a
+ * previous chat transcript to know how Agenda works.
+ */
+const AGENDA_ASSISTANT_KNOWLEDGE = [
+  'Agenda is an education and school-management platform for students, educators, and school Directors.',
+  'Students use their school-specific link to register, sign in, join their assigned live classes, and access saved learning resources.',
+  'Educators manage and deliver their assigned classes, start live broadcasts, and upload or edit only their own lesson/resource slots.',
+  'Directors manage their own school from the Director Dashboard. They manage student and educator accounts, activate accounts, configure classes and grade-specific monthly prices, and monitor every classroom belonging to their school.',
+  'Live-class access requires an activated, paid student account assigned to the same educator session. The educator must start the broadcast before the student can join.',
+  'Every Director has a separate school tenant and school ID. Student accounts, educator accounts, classes, saved educator lessons, and grade-specific prices are isolated by school. A Director cannot access another school\'s accounts or files. The school-specific share link selects the school; there is no public school dropdown.',
+  'Registration: open the correct school link, choose Student or Educator, enter the requested details, create a username and password, and select an available grade and educator/session. The Director activates the account.',
+  'Sign-in uses the username and password created during registration. A user who forgets a password must ask their school Director to reset it. Never ask the user to share a password.',
+  'Saved lessons: sign in, open the classroom, choose Learning Resources, and select the educator to view their published lessons and files.',
+  'Monthly school fees are configured by the Director for each grade. The default is USD 125 per student per month unless that school has saved a different grade rate. Always use the live school configuration for actual prices and distinguish monthly school fees from other fees.',
+  'An independent Agenda copy is available for a one-time USD 150 price. The purchaser becomes the Director of that separate copy and can manage its school name, educators, students, classes, saved lessons, monthly grade pricing, and classroom monitoring/delivery. The copy and its data remain isolated from other schools. This is not the monthly student fee. The AI chat does not process payments.',
+  'To rename a school, sign in from the Director Login card, open Director Dashboard > Accounts, edit the School name field, and save. The new name updates the platform branding for that school.',
+  'The school context supplied with each request is authoritative for that school\'s name, educators, sessions, and saved grade prices. Never invent school records, credentials, schedules, or custom prices, and never disclose private data or information from another school.',
+  'The application supports Arabic, English, French, Spanish, and Italian. All user-visible questions and assistant answers must follow the currently selected language.'
+].join('\\n');
+
 export const AIChatBot: React.FC<AIChatBotProps> = ({ currentLang, schoolId, schoolName }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [inputText, setInputText] = useState('');
@@ -98,9 +120,11 @@ export const AIChatBot: React.FC<AIChatBotProps> = ({ currentLang, schoolId, sch
 
     const applicationOverviewQuestion = [
       'what is agenda', 'about agenda', 'agenda application', 'agenda app', 'about the app',
-      'how to use agenda', 'how do i use', 'how to navigate', 'how do i navigate',
-      'navigate the app', 'application overview', 'brief about', 'brief of the app',
-      'give me a brief', 'give me an overview', 'explain agenda', 'explain this app', 'what does agenda do',
+      'about this platform', 'what is this app', 'what is this platform', 'what is this application',
+      'what is the platform about', 'tell me about this app', 'tell me about agenda',
+      'what can i do here', 'what services do you offer', 'what does this platform do',
+      'how does this work', 'application overview', 'overview', 'brief about', 'brief of the app',
+      'give me a brief', 'give me an overview', 'explain agenda', 'explain this app', 'explain the platform', 'what does agenda do',
       'expliquez agenda', 'présentation de la plateforme', 'fonctionnement de la plateforme',
       'explica agenda', 'presentación de la plataforma', 'cómo funciona la plataforma',
       'spiegami agenda', 'presentazione della piattaforma', 'come funziona la piattaforma',
@@ -243,6 +267,9 @@ export const AIChatBot: React.FC<AIChatBotProps> = ({ currentLang, schoolId, sch
   };
 
   const handleSend = async (textToSend?: string) => {
+    const recentConversation = messages.slice(-8).map((message) =>
+      `${message.sender === 'user' ? 'User' : 'Assistant'}: ${message.text}`
+    ).join('\\n');
     const text = (textToSend || inputText).trim();
     if (!text || isTyping) return;
 
@@ -349,6 +376,10 @@ Question: ${JSON.stringify(text)}`,
           contents: [
             {
               text: `You are the AI academic assistant for Agenda (منصة الأجندة اللبنانية).
+CANONICAL AGENDA KNOWLEDGE (always available; do not rely on previous chat messages to remember these facts):
+${AGENDA_ASSISTANT_KNOWLEDGE}
+RECENT CONVERSATION (use only to understand follow-up references; canonical knowledge and current school data take precedence):
+${recentConversation || '(No previous chat messages.)'}
 Platform constraints:
 - Use the selected school's live configuration for all monthly rates, educators, sessions, and school identity.
 - Do not claim a fixed platform-wide price or timetable. Do not invent payment methods, schedules, account credentials, or school records.
