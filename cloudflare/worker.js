@@ -1057,7 +1057,7 @@ function publicSession(session) {
     playbackUrl: session.playback_url || session.source_url,
     isLive: Boolean(session.is_live),
     liveStartsAt: session.live_starts_at,
-    mediaUrl: session.media_key ? `/api/media/${encodeURIComponent(session.media_key)}` : null,
+    mediaUrl: session.media_key ? `/api/media/${encodeURIComponent(session.media_key)}?schoolId=${encodeURIComponent(session.school_id)}` : null,
   };
 }
 
@@ -1809,7 +1809,7 @@ function publicEducatorLesson(row) {
     title: row.title || "",
     subject: row.subject || "",
     description: row.description || "",
-    mediaUrl: row.media_key ? `/api/media/${encodeURIComponent(row.media_key)}` : null,
+    mediaUrl: row.media_key ? `/api/media/${encodeURIComponent(row.media_key)}?schoolId=${encodeURIComponent(row.school_id)}` : null,
     mediaName: row.media_name || null,
     mediaType: row.media_type || null,
     mediaSize: Number(row.media_size || 0),
@@ -1929,9 +1929,16 @@ async function uploadMedia(request, env, objectKey) {
   return json({ mediaKey: key }, 201);
 }
 
-async function readMedia(env, objectKey) {
+async function readMedia(env, objectKey, schoolId) {
   const key = decodeURIComponent(objectKey);
-  if (!key || key.split("/").some((part) => part === "." || part === "..")) return json({ error: "Invalid media key." }, 400);
+  if (!key || key.split("/").some((part) => part === "." || part === "..") || !schoolId) return json({ error: "Invalid media key or school." }, 400);
+  const ownership = await env.DB.prepare(
+    `SELECT id FROM sessions WHERE media_key = ? AND school_id = ?
+     UNION ALL
+     SELECT id FROM educator_lessons WHERE media_key = ? AND school_id = ?
+     LIMIT 1`
+  ).bind(key, schoolId, key, schoolId).first();
+  if (!ownership) return json({ error: "Media not found in this school." }, 404);
   const object = await env.SESSION_MEDIA_BUCKET.get(key);
   if (!object) return json({ error: "Media not found." }, 404);
   const headers = new Headers();
@@ -2667,7 +2674,7 @@ async function handle(request, env) {
   if (request.method === "PUT" && uploadMatch) return uploadMedia(request, env, uploadMatch[1]);
 
   const mediaMatch = path.match(/^\/api\/media\/(.+)$/);
-  if (request.method === "GET" && mediaMatch) return readMedia(env, mediaMatch[1]);
+  if (request.method === "GET" && mediaMatch) return readMedia(env, mediaMatch[1], url.searchParams.get("schoolId") || "");
 
   return json({ error: "Not found." }, 404);
 }
