@@ -21,6 +21,7 @@ import {
 import type {
   CloudflareAccount,
   ClassroomMessage,
+  StoredSessionRecord,
 } from '../services/cloudflareApi';
 
 import {
@@ -556,7 +557,7 @@ const unsubscribeCustom = call.on('custom', (event: any) => {
   const targetId = custom.targetUserId || senderId;
 
   if (custom.targetUserId) {
-    const senderIsEducator = call.state.participants.some(
+    const senderIsEducator = (call?.state.participants ?? []).some(
       (participant) =>
         participant.userId === senderId &&
         participant.roles?.some(
@@ -599,7 +600,7 @@ const permissionStateSubscription =
 
     // Permission is granted, but the student still controls
     // whether their microphone is switched on.
-    setIsMicOn(call.microphone.enabled);
+    setIsMicOn(call?.microphone.enabled ?? false);
     setCameraError(null);
   });
 
