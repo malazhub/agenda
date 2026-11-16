@@ -96,6 +96,22 @@ const registerSignOutCleanup = useCallback(
     return () => { active = false; };
   }, []);
 
+  // Keep the public school title in sync when a Director changes it from another device.
+  useEffect(() => {
+    const refreshSchoolBrand = () => {
+      void getSchools().then(({ schools: records, activeSchoolId: serverActiveSchoolId }) => {
+        setSchools(records);
+        setActiveSchoolId(serverActiveSchoolId || records[0]?.id || '');
+      }).catch((error) => console.error('Unable to refresh school branding.', error));
+    };
+    const intervalId = window.setInterval(refreshSchoolBrand, 30_000);
+    window.addEventListener('focus', refreshSchoolBrand);
+    return () => {
+      window.clearInterval(intervalId);
+      window.removeEventListener('focus', refreshSchoolBrand);
+    };
+  }, []);
+
   useEffect(() => {
     const storedToken = sessionStorage.getItem('agenda-session-token');
     if (storedToken) setSessionToken(storedToken);
