@@ -584,7 +584,7 @@ const unsubscribeCustom = call.on('custom', (event: any) => {
 // Keep the student's speaking permission synchronized with
 // Stream's actual local capabilities.
 const permissionStateSubscription =
-  call.state.ownCapabilities$.subscribe((capabilities) => {
+  call!.state.ownCapabilities$.subscribe((capabilities) => {
     if (!isStudent) return;
 
     const allowed = capabilities.includes(
@@ -660,7 +660,7 @@ callEventUnsubs.current = [];
       try {
         await call.get();
 
-        otherHostPresent = call.state.participants.some(
+        otherHostPresent = call!.state.participants.some(
           (participant) =>
             participant.userId !== registeredAccount.id &&
             participant.roles.includes('host')
@@ -1371,7 +1371,7 @@ const toggleVideoTrack = async () => {
     } else {
       await call.microphone.enable();
 
-      setIsMicOn(call.microphone.enabled);
+      setIsMicOn(call!.microphone.enabled);
       setCameraError(null);
     }
   } catch (error) {
