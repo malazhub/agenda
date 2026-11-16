@@ -140,12 +140,12 @@ export const AIChatBot: React.FC<AIChatBotProps> = ({ currentLang, schoolId, sch
 
     // 1. Check if user is asking about price or timing (strictly return saved facts)
     let currentSchoolContext = schoolContext;
-    if (!currentSchoolContext && schoolId) {
+    if (schoolId) {
       try {
         currentSchoolContext = await getSchoolPublicContext(schoolId);
         setSchoolContext(currentSchoolContext);
       } catch {
-        currentSchoolContext = null;
+        // Retain the most recently loaded school context if the API is temporarily unavailable.
       }
     }
     const savedAnswer = getSavedResponse(text, currentSchoolContext);
