@@ -258,7 +258,15 @@ export function getLiveStreamStatus(
     }
   );
 }
-
+// Request a temporary Stream identity for the anonymous guest test room.
+export function createGuestLiveStream(): Promise<LiveStreamStatus> {
+  return request<LiveStreamStatus>(
+    '/api/guest/live-stream',
+    {
+      method: 'POST',
+    }
+  );
+}
 export function setupLiveStream(token: string): Promise<LiveStreamSetup> {
   return request('/api/director/live-stream', {
     method: 'POST',
