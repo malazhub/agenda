@@ -611,3 +611,15 @@ export function getGradeSessions(
     })),
   }));
 }
+
+
+/**
+ * Calls Gemini through the Cloudflare Worker. The Gemini API key remains
+ * server-side in the Worker secret and is never included in the browser bundle.
+ */
+export async function generateGeminiContent(contents: unknown): Promise<{ text: string }> {
+  return request<{ text: string }>('/api/ai/generate', {
+    method: 'POST',
+    body: JSON.stringify({ model: 'gemini-3.8-flash', contents }),
+  });
+}
