@@ -103,10 +103,11 @@ if (!schoolName || schoolName.length > 160) {
   process.exit(1);
 }
 const command = [
-  `INSERT OR IGNORE INTO schools (id, name) VALUES ('school-' || lower(hex(randomblob(8))), ${escapeSql(schoolName)});`,
   'INSERT INTO accounts (id, username, password_hash, role, school_id, full_name, email, activated, paid)',
-  `SELECT lower(hex(randomblob(16))), ${escapeSql(username)}, ${escapeSql(passwordHash)}, 'director', id, 'Director', '', 1, 1 FROM schools WHERE name = ${escapeSql(schoolName)}`,
-  'ON CONFLICT(username) DO UPDATE SET password_hash = excluded.password_hash, school_id = excluded.school_id WHERE accounts.role = \'director\' AND (accounts.school_id IS NULL OR accounts.school_id = excluded.school_id);',
+  `VALUES (lower(hex(randomblob(16))), ${escapeSql(username)}, ${escapeSql(passwordHash)}, 'director', 'school-' || lower(hex(randomblob(12))), 'Director', '', 1, 1)`,
+  'ON CONFLICT(username) DO UPDATE SET password_hash = excluded.password_hash WHERE accounts.role = \'director\';',
+  `INSERT INTO schools (id, name, director_id) SELECT school_id, ${escapeSql(schoolName)}, id FROM accounts WHERE username = ${escapeSql(username)} AND role = 'director'`,
+  'ON CONFLICT(id) DO UPDATE SET name = excluded.name, director_id = excluded.director_id;',
 ].join(' ');
 
 const tempDir = await mkdtemp(join(tmpdir(), 'agenda-director-bootstrap-'));
