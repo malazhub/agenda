@@ -59,7 +59,7 @@ export default function App() {
   const [registeredAccount, setRegisteredAccount] = useState<CloudflareAccount | null>(null);
   const [sessionToken, setSessionToken] = useState('');
   const [schools, setSchools] = useState<SchoolRecord[]>([]);
-  const [activeSchoolId, setActiveSchoolId] = useState('');
+  const [activeSchoolId, setActiveSchoolId] = useState(() => new URLSearchParams(window.location.search).get('schoolId') || 'default-agenda-school');
   const activeSchoolName = schools.find((school) => school.id === activeSchoolId)?.name || '';
   const signOutCleanupRef = useRef<(() => Promise<void>) | null>(null);
 
@@ -92,20 +92,20 @@ const registerSignOutCleanup = useCallback(
 
   useEffect(() => {
     let active = true;
-    void getSchools().then(({ schools: records, activeSchoolId: serverActiveSchoolId }) => {
+    void getSchools(activeSchoolId).then(({ schools: records }) => {
       if (!active) return;
       setSchools(records);
-      setActiveSchoolId(serverActiveSchoolId || records[0]?.id || '');
+      setActiveSchoolId(records[0]?.id || activeSchoolId);
     }).catch((error) => console.error('Unable to load schools.', error));
     return () => { active = false; };
-  }, []);
+  }, [activeSchoolId]);
 
   // Keep the public school title in sync when a Director changes it from another device.
   useEffect(() => {
     const refreshSchoolBrand = () => {
-      void getSchools().then(({ schools: records, activeSchoolId: serverActiveSchoolId }) => {
+      void getSchools(activeSchoolId).then(({ schools: records }) => {
         setSchools(records);
-        setActiveSchoolId(serverActiveSchoolId || records[0]?.id || '');
+        if (records[0]?.id) setActiveSchoolId(records[0].id);
       }).catch((error) => console.error('Unable to refresh school branding.', error));
     };
     const intervalId = window.setInterval(refreshSchoolBrand, 30_000);
@@ -114,7 +114,7 @@ const registerSignOutCleanup = useCallback(
       window.clearInterval(intervalId);
       window.removeEventListener('focus', refreshSchoolBrand);
     };
-  }, []);
+  }, [activeSchoolId]);
 
   useEffect(() => {
     const storedToken = sessionStorage.getItem('agenda-session-token');
@@ -263,6 +263,7 @@ const registerSignOutCleanup = useCallback(
         onOpenRegister={() => setIsRegisterOpen(true)}
         signedInName={registeredAccount?.fullName}
         schoolName={activeSchoolName}
+        schoolId={activeSchoolId}
         onOpenArchiveSessions={() => setIsArchiveSessionsOpen(true)}
         onSignOut={handleSignOut}
       />
@@ -286,6 +287,9 @@ const registerSignOutCleanup = useCallback(
             sessionToken={sessionToken}
             onSchoolBrandChange={(schoolId, schoolName) => {
               setActiveSchoolId(schoolId);
+              const nextUrl = new URL(window.location.href);
+              nextUrl.searchParams.set('schoolId', schoolId);
+              window.history.replaceState({}, '', nextUrl.toString());
               setSchools((current) => {
                 const exists = current.some((school) => school.id === schoolId);
                 return exists
@@ -407,7 +411,7 @@ const registerSignOutCleanup = useCallback(
       </footer>
 
       {/* AI Assistant Chatbot: Auto responds about pricing, agenda, live sessions, and saved issues */}
-      <AIChatBot currentLang={currentLang} />
+      <AIChatBot currentLang={currentLang} schoolId={activeSchoolId} schoolName={activeSchoolName} />
     </div>
   );
 }
