@@ -8,13 +8,12 @@ import {
   getDirectorAccounts,
   getDirectorProfile,
   getRegistrationSessions,
-  getSchools,
   loginAccount,
   updateDirectorProfile,
   updateDirectorAccount,
   deleteDirectorAccount 
 } from '../services/cloudflareApi';
-import type { CloudflareAccount, RegistrationSession, SchoolRecord } from '../services/cloudflareApi';
+import type { CloudflareAccount, RegistrationSession } from '../services/cloudflareApi';
 import {
   Clock,
   ShieldCheck,
@@ -68,8 +67,6 @@ export const CoursesHub: React.FC<CoursesHubProps> = ({
     typeof window === 'undefined' ? '' : window.sessionStorage.getItem('agenda-director-token') || ''
   );
   const [directorSchoolId, setDirectorSchoolId] = useState('');
-  const [directorSchools, setDirectorSchools] = useState<SchoolRecord[]>([]);
-  const [settingsSchoolId, setSettingsSchoolId] = useState('');
   const [settingsSchoolName, setSettingsSchoolName] = useState('');
   const [settingsUsername, setSettingsUsername] = useState('');
   const [settingsPassword, setSettingsPassword] = useState('');
@@ -94,14 +91,12 @@ export const CoursesHub: React.FC<CoursesHubProps> = ({
       return;
     }
     let active = true;
-    Promise.all([getDirectorProfile(directorToken), getSchools()])
-      .then(([{ profile }, { schools }]) => {
+    getDirectorProfile(directorToken)
+      .then(({ profile }) => {
         if (!active) return;
         setDirectorSchoolId(profile.schoolId);
-        setSettingsSchoolId(profile.schoolId);
         setSettingsSchoolName(profile.schoolName);
         setSettingsUsername(profile.username);
-        setDirectorSchools(schools);
       })
       .catch((profileError) => {
         if (active) setDirectorDataError(profileError instanceof Error ? profileError.message : 'Unable to load Director school profile.');
@@ -207,13 +202,12 @@ export const CoursesHub: React.FC<CoursesHubProps> = ({
 
   const handleSaveDirectorSettings = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!directorToken || !settingsSchoolId) return;
+    if (!directorToken) return;
     setSettingsSaving(true);
     setDirectorDataError('');
     setDirectorMessage('');
     try {
       const input = {
-        schoolId: settingsSchoolId,
         schoolName: settingsSchoolName.trim(),
         username: settingsUsername.trim(),
         ...(settingsPassword ? { password: settingsPassword } : {}),
@@ -222,12 +216,9 @@ export const CoursesHub: React.FC<CoursesHubProps> = ({
       sessionStorage.setItem('agenda-director-token', token);
       setDirectorToken(token);
       setDirectorSchoolId(profile.schoolId);
-      setSettingsSchoolId(profile.schoolId);
       setSettingsSchoolName(profile.schoolName);
       setSettingsUsername(profile.username);
       setSettingsPassword('');
-      const { schools } = await getSchools();
-      setDirectorSchools(schools);
       onSchoolBrandChange(profile.schoolId, profile.schoolName);
       setDirectorMessage(
         currentLang === 'ar'
@@ -715,41 +706,16 @@ const updateAccount = async (
             </h3>
             <p className="mt-1 text-xs text-slate-500">
               {currentLang === 'ar'
-                ? 'اختر مدرسة موجودة أو أنشئ مدرسة جديدة. سيظهر اسم المدرسة المحفوظ في عنوان المنصة.'
+                ? 'لكل مدير مدرسته وموظفوه وطلابه ودروسه وأسعاره المستقلة. يظهر اسم المدرسة المحفوظ في رأس المنصة.'
                 : currentLang === 'fr'
-                  ? 'Choisissez un établissement ou créez-en un. Son nom sera affiché dans l’en-tête de la plateforme.'
-                  : 'Select an existing school or create a new one. The saved school name becomes the platform header.'}
+                  ? 'Chaque Directeur possède son établissement, son équipe, ses élèves, ses leçons et ses tarifs. Le nom enregistré apparaît dans l’en-tête.'
+                  : 'Each Director has a separate school, staff, students, lessons, and pricing. The saved school name becomes this school's platform header.'}
             </p>
           </div>
           <form className="grid gap-4 md:grid-cols-2" onSubmit={handleSaveDirectorSettings}>
             <label className="block space-y-1.5">
               <span className="text-xs font-bold text-slate-700">
-                {currentLang === 'ar' ? 'المدرسة' : currentLang === 'fr' ? 'Établissement' : 'School'}
-              </span>
-              <select
-                required
-                value={settingsSchoolId}
-                onChange={(event) => {
-                  const nextId = event.target.value;
-                  setSettingsSchoolId(nextId);
-                  const selected = directorSchools.find((school) => school.id === nextId);
-                  setSettingsSchoolName(selected?.name || '');
-                }}
-                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-sm text-slate-800"
-              >
-                {directorSchools.map((school) => (
-                  <option key={school.id} value={school.id}>{school.name}</option>
-                ))}
-                <option value="__new__">
-                  {currentLang === 'ar' ? '+ إضافة مدرسة جديدة' : currentLang === 'fr' ? '+ Ajouter un établissement' : '+ Add a new school'}
-                </option>
-              </select>
-            </label>
-            <label className="block space-y-1.5">
-              <span className="text-xs font-bold text-slate-700">
-                {settingsSchoolId === '__new__'
-                  ? (currentLang === 'ar' ? 'اسم المدرسة الجديدة' : currentLang === 'fr' ? 'Nom du nouvel établissement' : 'New school name')
-                  : (currentLang === 'ar' ? 'اسم المدرسة / اسم المنصة' : currentLang === 'fr' ? 'Nom de l’établissement / plateforme' : 'School name / platform title')}
+                {currentLang === 'ar' ? 'اسم مدرستك' : currentLang === 'fr' ? 'Nom de votre établissement' : currentLang === 'es' ? 'Nombre de tu escuela' : currentLang === 'it' ? 'Nome della tua scuola' : 'Your school name'}
               </span>
               <input
                 required
@@ -762,7 +728,7 @@ const updateAccount = async (
             </label>
             <label className="block space-y-1.5">
               <span className="text-xs font-bold text-slate-700">
-                {currentLang === 'ar' ? 'اسم مستخدم المدير' : currentLang === 'fr' ? 'Nom d’utilisateur du directeur' : 'Director username'}
+                {currentLang === 'ar' ? 'اسم مستخدم المدير' : currentLang === 'fr' ? 'Nom d’utilisateur du directeur' : currentLang === 'es' ? 'Usuario del Director' : currentLang === 'it' ? 'Nome utente del Direttore' : 'Director username'}
               </span>
               <input
                 required
@@ -777,24 +743,29 @@ const updateAccount = async (
             </label>
             <label className="block space-y-1.5">
               <span className="text-xs font-bold text-slate-700">
-                {currentLang === 'ar' ? 'كلمة مرور جديدة (اختياري)' : currentLang === 'fr' ? 'Nouveau mot de passe (facultatif)' : 'New password (optional)'}
+                {currentLang === 'ar' ? 'كلمة مرور جديدة (اختياري)' : currentLang === 'fr' ? 'Nouveau mot de passe (facultatif)' : currentLang === 'es' ? 'Nueva contraseña (opcional)' : currentLang === 'it' ? 'Nuova password (facoltativa)' : 'New password (optional)'}
               </span>
               <input
                 type="password"
-                minLength={1}
                 maxLength={1024}
                 autoComplete="new-password"
                 value={settingsPassword}
                 onChange={(event) => setSettingsPassword(event.target.value)}
-                placeholder={currentLang === 'ar' ? 'اتركه فارغاً للإبقاء على الحالية' : 'Leave blank to keep current password'}
+                placeholder={currentLang === 'ar' ? 'اتركه فارغاً للإبقاء على الحالية' : currentLang === 'fr' ? 'Laisser vide pour conserver l’actuel' : currentLang === 'es' ? 'Déjalo vacío para mantener la actual' : currentLang === 'it' ? 'Lascia vuoto per mantenere quella attuale' : 'Leave blank to keep current password'}
                 className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-sm text-slate-800"
               />
             </label>
             <div className="md:col-span-2 flex flex-wrap items-center justify-between gap-3">
               <p className="text-[11px] text-slate-500">
                 {currentLang === 'ar'
-                  ? 'سيتم حفظ الإعدادات على الخادم وتطبيقها على رأس الصفحة للزوار والمستخدمين.'
-                  : 'Settings are saved on the server and applied to the public header for guests and signed-in users.'}
+                  ? 'هذه المدرسة ملك لحساب المدير الحالي فقط. سيظهر اسمها في رابط المدرسة ورأس المنصة.'
+                  : currentLang === 'fr'
+                    ? 'Cet établissement appartient uniquement à ce compte Directeur. Son nom apparaît dans le lien et l’en-tête.'
+                    : currentLang === 'es'
+                      ? 'Esta escuela pertenece únicamente a esta cuenta de Director. Su nombre aparece en el enlace y en la cabecera.'
+                      : currentLang === 'it'
+                        ? 'Questa scuola appartiene solo a questo account Direttore. Il nome appare nel link e nell’intestazione.'
+                        : 'This school belongs only to this Director account. Its name appears in the school link and platform header.'}
               </p>
               <button
                 type="submit"
@@ -803,7 +774,7 @@ const updateAccount = async (
               >
                 {settingsSaving
                   ? '…'
-                  : currentLang === 'ar' ? 'حفظ الإعدادات' : currentLang === 'fr' ? 'Enregistrer' : 'Save school & Director settings'}
+                  : currentLang === 'ar' ? 'حفظ الإعدادات' : currentLang === 'fr' ? 'Enregistrer' : currentLang === 'es' ? 'Guardar configuración' : currentLang === 'it' ? 'Salva impostazioni' : 'Save school & Director settings'}
               </button>
             </div>
           </form>
