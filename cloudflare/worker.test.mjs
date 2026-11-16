@@ -312,8 +312,17 @@ function fakeEnvironment() {
       if (q.startsWith('update educator_lessons')) {
         const lesson = lessons.get(v[v.length - 3]);
         if (!lesson) return { meta: { changes: 0 } };
-        const [title, subject, description, media_key, media_name, media_type, media_size] = v;
-        Object.assign(lesson, { title, subject, description, media_key, media_name, media_type, media_size, updated_at: '2026-11-03 10:00:00' });
+        if (q.includes("set title = '', subject = '', description = ''")) {
+          if (lesson.school_id !== v[1] || lesson.educator_id !== v[2]) return { meta: { changes: 0 } };
+          Object.assign(lesson, {
+            title: '', subject: '', description: '',
+            media_key: null, media_name: null, media_type: null, media_size: 0,
+            updated_at: '2026-11-03 10:00:00',
+          });
+        } else {
+          const [title, subject, description, media_key, media_name, media_type, media_size] = v;
+          Object.assign(lesson, { title, subject, description, media_key, media_name, media_type, media_size, updated_at: '2026-11-03 10:00:00' });
+        }
         return { meta: { changes: 1 } };
       }
       if (q.startsWith('update sessions set is_live')) {
