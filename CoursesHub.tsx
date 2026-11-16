@@ -189,14 +189,14 @@ export const CoursesHub: React.FC<CoursesHubProps> = ({
     try {
       const { account, token } = await loginAccount(directorForm.username, directorForm.password);
       if (account.role !== 'director') {
-        throw new Error('This account does not have Director access.');
+        throw new Error(currentLang === 'ar' ? 'هذا الحساب لا يملك صلاحية المدير.' : currentLang === 'fr' ? 'Ce compte ne dispose pas des droits de Directeur.' : currentLang === 'es' ? 'Esta cuenta no tiene permisos de Director.' : currentLang === 'it' ? 'Questo account non dispone dei permessi di Direttore.' : 'This account does not have Director access.');
       }
       sessionStorage.setItem('agenda-director-token', token);
       setDirectorToken(token);
       setDirectorScreen('dashboard');
       setDirectorForm({ username: '', password: '' });
     } catch (error) {
-      setDirectorError(error instanceof Error ? error.message : 'Unable to sign in.');
+      setDirectorError(currentLang === 'ar' ? 'تعذر تسجيل دخول المدير. تحقق من اسم المستخدم وكلمة المرور.' : currentLang === 'fr' ? 'Connexion du Directeur impossible. Vérifiez le nom d’utilisateur et le mot de passe.' : currentLang === 'es' ? 'No se pudo iniciar sesión como Director. Comprueba el usuario y la contraseña.' : currentLang === 'it' ? 'Accesso Direttore non riuscito. Verifica nome utente e password.' : error instanceof Error ? error.message : 'Unable to sign in.');
     }
   };
 
@@ -210,7 +210,7 @@ export const CoursesHub: React.FC<CoursesHubProps> = ({
       const stream = await getDirectorLiveStream(directorToken, session.id);
       setMonitorStream(stream);
     } catch (error) {
-      setMonitorError(error instanceof Error ? error.message : 'Unable to open this classroom for monitoring.');
+      setMonitorError(currentLang === 'ar' ? 'تعذر فتح الصف للمراقبة.' : currentLang === 'fr' ? 'Impossible d’ouvrir cette classe pour la surveillance.' : currentLang === 'es' ? 'No se pudo abrir esta aula para supervisarla.' : currentLang === 'it' ? 'Impossibile aprire questa classe per il monitoraggio.' : error instanceof Error ? error.message : 'Unable to open this classroom for monitoring.');
     } finally {
       setMonitorLoading(false);
     }
@@ -270,7 +270,7 @@ const updateAccount = async (
     setDirectorDataError(
       error instanceof Error
         ? error.message
-        : 'Unable to save the account status.'
+        : currentLang === 'ar' ? 'تعذر حفظ حالة الحساب.' : currentLang === 'fr' ? 'Impossible d’enregistrer l’état du compte.' : currentLang === 'es' ? 'No se pudo guardar el estado de la cuenta.' : currentLang === 'it' ? 'Impossibile salvare lo stato dell’account.' : 'Unable to save the account status.'
     );
   }
 };
@@ -311,7 +311,7 @@ const updateAccount = async (
                 : `Account (${account.fullName}) was permanently deleted from Cloudflare.`
       );
     } catch (err) {
-      setDirectorDataError(err instanceof Error ? err.message : 'Failed to delete account from Cloudflare.');
+      setDirectorDataError(currentLang === 'ar' ? 'تعذر حذف الحساب.' : currentLang === 'fr' ? 'Impossible de supprimer le compte.' : currentLang === 'es' ? 'No se pudo eliminar la cuenta.' : currentLang === 'it' ? 'Impossibile eliminare l’account.' : err instanceof Error ? err.message : 'Failed to delete account from Cloudflare.');
     }
   };
 
@@ -429,7 +429,7 @@ const updateAccount = async (
     >
       {educator.fullName}
       {!educator.registeredSessionId
-        ? ' — no classroom assigned'
+        ? (currentLang === 'ar' ? ' — لا يوجد صف مخصص' : currentLang === 'fr' ? ' — aucune classe attribuée' : currentLang === 'es' ? ' — aula no asignada' : currentLang === 'it' ? ' — nessuna classe assegnata' : ' — no classroom assigned')
         : ''}
     </option>
   ))}
@@ -467,7 +467,7 @@ const updateAccount = async (
           {' · '}
           {session.subject}
           {' · '}
-          {session.teacherName || 'Unassigned lesson'}
+          {session.teacherName || (currentLang === 'ar' ? 'حصة غير مخصصة' : currentLang === 'fr' ? 'Cours non attribué' : currentLang === 'es' ? 'Sesión sin asignar' : currentLang === 'it' ? 'Lezione non assegnata' : 'Unassigned lesson')}
           {' · '}
           {session.title}
         </option>
@@ -500,7 +500,7 @@ const updateAccount = async (
                   type="checkbox"
                   checked={row.activated}
                   onChange={() => void updateAccount(row, { activated: !row.activated })}
-                  aria-label={`${row.fullName} activated`}
+                  aria-label={currentLang === 'ar' ? `تفعيل ${row.fullName}` : currentLang === 'fr' ? `Compte activé : ${row.fullName}` : currentLang === 'es' ? `Cuenta activada: ${row.fullName}` : currentLang === 'it' ? `Account attivato: ${row.fullName}` : `${row.fullName} activated`}
                   className="w-4 h-4 accent-indigo-600 cursor-pointer"
                 />
               </td>
@@ -509,7 +509,7 @@ const updateAccount = async (
                   type="checkbox"
                   checked={row.paid}
                   onChange={() => void updateAccount(row, { paid: !row.paid })}
-                  aria-label={`${row.fullName} paid`}
+                  aria-label={currentLang === 'ar' ? `حالة الدفع لـ ${row.fullName}` : currentLang === 'fr' ? `Compte payé : ${row.fullName}` : currentLang === 'es' ? `Cuenta pagada: ${row.fullName}` : currentLang === 'it' ? `Account pagato: ${row.fullName}` : `${row.fullName} paid`}
                   className="w-4 h-4 accent-indigo-600 cursor-pointer"
                 />
               </td>
@@ -605,7 +605,7 @@ const updateAccount = async (
                 value={directorForm.username}
                 onChange={e => setDirectorForm(prev => ({ ...prev, username: e.target.value }))}
                 className="w-full pl-9 pr-3 py-2.5 border border-slate-200 rounded-xl text-sm text-slate-800 bg-slate-50 focus:outline-indigo-600"
-                placeholder="username"
+                placeholder={currentLang === 'ar' ? 'اسم المستخدم' : currentLang === 'fr' ? 'Nom d’utilisateur' : currentLang === 'es' ? 'Nombre de usuario' : currentLang === 'it' ? 'Nome utente' : 'Username'}
               />
             </div>
           </div>
@@ -629,7 +629,7 @@ const updateAccount = async (
                 type="button"
                 onClick={() => setShowDirectorPassword(!showDirectorPassword)}
                 className="absolute right-3 top-3 text-slate-400 hover:text-slate-700 transition cursor-pointer"
-                title={showDirectorPassword ? 'Hide password' : 'Show password'}
+                title={showDirectorPassword ? (currentLang === 'ar' ? 'إخفاء كلمة المرور' : currentLang === 'fr' ? 'Masquer le mot de passe' : currentLang === 'es' ? 'Ocultar contraseña' : currentLang === 'it' ? 'Nascondi password' : 'Hide password') : (currentLang === 'ar' ? 'إظهار كلمة المرور' : currentLang === 'fr' ? 'Afficher le mot de passe' : currentLang === 'es' ? 'Mostrar contraseña' : currentLang === 'it' ? 'Mostra password' : 'Show password')}
               >
                 {showDirectorPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
               </button>
@@ -731,13 +731,13 @@ const updateAccount = async (
         ) : (
           <div className="space-y-6">
                         {renderDirectorTable(
-              currentLang === 'ar' ? 'الطلاب' : currentLang === 'fr' ? 'Étudiants' : 'Students',
+              currentLang === 'ar' ? 'الطلاب' : currentLang === 'fr' ? 'Étudiants' : currentLang === 'es' ? 'Estudiantes' : currentLang === 'it' ? 'Studenti' : 'Students',
               studentRows,
               true
             )}
 
             {renderDirectorTable(
-              currentLang === 'ar' ? 'المعلمون' : currentLang === 'fr' ? 'Éducateurs' : 'Educators',
+              currentLang === 'ar' ? 'المعلمون' : currentLang === 'fr' ? 'Éducateurs' : currentLang === 'es' ? 'Educadores' : currentLang === 'it' ? 'Educatori' : 'Educators',
               educatorRows
             )}
           </div>
