@@ -33,6 +33,7 @@ interface CoursesHubProps {
     onShowMessage: (message: string) => void;
   directorLoginRequest: number;
   registeredAccount: CloudflareAccount | null;
+  schoolId: string;
   sessionToken: string;
   onRegisterSignOutCleanup?: (
     cleanup: (() => Promise<void>) | null
@@ -45,6 +46,7 @@ export const CoursesHub: React.FC<CoursesHubProps> = ({
   currentLang,
   directorLoginRequest,
   registeredAccount,
+  schoolId,
   sessionToken,
     onShowMessage,
   onEnterLiveClassroom,
@@ -141,7 +143,7 @@ export const CoursesHub: React.FC<CoursesHubProps> = ({
     let active = true;
     setDirectorLoading(true);
     setDirectorDataError('');
-    Promise.all([getDirectorAccounts(directorToken), getRegistrationSessions()])
+    Promise.all([getDirectorAccounts(directorToken), getRegistrationSessions(schoolId)])
       .then(([{ students, educators }, { sessions }]) => {
         if (!active) return;
         setStudentRows(students);
@@ -157,7 +159,7 @@ export const CoursesHub: React.FC<CoursesHubProps> = ({
     return () => {
       active = false;
     };
-  }, [directorScreen, directorToken]);
+  }, [directorScreen, directorToken, schoolId]);
 
   const handleDirectorLogin = async () => {
     setDirectorError('');
@@ -511,6 +513,7 @@ const updateAccount = async (
             <GradeSessionsView
         currentLang={currentLang}
         selectedGrade={activeGradeForSessions}
+        schoolId={schoolId}
         initialTab={activeGradeTab}
         autoOpenLiveClassroom={autoOpenLiveClassroom}
         registeredAccount={registeredAccount}
