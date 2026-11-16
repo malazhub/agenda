@@ -2,6 +2,7 @@ export interface CloudflareAccount {
   id: string;
   username: string;
   role: 'student' | 'educator' | 'director';
+  schoolId: string;
   fullName: string;
   email: string;
   phone: string;
@@ -15,7 +16,7 @@ export interface CloudflareAccount {
 }
 
 export interface AuthResponse {
-  account: CloudflareAccount;
+  account: ;
   token: string;
 }
 
@@ -23,6 +24,7 @@ export interface RegistrationInput {
   username: string;
   password: string;
   role: 'student' | 'educator';
+  schoolId: string;
   fullName: string;
   email: string;
   phone: string;
@@ -109,8 +111,50 @@ export interface ClassroomMessage {
   attachmentName?: string | null;
   attachmentType?: string | null;
 }
-const API_BASE_URL = (import.meta.env.VITE_CLOUDFLARE_API_URL || '').replace(/\/+$/, '');
+export interface SchoolRecord {
+  id: string;
+  name: string;
+}
 
+export interface SchoolEducator {
+  id: string;
+  fullName: string;
+  subject: string;
+  gradeId: string;
+  registeredSessionId: string | null;
+}
+
+export interface EducatorLesson {
+  id: string;
+  schoolId: string;
+  educatorId: string;
+  slot: number;
+  title: string;
+  subject: string;
+  description: string;
+  mediaUrl: string | null;
+  mediaName: string | null;
+  mediaType: string | null;
+  mediaSize: number;
+  updatedAt: string;
+}
+
+export interface DirectorProfile {
+  schoolId: string;
+  schoolName: string;
+  username: string;
+}
+const API_BASE_URL = (import.meta.env.VITE_CLOUDFLARE_API_URL || '').replace(/\/+$/, '');
+function withAbsoluteLessonMedia(
+  lesson: EducatorLesson
+): EducatorLesson {
+  return {
+    ...lesson,
+    mediaUrl: lesson.mediaUrl && API_BASE_URL
+      ? `${API_BASE_URL}${lesson.mediaUrl}`
+      : lesson.mediaUrl,
+  };
+}
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   if (!API_BASE_URL) {
     throw new Error(
@@ -157,25 +201,44 @@ export function registerAccount(input: RegistrationInput): Promise<AuthResponse>
   });
 }
 
-export function getRegistrationSessions(): Promise<{ sessions: RegistrationSession[] }> {
-  return request('/api/registration/sessions');
+export function getSchools(): Promise<{ schools: SchoolRecord[] }> {
+  return request('/api/schools');
 }
 
-export function getRegistrationGrades(): Promise<{ grades: string[] }> {
-  return request('/api/registration/grades');
-}
-export function getRegistrationEducators(): Promise<{
-  educators: RegistrationEducator[];
-}> {
-  return request('/api/registration/educators');
+export function getRegistrationSessions(
+  schoolId: string
+): Promise<{ sessions: RegistrationSession[] }> {
+  const query = new URLSearchParams({ schoolId });
+  return request(`/api/registration/sessions?${query.toString()}`);
 }
 
-export function getLiveEducators(token: string): Promise<{
-  educators: LiveEducatorSession[];
-}> {
-  return request('/api/live-educators', {
-    headers: authHeaders(token),
-  });
+export function getRegistrationGrades(
+  schoolId: string
+): Promise<{ grades: string[] }> {
+  const query = new URLSearchParams({ schoolId });
+  return request(`/api/registration/grades?${query.toString()}`);
+}
+
+export function getRegistrationEducators(
+  schoolId: string
+): Promise<{ educators: RegistrationEducator[] }> {
+  const query = new URLSearchParams({ schoolId });
+  return request(`/api/registration/educators?${query.toString()}`);
+}
+
+export function getSchoolEducators(
+  schoolId: string
+): Promise<{ educators: SchoolEducator[] }> {
+  return request(
+    `/api/schools/${encodeURIComponent(schoolId)}/educators`
+  );
+}
+
+export function getLiveEducators(
+  schoolId: string
+): Promise<{ educators: LiveEducatorSession[] }> {
+  const query = new URLSearchParams({ schoolId });
+  return request(`/api/live-educators?${query.toString()}`);
 }
 
 export function loginAccount(username: string, password: string): Promise<AuthResponse> {
@@ -188,14 +251,110 @@ export function loginAccount(username: string, password: string): Promise<AuthRe
 export function getCurrentAccount(token: string): Promise<{ account: CloudflareAccount }> {
   return request('/api/auth/me', { headers: authHeaders(token) });
 }
+export async function getEducatorLessons(
+  schoolId: string,
+  educatorId: string
+): Promise<{ lessons: EducatorLesson[] }> {
+  const query = new URLSearchParams({ schoolId });
 
+  const result = await request<{ lessons: EducatorLesson[] }>(
+    `/api/learning/educators/${encodeURIComponent(educatorId)}/lessons?${query.toString()}`
+  );
+
+  return {
+    lessons: result.lessons.map(withAbsoluteLessonMedia),
+  };
+}
+
+export async function saveEducatorLesson(
+  token: string,
+  lessonId: string,
+  input: {
+    title: string;
+    subject: string;
+    description: string;
+    file: File | null;
+  }
+): Promise<{ saved: boolean; lesson: EducatorLesson }> {
+  const formData = new FormData();
+
+  formData.append('title', input.title);
+  formData.append('subject', input.subject);
+  formData.append('description', input.description);
+
+  if (input.file) {
+    formData.append('file', input.file, input.file.name);
+  }
+
+  const result = await request<{
+    saved: boolean;
+    lesson: EducatorLesson;
+  }>(
+    `/api/learning/lessons/${encodeURIComponent(lessonId)}`,
+    {
+      method: 'PUT',
+      headers: authHeaders(token),
+      body: formData,
+    }
+  );
+
+  return {
+    ...result,
+    lesson: withAbsoluteLessonMedia(result.lesson),
+  };
+}
+
+export async function deleteEducatorLesson(
+  token: string,
+  lessonId: string
+): Promise<{ deleted: boolean; lesson: EducatorLesson }> {
+  const result = await request<{
+    deleted: boolean;
+    lesson: EducatorLesson;
+  }>(
+    `/api/learning/lessons/${encodeURIComponent(lessonId)}`,
+    {
+      method: 'DELETE',
+      headers: authHeaders(token),
+    }
+  );
+
+  return {
+    ...result,
+    lesson: withAbsoluteLessonMedia(result.lesson),
+  };
+}
 export function getDirectorAccounts(token: string): Promise<{
   students: CloudflareAccount[];
   educators: CloudflareAccount[];
 }> {
   return request('/api/director/accounts', { headers: authHeaders(token) });
 }
+export function getDirectorProfile(
+  token: string
+): Promise<{ profile: DirectorProfile }> {
+  return request('/api/director/profile', {
+    headers: authHeaders(token),
+  });
+}
 
+export function updateDirectorProfile(
+  token: string,
+  input: {
+    schoolName: string;
+    username: string;
+    password?: string;
+  }
+): Promise<{
+  profile: DirectorProfile;
+  token: string;
+}> {
+  return request('/api/director/profile', {
+    method: 'PATCH',
+    headers: authHeaders(token),
+    body: JSON.stringify(input),
+  });
+}
 export function updateDirectorAccount(
   token: string,
   accountId: string,
@@ -215,7 +374,10 @@ export function updateDirectorAccount(
   });
 }
 
-export function deleteDirectorAccount(token: string, accountId: string): Promise<{ deleted: boolean }> {
+export function deleteDirectorAccount(
+  token: string,
+  accountId: string
+): Promise<{ deleted: boolean; fileCleanupComplete?: boolean }> {
   return request(`/api/director/accounts/${encodeURIComponent(accountId)}`, {
     method: 'DELETE',
     headers: authHeaders(token),
