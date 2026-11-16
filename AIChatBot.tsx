@@ -1,6 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Language } from '../types';
 import { GoogleGenAI } from '@google/genai';
+import { getSchoolPublicContext } from '../services/cloudflareApi';
+import type { SchoolPublicContext } from '../services/cloudflareApi';
 import { 
   X, 
   Send, 
@@ -10,6 +12,8 @@ import {
 
 interface AIChatBotProps {
   currentLang: Language;
+  schoolId: string;
+  schoolName?: string;
 }
 
 interface ChatMessage {
@@ -19,7 +23,7 @@ interface ChatMessage {
   time: string;
 }
 
-export const AIChatBot: React.FC<AIChatBotProps> = ({ currentLang }) => {
+export const AIChatBot: React.FC<AIChatBotProps> = ({ currentLang, schoolId, schoolName }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [inputText, setInputText] = useState('');
   const [isTyping, setIsTyping] = useState(false);
@@ -27,6 +31,22 @@ export const AIChatBot: React.FC<AIChatBotProps> = ({ currentLang }) => {
 
   // Blank chat: Starts with no initial pre-canned text as requested
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [schoolContext, setSchoolContext] = useState<SchoolPublicContext | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    if (!schoolId) {
+      setSchoolContext(null);
+      return () => { active = false; };
+    }
+    getSchoolPublicContext(schoolId)
+      .then((context) => { if (active) setSchoolContext(context); })
+      .catch((error) => {
+        console.warn('Unable to load school-specific AI context.', error);
+        if (active) setSchoolContext(null);
+      });
+    return () => { active = false; };
+  }, [schoolId]);
 
   useEffect(() => {
     if (isOpen) {
@@ -34,40 +54,70 @@ export const AIChatBot: React.FC<AIChatBotProps> = ({ currentLang }) => {
     }
   }, [messages, isOpen]);
 
-  // Saved responses for Price and Timing
+  // Deterministic answers use the selected school's live configuration.
   const getSavedResponse = (query: string): string | null => {
     const q = query.toLowerCase();
+    const prices = schoolContext?.prices || [];
+    const monthlyPriceQuestion = [
+      'price', 'pricing', 'cost', 'fee', 'fees', 'usd', 'dollar', 'payment',
+      'tarif', 'prix', 'coût', 'cout', 'payer', 'mensuel', 'mensual', 'mensile',
+      'month', 'monthly', 'per month', 'شهري', 'سعر', 'اسعار', 'أسعار', 'تكلف', 'بكم', 'دولار', 'دفع'
+    ].some((keyword) => q.includes(keyword));
 
-    // 1. Price check (7 USD as saved)
-    const priceKeywords = [
-      'سعر', 'اسعار', 'أسعار', 'تكلف', 'بكم', 'دولار', 'دفع', 'whish', 'omt', 'اشتراك',
-      'price', 'pricing', 'cost', 'fee', 'fees', 'usd', 'dollar', 'payment', 'pay',
-      'tarif', 'prix', 'cout', 'coût', 'payer'
-    ];
-    if (priceKeywords.some(kw => q.includes(kw))) {
-      if (currentLang === 'ar') {
-        return `سعر الحصة هو 7 USD موحد لجميع الصفوف والمواد، مع 3 حصص تجريبية مجانية عند التسجيل.\nطرق الدفع المعتمدة: Whish Money، OMT Cash، و Fresh USD.`;
-      } else if (currentLang === 'fr') {
-        return `Le tarif est fixé à 7 USD par séance pour l'ensemble des classes et matières, avec 3 séances d'essai gratuites à l'inscription.\nMoyens de paiement acceptés : Whish Money, OMT Cash et Fresh USD.`;
-      } else {
-        return `Session rate is 7 USD flat across all grade levels and subjects, including 3 free trial sessions upon registration.\nAccepted payment methods: Whish Money, OMT Cash, and Fresh USD.`;
-      }
+    if (monthlyPriceQuestion) {
+      const rateLines = prices.length
+        ? prices.map((price) => `${price.gradeId.toUpperCase()}: ${price.monthlyRateUsd} USD`).join('\n')
+        : `${schoolContext?.defaultMonthlyRateUsd ?? 125} USD per month (default rate)`;
+      if (currentLang === 'ar') return `المدرسة: ${schoolContext?.schoolName || schoolName || 'Agenda'}\nالأسعار الشهرية المعتمدة حسب الصف:\n${rateLines}\nالسعر الافتراضي للصف الذي لم يحدد المدير سعره هو 125 دولاراً شهرياً. هذه الأسعار خاصة بمدرستك.`;
+      if (currentLang === 'fr') return `Établissement : ${schoolContext?.schoolName || schoolName || 'Agenda'}\nTarifs mensuels par classe :\n${rateLines}\nLe tarif par défaut d'une classe sans prix personnalisé est de 125 USD par mois. Ces tarifs sont propres à votre établissement.`;
+      if (currentLang === 'es') return `Escuela: ${schoolContext?.schoolName || schoolName || 'Agenda'}\nTarifas mensuales por curso:\n${rateLines}\nEl precio predeterminado para un curso sin tarifa personalizada es de 125 USD al mes. Estas tarifas pertenecen a tu escuela.`;
+      if (currentLang === 'it') return `Scuola: ${schoolContext?.schoolName || schoolName || 'Agenda'}\nTariffe mensili per classe:\n${rateLines}\nLa tariffa predefinita per una classe senza prezzo personalizzato è di 125 USD al mese. Queste tariffe appartengono alla tua scuola.`;
+      return `School: ${schoolContext?.schoolName || schoolName || 'Agenda'}\nApproved monthly rates by grade:\n${rateLines}\nThe default rate for a grade without a custom price is 125 USD per month. These prices belong to this school.`;
     }
 
-    // 2. Timing check (4:00 PM to 8:00 PM as saved)
-    const timingKeywords = [
-      'مواعيد', 'ساعة', 'وقت', 'توقيت', 'متى', 'دوام', 'بث',
-      'timing', 'schedule', 'hours', 'time', 'when',
-      'horaire', 'horaires', 'heure', 'quand'
-    ];
-    if (timingKeywords.some(kw => q.includes(kw))) {
-      if (currentLang === 'ar') {
-        return `تبدأ الحصص المباشرة يومياً من الساعة 4:00 بعد الظهر حتى 8:00 مساءً (بتوقيت بيروت) لجميع المراحل والصفوف.`;
-      } else if (currentLang === 'fr') {
-        return `Les sessions en direct se déroulent quotidiennement de 16h00 à 20h00 (Heure de Beyrouth) pour tous les niveaux scolaires.`;
-      } else {
-        return `Live sessions run daily from 4:00 PM to 8:00 PM (Beirut Time) for all grade levels.`;
-      }
+    const registrationQuestion = ['register', 'registration', 'sign up', 'create account', 'inscrire', 'inscription', 'registrar', 'registro', 'registrazione', 'تسجيل', 'سجل'].some((keyword) => q.includes(keyword));
+    if (registrationQuestion) {
+      if (currentLang === 'ar') return 'للتسجيل: افتح رابط المدرسة الصحيح، اختر طالباً أو معلماً، أدخل الاسم والبريد الإلكتروني واسم المستخدم وكلمة المرور، ثم اختر الصف والأستاذ/الحصة المتاحة. بعد التسجيل ينتظر الحساب موافقة المدير وتفعيله.';
+      if (currentLang === 'fr') return "Pour vous inscrire : ouvrez le lien de votre établissement, choisissez Élève ou Éducateur, saisissez vos coordonnées, créez un nom d’utilisateur et un mot de passe, puis choisissez la classe et l’éducateur disponibles. Le Directeur doit ensuite activer le compte.";
+      if (currentLang === 'es') return 'Para registrarte: abre el enlace de tu escuela, elige Estudiante o Educador, introduce tus datos, crea un usuario y una contraseña y selecciona el curso y educador disponibles. El Director debe activar la cuenta después del registro.';
+      if (currentLang === 'it') return "Per registrarti: apri il link della tua scuola, scegli Studente o Educatore, inserisci i tuoi dati, crea nome utente e password e seleziona la classe e l'educatore disponibili. Il Direttore dovrà attivare l'account dopo la registrazione.";
+      return 'To register: open your school-specific link, choose Student or Educator, enter your details, create a username and password, and select an available grade and educator/session. The Director must activate the account after registration.';
+    }
+
+    const signInQuestion = ['password', 'username', 'sign in', 'login', 'mot de passe', 'identifiant', 'contraseña', 'usuario', 'password', 'accedi', 'nome utente', 'كلمة المرور', 'اسم المستخدم', 'دخول'].some((keyword) => q.includes(keyword));
+    if (signInQuestion) {
+      if (currentLang === 'ar') return 'لتسجيل الدخول، استخدم اسم المستخدم وكلمة المرور اللذين أنشأتهما عند التسجيل. إذا نسيت كلمة المرور، تواصل مع مدير مدرستك ليعيد تعيينها. لا تشارك كلمة المرور مع أي شخص.';
+      if (currentLang === 'fr') return "Pour vous connecter, utilisez le nom d’utilisateur et le mot de passe créés lors de l’inscription. En cas d’oubli, contactez le Directeur de votre établissement pour réinitialiser le mot de passe. Ne partagez jamais votre mot de passe.";
+      if (currentLang === 'es') return 'Para iniciar sesión, utiliza el nombre de usuario y la contraseña que creaste al registrarte. Si los olvidas, contacta con el Director de tu escuela para restablecer la contraseña. No compartas tu contraseña.';
+      if (currentLang === 'it') return "Per accedere, usa il nome utente e la password creati durante la registrazione. Se li dimentichi, contatta il Direttore della tua scuola per reimpostare la password. Non condividere la password.";
+      return 'Sign in with the username and password you created during registration. If you forget them, contact your school Director to reset the password. Never share your password.';
+    }
+
+    const lessonQuestion = ['saved lesson', 'recording', 'lesson', 'archive', 'ressource', 'leçon', 'lecon', 'clase guardada', 'lección', 'lezione', 'registrazione', 'دروس محفوظة', 'درس', 'أرشيف'].some((keyword) => q.includes(keyword));
+    if (lessonQuestion) {
+      if (currentLang === 'ar') return 'لاسترجاع الدروس المحفوظة، سجّل الدخول وافتح غرفة الصف ثم اختر «الموارد التعليمية». اختر الأستاذ لعرض خانات الدروس والملفات التي نشرها. يمكن للمدرس تعديل موارده الخاصة فقط.';
+      if (currentLang === 'fr') return "Pour retrouver les leçons enregistrées, connectez-vous, ouvrez la salle de classe puis choisissez « Ressources pédagogiques ». Sélectionnez l’éducateur pour consulter les leçons et fichiers publiés. Chaque éducateur ne peut modifier que ses propres ressources.";
+      if (currentLang === 'es') return 'Para recuperar lecciones guardadas, inicia sesión, abre el aula y selecciona «Recursos educativos». Elige al educador para ver las lecciones y archivos publicados. Cada educador solo puede modificar sus propios recursos.';
+      if (currentLang === 'it') return "Per recuperare le lezioni salvate, accedi, apri l'aula e seleziona «Risorse didattiche». Scegli l'educatore per vedere lezioni e file pubblicati. Ogni educatore può modificare solo le proprie risorse.";
+      return 'To retrieve saved lessons, sign in, open the classroom, and select Learning Resources. Choose the educator to view published lesson slots and files. Each educator can edit only their own resources.';
+    }
+
+    const liveQuestion = ['live', 'broadcast', 'join class', 'classroom', 'direct', 'en direct', 'en vivo', 'aula', 'diretta', 'بث', 'صف مباشر', 'غرفة الصف'].some((keyword) => q.includes(keyword));
+    if (liveQuestion) {
+      if (currentLang === 'ar') return 'للدخول إلى الصف المباشر، سجّل الدخول بالحساب المفعّل والمسدد والمسجل في حصة الأستاذ نفسها. افتح «البث المباشر» واختر صفك. يبدأ الأستاذ البث أولاً، ويمكن للمدير مراقبة أي صف من لوحة التحكم ← إدارة الحصص.';
+      if (currentLang === 'fr') return "Pour rejoindre un cours en direct, connectez-vous avec un compte activé, payé et inscrit à la même séance que l’éducateur. Ouvrez « Diffusion en direct » et choisissez votre classe. L’éducateur démarre la diffusion. Le Directeur peut surveiller toute classe depuis Tableau de bord → Gestion des cours.";
+      if (currentLang === 'es') return 'Para entrar en una clase en directo, inicia sesión con una cuenta activada, pagada y asignada a la misma sesión del educador. Abre «Emisión en directo» y elige tu curso. El educador inicia la emisión. El Director puede supervisar cualquier clase desde Panel → Gestionar sesiones.';
+      if (currentLang === 'it') return "Per entrare in una lezione dal vivo, accedi con un account attivato, pagato e assegnato alla stessa sessione dell'educatore. Apri «Diretta» e scegli la tua classe. L'educatore avvia la trasmissione. Il Direttore può monitorare qualsiasi classe da Pannello → Gestione lezioni.";
+      return 'To join a live class, sign in with an activated, paid account assigned to the same educator session. Open Broadcast Room and choose your grade. The educator starts the broadcast. The Director can monitor any class from Dashboard → Manage Sessions.';
+    }
+
+    const architectureQuestion = ['school', 'director', 'separate', 'data', 'privacy', 'educator', 'student', 'tenant', 'architecture', 'école', 'directeur', 'datos', 'escuela', 'scuola', 'direttore', 'مدرسة', 'مدير', 'طلاب', 'معلمين', 'خصوصية'].some((keyword) => q.includes(keyword));
+    if (architectureQuestion) {
+      if (currentLang === 'ar') return 'تعمل المنصة بنظام مدارس مستقلة: لكل مدير مدرسة خاصة به ومعرّف مدرسة مستقل، وطلاب ومدرسون وحصص وموارد تعليمية وأسعار منفصلة. لا يستطيع مدير الوصول إلى حسابات أو ملفات مدرسة أخرى. استخدم رابط المدرسة الخاص بها لتسجيل الطلاب والمدرسين.';
+      if (currentLang === 'fr') return "La plateforme fonctionne avec des établissements séparés : chaque Directeur possède son propre établissement et identifiant, ses élèves, éducateurs, cours, ressources et tarifs. Un Directeur ne peut pas accéder aux comptes ni aux fichiers d’un autre établissement. Utilisez le lien propre à votre établissement pour les inscriptions.";
+      if (currentLang === 'es') return 'La plataforma utiliza escuelas independientes: cada Director tiene su propia escuela e identificador, estudiantes, educadores, clases, recursos y tarifas. Un Director no puede acceder a las cuentas ni archivos de otra escuela. Utiliza el enlace específico de tu escuela para registrarte.';
+      if (currentLang === 'it') return "La piattaforma utilizza scuole separate: ogni Direttore ha la propria scuola e il proprio identificativo, studenti, educatori, lezioni, risorse e tariffe. Un Direttore non può accedere agli account o ai file di un'altra scuola. Usa il link specifico della tua scuola per registrarti.";
+      return 'Agenda uses separate school spaces: every Director has an independently identified school, its own students, educators, classes, saved learning resources, and pricing. A Director cannot access another school’s accounts or files. Use your school-specific link when registering.';
     }
 
     return null;
@@ -169,7 +219,7 @@ User question: "${text}"`
         >
           <Bot className="w-5 h-5 text-white" />
           <span className="text-xs font-bold hidden sm:inline">
-            {currentLang === 'ar' ? 'المساعد الذكي' : currentLang === 'fr' ? 'Assistant IA' : 'AI Assistant'}
+            {currentLang === 'ar' ? 'المساعد الذكي' : currentLang === 'fr' ? 'Assistant IA' : currentLang === 'es' ? 'Asistente de IA' : currentLang === 'it' ? 'Assistente IA' : 'AI Assistant'}
           </span>
         </button>
       )}
@@ -186,7 +236,7 @@ User question: "${text}"`
               <div>
                 <div className="flex items-center gap-1.5">
                   <h4 className="font-black text-sm text-white">
-                    {currentLang === 'ar' ? 'المساعد الذكي' : 'AI Assistant'}
+                    {currentLang === 'ar' ? 'المساعد الذكي' : currentLang === 'fr' ? 'Assistant IA' : currentLang === 'es' ? 'Asistente de IA' : currentLang === 'it' ? 'Assistente IA' : 'AI Assistant'}
                   </h4>
                   <span className="w-2 h-2 rounded-full bg-emerald-400" />
                 </div>
@@ -206,11 +256,7 @@ User question: "${text}"`
             {messages.length === 0 && (
               <div className="h-full flex items-center justify-center text-slate-300 text-xs text-center p-6 select-none">
                 <p>
-                  {currentLang === 'ar' 
-                    ? 'اكتب رسالتك للبدء...' 
-                    : currentLang === 'fr'
-                    ? 'Écrivez votre message pour commencer...'
-                    : 'Type a message to begin...'}
+                  {currentLang === 'ar' ? 'اكتب رسالتك للبدء...' : currentLang === 'fr' ? 'Écrivez votre message pour commencer...' : currentLang === 'es' ? 'Escribe un mensaje para comenzar...' : currentLang === 'it' ? 'Scrivi un messaggio per iniziare...' : 'Type a message to begin...'}
                 </p>
               </div>
             )}
