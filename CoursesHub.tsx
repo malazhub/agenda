@@ -137,7 +137,7 @@ export const CoursesHub: React.FC<CoursesHubProps> = ({
         Boolean(accountGrade) &&
         (
           gradeId === accountGrade ||
-          gradeName?.includes(accountGrade) ?? false
+          gradeName.includes(accountGrade)
         )
       );
     });
@@ -374,7 +374,7 @@ const updateAccount = async (
   const openSharedLiveRoom = () => {
     const accountGrade = registeredAccount?.gradeId
       ?.toLowerCase()
-      .replace(/[^a-z0-9]/g, '');
+      .replace(/[^a-z0-9]/g, '') || '';
 
     const targetGrade =
       LEBANESE_GRADE_LEVELS.find((grade) => {
