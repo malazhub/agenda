@@ -63,18 +63,22 @@ export const AIChatBot: React.FC<AIChatBotProps> = ({ currentLang, schoolId, sch
       'what is agenda', 'about agenda', 'agenda application', 'agenda app', 'about the app',
       'how to use agenda', 'how do i use', 'how to navigate', 'how do i navigate',
       'navigate the app', 'application overview', 'brief about', 'brief of the app',
+      'give me a brief', 'give me an overview', 'explain agenda', 'explain this app', 'what does agenda do',
+      'expliquez agenda', 'présentation de la plateforme', 'fonctionnement de la plateforme',
+      'explica agenda', 'presentación de la plataforma', 'cómo funciona la plataforma',
+      'spiegami agenda', 'presentazione della piattaforma', 'come funziona la piattaforma',
+      'اشرح لي التطبيق', 'اشرح تطبيق أجندة', 'نبذة عن المنصة', 'كيف تعمل المنصة',
       'rename my school', 'rename school', 'change school name', 'school name',
       'own copy', 'my own copy', 'get my own copy', 'get a copy', 'buy a copy',
-      'purchase a copy', '150 usd', '150 dollars', '150 usd', 'my own school',
-      'présentation', 'présentez', 'à propos', 'comment naviguer', 'changer le nom de l’école',
+      'purchase a copy', 'cost of a copy', 'price of a copy', 'copy price', 'my own school',
+      'présentation', 'présentez', 'à propos', 'comment naviguer', 'changer le nom de l’école', 'prix d’une copie',
       'renommer mon école', 'ma propre copie', 'ma propre version', 'acheter une copie',
       'presentación', 'sobre agenda', 'cómo navegar', 'como navegar', 'cambiar el nombre de la escuela',
-      'mi propia copia', 'obtener una copia', 'comprar una copia',
+      'mi propia copia', 'obtener una copia', 'comprar una copia', 'precio de una copia',
       'presentazione', 'informazioni su agenda', 'come navigare', 'cambiare il nome della scuola',
-      'la mia copia', 'ottenere una copia', 'acquistare una copia',
+      'la mia copia', 'ottenere una copia', 'acquistare una copia', 'prezzo di una copia',
       'شرح التطبيق', 'نبذة عن التطبيق', 'ما هو أجندة', 'كيف أتنقل', 'كيفية التنقل',
-      'تغيير اسم المدرسة', 'تغيير اسم مدرستي', 'نسختي الخاصة', 'نسخة خاصة', 'شراء نسخة',
-      '150 دولار', 'مئة وخمسون دولار'
+      'تغيير اسم المدرسة', 'تغيير اسم مدرستي', 'نسختي الخاصة', 'نسخة خاصة', 'شراء نسخة', 'سعر النسخة', 'ثمن النسخة'
     ].some((keyword) => q.includes(keyword));
 
     if (applicationOverviewQuestion) {
