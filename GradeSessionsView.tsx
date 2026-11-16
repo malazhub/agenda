@@ -1925,16 +1925,24 @@ const handleClearChatMessages = async () => {
               </span>
 
               <div>
-                <h3 className="font-bold text-sm">
-              {selectedGrade.name[currentLang]}
-            </h3>
-            <p className="text-xs text-slate-300">
-              {currentLang === 'ar' ? 'الأستاذ: ' : 'Educator: '}
-              {activeCallSession.educatorName}
-            </p>
-            <p className="text-xs text-slate-400">
-              {activeCallSession.subject}
-            </p>
+                {isGuestMode ? (
+                  <h3 className="font-bold text-sm">
+                    {currentLang === 'ar' ? 'غرفة البث المباشر' : currentLang === 'fr' ? 'Salle de diffusion' : 'Broadcast Room'}
+                  </h3>
+                ) : (
+                  <>
+                    <h3 className="font-bold text-sm">
+                      {selectedGrade.name[currentLang]}
+                    </h3>
+                    <p className="text-xs text-slate-300">
+                      {currentLang === 'ar' ? 'الأستاذ: ' : 'Educator: '}
+                      {activeCallSession.educatorName}
+                    </p>
+                    <p className="text-xs text-slate-400">
+                      {activeCallSession.subject}
+                    </p>
+                  </>
+                )}
               </div>
             </div>
 

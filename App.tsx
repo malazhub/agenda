@@ -59,7 +59,8 @@ export default function App() {
   const [registeredAccount, setRegisteredAccount] = useState<CloudflareAccount | null>(null);
   const [sessionToken, setSessionToken] = useState('');
   const [schools, setSchools] = useState<SchoolRecord[]>([]);
-  const [selectedSchoolId, setSelectedSchoolId] = useState(() => localStorage.getItem('agenda-school-id') || '');
+  const [activeSchoolId, setActiveSchoolId] = useState('');
+  const activeSchoolName = schools.find((school) => school.id === activeSchoolId)?.name || '';
   const signOutCleanupRef = useRef<(() => Promise<void>) | null>(null);
 
 const registerSignOutCleanup = useCallback(
@@ -86,20 +87,34 @@ const registerSignOutCleanup = useCallback(
   }, [currentLang, isRTL]);
 
   useEffect(() => {
+    document.title = activeSchoolName || 'Agenda';
+  }, [activeSchoolName]);
+
+  useEffect(() => {
     let active = true;
-    void getSchools().then(({ schools: records }) => {
+    void getSchools().then(({ schools: records, activeSchoolId: serverActiveSchoolId }) => {
       if (!active) return;
       setSchools(records);
-      const saved = localStorage.getItem('agenda-school-id');
-      setSelectedSchoolId((current) => current || saved || records[0]?.id || '');
+      setActiveSchoolId(serverActiveSchoolId || records[0]?.id || '');
     }).catch((error) => console.error('Unable to load schools.', error));
     return () => { active = false; };
   }, []);
 
+  // Keep the public school title in sync when a Director changes it from another device.
   useEffect(() => {
-    if (!selectedSchoolId) return;
-    localStorage.setItem('agenda-school-id', selectedSchoolId);
-  }, [selectedSchoolId]);
+    const refreshSchoolBrand = () => {
+      void getSchools().then(({ schools: records, activeSchoolId: serverActiveSchoolId }) => {
+        setSchools(records);
+        setActiveSchoolId(serverActiveSchoolId || records[0]?.id || '');
+      }).catch((error) => console.error('Unable to refresh school branding.', error));
+    };
+    const intervalId = window.setInterval(refreshSchoolBrand, 30_000);
+    window.addEventListener('focus', refreshSchoolBrand);
+    return () => {
+      window.clearInterval(intervalId);
+      window.removeEventListener('focus', refreshSchoolBrand);
+    };
+  }, []);
 
   useEffect(() => {
     const storedToken = sessionStorage.getItem('agenda-session-token');
@@ -114,8 +129,6 @@ const registerSignOutCleanup = useCallback(
         const { account } = await getCurrentAccount(sessionToken);
         if (!active) return;
         setRegisteredAccount(account);
-    if (account.schoolId) setSelectedSchoolId(account.schoolId);
-        if (account.schoolId) setSelectedSchoolId(account.schoolId);
         setUserProfile((previous) => ({
           ...previous,
           name: account.fullName,
@@ -249,10 +262,7 @@ const registerSignOutCleanup = useCallback(
         onRoleChange={(role) => setUserProfile(prev => ({ ...prev, role }))}
         onOpenRegister={() => setIsRegisterOpen(true)}
         signedInName={registeredAccount?.fullName}
-        schoolName={schools.find((school) => school.id === (registeredAccount?.schoolId || selectedSchoolId))?.name || ''}
-        schools={schools}
-        selectedSchoolId={registeredAccount?.schoolId || selectedSchoolId}
-        onSchoolChange={setSelectedSchoolId}
+        schoolName={activeSchoolName}
         onOpenArchiveSessions={() => setIsArchiveSessionsOpen(true)}
         onSignOut={handleSignOut}
       />
@@ -272,8 +282,17 @@ const registerSignOutCleanup = useCallback(
             currentLang={currentLang}
             directorLoginRequest={directorLoginRequest}
             registeredAccount={registeredAccount}
-            schoolId={registeredAccount?.schoolId || selectedSchoolId}
+            schoolId={registeredAccount?.schoolId || activeSchoolId}
             sessionToken={sessionToken}
+            onSchoolBrandChange={(schoolId, schoolName) => {
+              setActiveSchoolId(schoolId);
+              setSchools((current) => {
+                const exists = current.some((school) => school.id === schoolId);
+                return exists
+                  ? current.map((school) => school.id === schoolId ? { ...school, name: schoolName } : school)
+                  : [...current, { id: schoolId, name: schoolName }].sort((a, b) => a.name.localeCompare(b.name));
+              });
+            }}
             onRegisterSignOutCleanup={registerSignOutCleanup}
             
             onShowMessage={showToast}
@@ -307,7 +326,7 @@ const registerSignOutCleanup = useCallback(
         isOpen={isRegisterOpen}
         onClose={() => setIsRegisterOpen(false)}
         currentLang={currentLang}
-        schoolId={selectedSchoolId}
+        schoolId={activeSchoolId}
         onRegisterSuccess={handleRegisterSuccess}
       />
 
@@ -348,7 +367,7 @@ const registerSignOutCleanup = useCallback(
               </div>
               <div>
                 <span className="text-lg font-black tracking-tight text-white block">
-                  Agenda
+                  {activeSchoolName || 'Agenda'}
                 </span>
                 <p className="text-xs text-slate-300 font-medium">
                   {t.heroTitle}

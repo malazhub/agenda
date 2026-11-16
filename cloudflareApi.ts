@@ -202,7 +202,7 @@ export function registerAccount(input: RegistrationInput): Promise<AuthResponse>
   });
 }
 
-export function getSchools(): Promise<{ schools: SchoolRecord[] }> {
+export function getSchools(): Promise<{ schools: SchoolRecord[]; activeSchoolId?: string }> {
   return request('/api/schools');
 }
 
@@ -342,6 +342,7 @@ export function getDirectorProfile(
 export function updateDirectorProfile(
   token: string,
   input: {
+    schoolId: string;
     schoolName: string;
     username: string;
     password?: string;
