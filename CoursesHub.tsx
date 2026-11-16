@@ -10,7 +10,6 @@ import {
   getDirectorProfile,
   getRegistrationSessions,
   loginAccount,
-  updateDirectorProfile,
   updateDirectorAccount,
   deleteDirectorAccount,
   getDirectorLiveStream,
@@ -69,10 +68,6 @@ export const CoursesHub: React.FC<CoursesHubProps> = ({
     typeof window === 'undefined' ? '' : window.sessionStorage.getItem('agenda-director-token') || ''
   );
   const [directorSchoolId, setDirectorSchoolId] = useState('');
-  const [settingsSchoolName, setSettingsSchoolName] = useState('');
-  const [settingsUsername, setSettingsUsername] = useState('');
-  const [settingsPassword, setSettingsPassword] = useState('');
-  const [settingsSaving, setSettingsSaving] = useState(false);
   const [studentRows, setStudentRows] = useState<DirectorRow[]>([]);
   const [educatorRows, setEducatorRows] = useState<DirectorRow[]>([]);
   const [registrationSessions, setRegistrationSessions] = useState<RegistrationSession[]>([]);
@@ -101,8 +96,6 @@ export const CoursesHub: React.FC<CoursesHubProps> = ({
       .then(({ profile }) => {
         if (!active) return;
         setDirectorSchoolId(profile.schoolId);
-        setSettingsSchoolName(profile.schoolName);
-        setSettingsUsername(profile.username);
         onSchoolBrandChange(profile.schoolId, profile.schoolName);
       })
       .catch((profileError) => {
@@ -223,45 +216,7 @@ export const CoursesHub: React.FC<CoursesHubProps> = ({
     }
   };
 
-  const handleSaveDirectorSettings = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    if (!directorToken) return;
-    setSettingsSaving(true);
-    setDirectorDataError('');
-    setDirectorMessage('');
-    try {
-      const input = {
-        schoolName: settingsSchoolName.trim(),
-        username: settingsUsername.trim(),
-        ...(settingsPassword ? { password: settingsPassword } : {}),
-      };
-      const { profile, token } = await updateDirectorProfile(directorToken, input);
-      sessionStorage.setItem('agenda-director-token', token);
-      setDirectorToken(token);
-      setDirectorSchoolId(profile.schoolId);
-      setSettingsSchoolName(profile.schoolName);
-      setSettingsUsername(profile.username);
-      setSettingsPassword('');
-      onSchoolBrandChange(profile.schoolId, profile.schoolName);
-      setDirectorMessage(
-        currentLang === 'ar'
-          ? 'تم حفظ اسم المدرسة وبيانات المدير وتحديث اسم المنصة.'
-          : currentLang === 'fr'
-            ? 'Le nom de l\u2019établissement et les identifiants du directeur ont été enregistrés.'
-            : currentLang === 'es'
-              ? 'Se guardaron el nombre de la escuela y las credenciales del Director. Se actualizó el encabezado.'
-              : currentLang === 'it'
-                ? 'Il nome della scuola e le credenziali del Direttore sono stati salvati. L\u2019intestazione è stata aggiornata.'
-                : 'School name and Director credentials saved. The main header is updated.'
-      );
-    } catch (error) {
-      setDirectorDataError(error instanceof Error ? error.message : 'Unable to save Director settings.');
-    } finally {
-      setSettingsSaving(false);
-    }
-  };
 
-  
 const updateAccount = async (
   account: DirectorRow,
     update: {
@@ -730,86 +685,7 @@ const updateAccount = async (
           </button>
         </div>
 
-        <section className="rounded-2xl border border-indigo-200 bg-white p-5 sm:p-6 space-y-4">
-          <div>
-            <h3 className="text-base font-black text-slate-900">
-              {currentLang === 'ar' ? 'إعدادات المدرسة والمدير' : currentLang === 'fr' ? 'Établissement et compte Directeur' : currentLang === 'es' ? 'Configuración de escuela y Director' : currentLang === 'it' ? 'Impostazioni scuola e Direttore' : 'School & Director Settings'}
-            </h3>
-            <p className="mt-1 text-xs text-slate-500">
-              {currentLang === 'ar'
-                ? 'لكل مدير مدرسته وموظفوه وطلابه ودروسه وأسعاره المستقلة. يظهر اسم المدرسة المحفوظ في رأس المنصة.'
-                : currentLang === 'fr'
-                  ? 'Chaque Directeur possède son établissement, son équipe, ses élèves, ses leçons et ses tarifs. Le nom enregistré apparaît dans l\u2019en-tête.'
-                  : 'Each Director has a separate school, staff, students, lessons, and pricing. The saved school name becomes this school\u2019s platform header.'}
-            </p>
-          </div>
-          <form className="grid gap-4 md:grid-cols-2" onSubmit={handleSaveDirectorSettings}>
-            <label className="block space-y-1.5">
-              <span className="text-xs font-bold text-slate-700">
-                {currentLang === 'ar' ? 'اسم مدرستك' : currentLang === 'fr' ? 'Nom de votre établissement' : currentLang === 'es' ? 'Nombre de tu escuela' : currentLang === 'it' ? 'Nome della tua scuola' : 'Your school name'}
-              </span>
-              <input
-                required
-                maxLength={160}
-                value={settingsSchoolName}
-                onChange={(event) => setSettingsSchoolName(event.target.value)}
-                placeholder="Example Agenda"
-                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-sm text-slate-800"
-              />
-            </label>
-            <label className="block space-y-1.5">
-              <span className="text-xs font-bold text-slate-700">
-                {currentLang === 'ar' ? 'اسم مستخدم المدير' : currentLang === 'fr' ? 'Nom d\u2019utilisateur du directeur' : currentLang === 'es' ? 'Usuario del Director' : currentLang === 'it' ? 'Nome utente del Direttore' : 'Director username'}
-              </span>
-              <input
-                required
-                minLength={3}
-                maxLength={32}
-                pattern="[a-zA-Z0-9._-]{3,32}"
-                autoComplete="username"
-                value={settingsUsername}
-                onChange={(event) => setSettingsUsername(event.target.value)}
-                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-sm text-slate-800"
-              />
-            </label>
-            <label className="block space-y-1.5">
-              <span className="text-xs font-bold text-slate-700">
-                {currentLang === 'ar' ? 'كلمة مرور جديدة (اختياري)' : currentLang === 'fr' ? 'Nouveau mot de passe (facultatif)' : currentLang === 'es' ? 'Nueva contraseña (opcional)' : currentLang === 'it' ? 'Nuova password (facoltativa)' : 'New password (optional)'}
-              </span>
-              <input
-                type="password"
-                maxLength={1024}
-                autoComplete="new-password"
-                value={settingsPassword}
-                onChange={(event) => setSettingsPassword(event.target.value)}
-                placeholder={currentLang === 'ar' ? 'اتركه فارغاً للإبقاء على الحالية' : currentLang === 'fr' ? 'Laisser vide pour conserver l\u2019actuel' : currentLang === 'es' ? 'Déjalo vacío para mantener la actual' : currentLang === 'it' ? 'Lascia vuoto per mantenere quella attuale' : 'Leave blank to keep current password'}
-                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-sm text-slate-800"
-              />
-            </label>
-            <div className="md:col-span-2 flex flex-wrap items-center justify-between gap-3">
-              <p className="text-[11px] text-slate-500">
-                {currentLang === 'ar'
-                  ? 'هذه المدرسة ملك لحساب المدير الحالي فقط. سيظهر اسمها في رابط المدرسة ورأس المنصة.'
-                  : currentLang === 'fr'
-                    ? 'Cet établissement appartient uniquement à ce compte Directeur. Son nom apparaît dans le lien et l\u2019en-tête.'
-                    : currentLang === 'es'
-                      ? 'Esta escuela pertenece únicamente a esta cuenta de Director. Su nombre aparece en el enlace y en la cabecera.'
-                      : currentLang === 'it'
-                        ? 'Questa scuola appartiene solo a questo account Direttore. Il nome appare nel link e nell\u2019intestazione.'
-                        : 'This school belongs only to this Director account. Its name appears in the school link and platform header.'}
-              </p>
-              <button
-                type="submit"
-                disabled={settingsSaving || !settingsSchoolName.trim() || !settingsUsername.trim()}
-                className="rounded-xl bg-indigo-700 px-5 py-3 text-xs font-black text-white transition hover:bg-indigo-800 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {settingsSaving
-                  ? '…'
-                  : currentLang === 'ar' ? 'حفظ الإعدادات' : currentLang === 'fr' ? 'Enregistrer' : currentLang === 'es' ? 'Guardar configuración' : currentLang === 'it' ? 'Salva impostazioni' : 'Save school & Director settings'}
-              </button>
-            </div>
-          </form>
-        </section>
+
 
         {directorDataError && (
           <div role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-xs font-semibold text-red-700">
