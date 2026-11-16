@@ -226,7 +226,7 @@ export const LEBANESE_GRADE_LEVELS: GradeLevelDef[] = [
       ar: 'الروضات والتحضيري (KG / Maternelle)',
       fr: 'Maternelle (Grande Section - KG)',
       en: 'Kindergarten & Preschool (KG)',
-      it: 'Scuola dell’infanzia (KG)',
+      it: 'Scuola dell\u2019infanzia (KG)',
       es: 'Educación infantil (KG)'
     },
     badge: 'KG / Maternelle',
@@ -257,7 +257,7 @@ export const MOCK_LIVE_SESSIONS: LiveSessionInfo[] = [
     id: 'live_bac_sg_phys',
     gradeId: 'bac_sg',
     subject: 'Physique / فيزياء',
-    title: 'Circuits RLC en régime sinusoïdal forcé & Résonance d’intensité',
+    title: 'Circuits RLC en régime sinusoïdal forcé & Résonance d\u2019intensité',
     teacherName: 'Dr. Ziad Gemayel',
     teacherAvatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200&auto=format&fit=crop&q=80',
     timeSlot: '5:00 PM – 5:45 PM',
@@ -285,7 +285,7 @@ export const MOCK_LIVE_SESSIONS: LiveSessionInfo[] = [
     id: 'live_bac_lh_phil',
     gradeId: 'bac_lh',
     subject: 'Philosophie & Arabe',
-    title: 'L’Inconscient, la Morale et la Dissertation Méthodique',
+    title: 'L\u2019Inconscient, la Morale et la Dissertation Méthodique',
     teacherName: 'Prof. Georges Haddad',
     teacherAvatar: 'https://images.unsplash.com/photo-1508214751196-bcfd4ca60f91?w=200&auto=format&fit=crop&q=80',
     timeSlot: '5:30 PM – 6:15 PM',
@@ -395,7 +395,7 @@ export const MOCK_LIVE_SESSIONS: LiveSessionInfo[] = [
     timeSlot: '4:00 PM – 4:40 PM',
     isLiveNow: true,
     activeStudentsCount: 3,
-    currentChapter: 'Jeux d’éveil cognitif et reconnaissance des formes',
+    currentChapter: 'Jeux d\u2019éveil cognitif et reconnaissance des formes',
     participants: []
   }
 ];
