@@ -397,6 +397,18 @@ export function createDirectorSession(token: string, session: SessionInput): Pro
   });
 }
 
+export function updateDirectorSessionLive(
+  token: string,
+  sessionId: string,
+  isLive: boolean
+): Promise<{ session: StoredSessionRecord }> {
+  return request(`/api/director/sessions/${encodeURIComponent(sessionId)}`, {
+    method: 'PATCH',
+    headers: authHeaders(token),
+    body: JSON.stringify({ isLive }),
+  });
+}
+
 export function deleteDirectorSession(token: string, sessionId: string): Promise<{ deleted: boolean }> {
   return request(`/api/director/sessions/${encodeURIComponent(sessionId)}`, {
     method: 'DELETE',
