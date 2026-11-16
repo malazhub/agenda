@@ -10,7 +10,8 @@ import {
 } from '@stream-io/video-client';
 import {
   getGradeSessions,
-  getLiveEducators,
+    getLiveEducators,
+  createGuestLiveStream,
   setEducatorLiveSession,
   getLiveStreamStatus,
   getClassroomMessages,
@@ -33,7 +34,7 @@ import {
   FileText,
   ExternalLink,
   RefreshCw,
-  Lock,
+ 
   Maximize2,
   Minimize,
   Mic,
@@ -58,7 +59,7 @@ interface GradeSessionsViewProps {
   sessionToken: string;
   onBack: () => void;
   onEnterLiveClassroom?: (session?: any) => void;
-  onRequestSignIn?: () => void;
+  onShowMessage: (message: string) => void;
   onRegisterSignOutCleanup?: (
     cleanup: (() => Promise<void>) | null
   ) => void;
@@ -138,7 +139,7 @@ export const GradeSessionsView: React.FC<GradeSessionsViewProps> = ({
   registeredAccount,
   sessionToken,
   onBack,
-  onRequestSignIn,
+  onShowMessage,
   onRegisterSignOutCleanup,
 }) => {
     const isRTL = currentLang === 'ar';
@@ -224,7 +225,8 @@ const [timerRunning, setTimerRunning] = useState(false);
 
 const [isMicOn, setIsMicOn] = useState(false);
 const [isVideoOn, setIsVideoOn] = useState(false);
-
+const [isGuestMode, setIsGuestMode] = useState(false);
+const [guestUserId, setGuestUserId] = useState('');
 const [isFullscreen, setIsFullscreen] = useState(false);
 const [isStudentPreviewExpanded, setIsStudentPreviewExpanded] =
   useState(false);
@@ -266,13 +268,8 @@ const containerRef = useRef<HTMLDivElement>(null);
     isLive: boolean;
   }>>([]);
 
-    // Load the live educator directory only for signed-in users.
+      // The live educator directory is visible to guests and signed-in users.
   useEffect(() => {
-    if (!registeredAccount || !sessionToken) {
-      setLiveSessionsList([]);
-      return;
-    }
-
     let active = true;
 
     const loadLiveSessions = async () => {
@@ -304,10 +301,8 @@ const containerRef = useRef<HTMLDivElement>(null);
       }
     };
 
-    // Load the directory immediately after sign-in.
     void loadLiveSessions();
 
-    // Refresh the directory every ten seconds.
     const refreshInterval = window.setInterval(() => {
       void loadLiveSessions();
     }, 10000);
@@ -316,11 +311,7 @@ const containerRef = useRef<HTMLDivElement>(null);
       active = false;
       window.clearInterval(refreshInterval);
     };
-  }, [
-    sessionToken,
-    reloadKey,
-    registeredAccount?.id
-  ]);
+  }, [sessionToken, reloadKey]);
 
     // Load stored learning resources only after sign-in.
   useEffect(() => {
@@ -733,7 +724,149 @@ callEventUnsubs.current = [];
     setIsLoading(false);
   }
 };
+// Create a separate, empty test room for visitors who are not signed in.
+const startGuestLiveCall = async () => {
+  if (startCallInProgressRef.current || inLiveConference) return;
 
+  startCallInProgressRef.current = true;
+  setIsLoading(true);
+  setCameraError(null);
+
+  let client: StreamVideoClient | null = null;
+  let call: Call | null = null;
+
+  try {
+    // The Worker creates a unique guest identity and unique call ID.
+    const credentials = await createGuestLiveStream();
+
+    if (
+      !credentials.apiKey ||
+      !credentials.callId ||
+      !credentials.token ||
+      !credentials.userId
+    ) {
+      throw new Error(
+        'The guest classroom credentials are incomplete.'
+      );
+    }
+
+    const { StreamVideoClient: VideoClient } =
+      await import('@stream-io/video-client');
+
+    client = new VideoClient({
+      apiKey: credentials.apiKey,
+      token: credentials.token,
+      user: {
+        id: credentials.userId,
+        name: credentials.userName || 'Guest',
+      },
+    });
+
+    // This call is unique to this guest.
+    // It is not an educator's assigned classroom.
+    call = client.call('default', credentials.callId);
+
+    await call.join({
+      create: true,
+    });
+
+    // Enable the guest camera so the visitor can test it.
+    try {
+      await call.camera.selectDirection('front');
+      await call.camera.enable();
+
+      setIsVideoOn(
+        call.camera.state.status === 'enabled'
+      );
+    } catch (cameraError) {
+      console.warn(
+        'Guest test camera could not start:',
+        cameraError
+      );
+
+      setIsVideoOn(false);
+    }
+
+    // Keep the microphone off until the guest chooses to enable it.
+    try {
+      await call.microphone.disable();
+    } catch (microphoneError) {
+      console.warn(
+        'Unable to keep the guest microphone disabled:',
+        microphoneError
+      );
+    }
+
+    participantsSubscription.current?.unsubscribe();
+
+    participantsSubscription.current =
+      call.state.participants$.subscribe((participants) => {
+        const uniqueParticipants = Array.from(
+          new Map(
+            participants.map((participant) => [
+              participant.userId || participant.sessionId,
+              participant,
+            ])
+          ).values()
+        );
+
+        setCallParticipants(uniqueParticipants);
+      });
+
+    callEventUnsubs.current.forEach((unsubscribe) => unsubscribe());
+    callEventUnsubs.current = [];
+
+    setGuestUserId(credentials.userId);
+    setIsGuestMode(true);
+
+    setStreamClient(client);
+    setStreamCall(call);
+
+    // No grade, educator or subject is assigned to a guest test room.
+    setActiveCallSession({
+      id: credentials.callId,
+      educatorName: '',
+      subject: '',
+      isLive: true,
+      isGuest: true,
+    });
+
+    setInLiveConference(true);
+
+    setTimeLeft(45 * 60);
+    setTimerRunning(true);
+
+    setCanSpeak(true);
+    setIsMicOn(false);
+
+  } catch (error) {
+    console.error(
+      'Unable to open the guest test room:',
+      error
+    );
+
+    if (call) {
+      await call.leave().catch(() => undefined);
+    }
+
+    if (client) {
+      await client.disconnectUser().catch(() => undefined);
+    }
+
+    setGuestUserId('');
+    setIsGuestMode(false);
+    setIsVideoOn(false);
+    setIsMicOn(false);
+
+    setCameraError(
+      'Unable to open the guest test room. Please try again.'
+    );
+
+  } finally {
+    startCallInProgressRef.current = false;
+    setIsLoading(false);
+  }
+};
     // Stop the broadcast and leave the assigned Stream classroom.
   
 const endLiveCall = async () => {
@@ -782,6 +915,26 @@ callEventUnsubs.current = [];
         await streamCall.microphone.disable();
       } catch (error) {
         console.warn('Unable to disable microphone:', error);
+      }
+    }
+
+        if (streamCall && isGuestMode) {
+      try {
+        await streamCall.camera.disable();
+      } catch (error) {
+        console.warn(
+          'Unable to disable guest camera:',
+          error
+        );
+      }
+
+      try {
+        await streamCall.microphone.disable();
+      } catch (error) {
+        console.warn(
+          'Unable to disable guest microphone:',
+          error
+        );
       }
     }
 
@@ -849,8 +1002,11 @@ callEventUnsubs.current = [];
     setTimerRunning(false);
     setTimeLeft(45 * 60);
 
-    setIsVideoOn(false);
+        setIsVideoOn(false);
     setIsMicOn(false);
+
+    setIsGuestMode(false);
+    setGuestUserId('');
 
     setActiveCallSession(null);
     setCameraError(null);
@@ -1052,7 +1208,7 @@ const stopStudentSpeaking = async (studentId: string) => {
 const startStudentSelfCam = async () => {
   const call = streamCall;
 
-  if (!call || !isStudent) return;
+  if (!call || (!isStudent && !isGuestMode)) return;
 
   if (
     !call.permissionsContext.hasPermission(
@@ -1103,7 +1259,7 @@ const startStudentSelfCam = async () => {
 const flipStudentCamera = async () => {
   const call = streamCall;
 
-  if (!call || !isStudent) return;
+  if (!call || (!isStudent && !isGuestMode)) return;
 
   if (
     !call.permissionsContext.hasPermission(
@@ -1158,19 +1314,24 @@ const flipStudentCamera = async () => {
 const toggleVideoTrack = async () => {
   const call = streamCall;
 
-  if (!call || (!isStudent && !isEducator)) return;
+  if (
+    !call ||
+    (!isStudent && !isEducator && !isGuestMode)
+  ) {
+    return;
+  }
 
   const cameraWasOn = isVideoOn;
 
   try {
-        if (cameraWasOn) {
+    if (cameraWasOn) {
       await call.camera.disable();
       setIsVideoOn(false);
       setIsStudentPreviewExpanded(false);
     } else {
-      if (isStudent) {
+      if (isStudent || isGuestMode) {
         await call.camera.selectDirection('front', {
-          enableCamera: false
+          enableCamera: false,
         });
       }
 
@@ -1179,6 +1340,7 @@ const toggleVideoTrack = async () => {
     }
 
     setCameraError(null);
+
   } catch (error) {
     console.error(
       'Unable to toggle classroom camera:',
@@ -1199,7 +1361,7 @@ const toggleVideoTrack = async () => {
   const toggleAudioTrack = async () => {
   const call = streamCall;
 
-  if (!call || (!isEducator && !isStudent)) return;
+  if (!call || (!isEducator && !isStudent && !isGuestMode)) return;
 
   // A real button click is a browser user gesture.
   // Use it to resume incoming classroom audio if autoplay was blocked.
@@ -1378,7 +1540,11 @@ const studentPrimarySession =
     window.open(url, '_blank', 'noopener,noreferrer');
   };
 
-      // Keep chat selection independent from the main classroom video.
+       // Identify the local Stream user for both registered users and guests.
+  const localStreamUserId =
+    registeredAccount?.id || guestUserId;
+
+  // Keep chat selection independent from the main classroom video.
   const selectedParticipant =
     callParticipants.find(
       (participant) =>
@@ -1386,61 +1552,65 @@ const studentPrimarySession =
     ) ||
     callParticipants.find(
       (participant) =>
-        participant.userId !== registeredAccount?.id
+        participant.userId !== localStreamUserId
     ) ||
     null;
 
-    // Educators always see their own camera as the primary video.
+  // Educators always see their own camera as the primary video.
   const educatorOwnParticipant = callParticipants.find(
     (participant) =>
-      participant.userId === registeredAccount?.id
+      participant.userId === localStreamUserId
   );
 
-  // On the student screen, prefer the educator's Stream host role.
-  // If Stream does not expose that role, use the assigned educator's
-  // participant name. Finally, retain a non-self participant fallback
-  // so the main video does not disappear when roles are missing.
-  const studentEducatorParticipant =
-    callParticipants.find(
-      (participant) =>
-        participant.roles?.some(
-          (role: string) => role === 'admin' || role === 'host'
-        )
-    ) ||
-    callParticipants.find(
-      (participant) =>
-        participant.name?.trim().toLowerCase() ===
-        activeCallSession?.educatorName?.trim().toLowerCase()
-    ) ||
-    callParticipants.find(
-      (participant) =>
-        participant.userId !== registeredAccount?.id
-    ) ||
-    null;
+  // A guest has no educator video.
+  // Registered students retain the normal educator selection logic.
+  const studentEducatorParticipant = isGuestMode
+    ? null
+    : (
+        callParticipants.find(
+          (participant) =>
+            participant.roles?.some(
+              (role: string) => role === 'admin' || role === 'host'
+            )
+        ) ||
+        callParticipants.find(
+          (participant) =>
+            participant.name?.trim().toLowerCase() ===
+            activeCallSession?.educatorName?.trim().toLowerCase()
+        ) ||
+        callParticipants.find(
+          (participant) =>
+            participant.userId !== localStreamUserId
+        ) ||
+        null
+      );
 
-    const studentOwnParticipant = isStudent
-    ? callParticipants.find(
-        (participant) =>
-          participant.userId === registeredAccount?.id
-      ) || null
-    : null;
+  const studentOwnParticipant =
+    isStudent || isGuestMode
+      ? callParticipants.find(
+          (participant) =>
+            participant.userId === localStreamUserId
+        ) || null
+      : null;
 
-  const primaryVideoParticipant = isEducator
-    ? educatorOwnParticipant || null
-    : studentEducatorParticipant;
+  const primaryVideoParticipant = isGuestMode
+    ? null
+    : isEducator
+      ? educatorOwnParticipant || null
+      : studentEducatorParticipant;
 
-const chatStudentId = isEducator
-  ? (
-      selectedParticipant &&
-      selectedParticipant.userId !== registeredAccount?.id
-        ? selectedParticipant.userId
-        : ''
-    )
-  : isStudent
-    ? registeredAccount?.id || ''
-    : '';
+  const chatStudentId = isEducator
+    ? (
+        selectedParticipant &&
+        selectedParticipant.userId !== registeredAccount?.id
+          ? selectedParticipant.userId
+          : ''
+      )
+    : isStudent
+      ? registeredAccount?.id || ''
+      : '';
+
   const classroomSessionId = String(activeCallSession?.id || '');
-
 // Refresh private chat while the live classroom is active.
 useEffect(() => {
   // Each effect instance gets its own request version.
@@ -1854,9 +2024,9 @@ const handleClearChatMessages = async () => {
                     {/* RECEIVE AUDIO FROM ALL REMOTE CLASSROOM PARTICIPANTS */}
           {streamCall &&
             callParticipants
-              .filter(
+                            .filter(
                 (participant) =>
-                  participant.userId !== registeredAccount?.id
+                  participant.userId !== localStreamUserId
               )
               .map((participant) => (
                 <StreamParticipantAudio
@@ -1896,7 +2066,7 @@ const handleClearChatMessages = async () => {
         : 'lg:grid-cols-[minmax(0,1fr)_20rem]'
     }`}
   >
-    {callParticipants.length === 0 ? (
+    {callParticipants.length === 0 && !isGuestMode ? (
       <div className="lg:col-span-2 min-h-[40vh] flex flex-col items-center justify-center text-center">
         <Users className="w-12 h-12 text-slate-500 mb-3" />
 
@@ -1924,18 +2094,28 @@ const handleClearChatMessages = async () => {
               call={streamCall}
               sessionId={primaryVideoParticipant.sessionId}
               muted={
-                primaryVideoParticipant.userId === registeredAccount?.id
+                primaryVideoParticipant.userId === localStreamUserId
               }
             />
           )}
-
+          {isGuestMode && (
+            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+              <span className="rounded-xl bg-black/70 px-5 py-3 text-sm font-bold text-white">
+                {currentLang === 'ar'
+                  ? 'لم يتم اختيار أستاذ'
+                  : currentLang === 'fr'
+                    ? 'Aucun éducateur sélectionné'
+                    : 'No educator selected'}
+              </span>
+            </div>
+          )}
           {primaryVideoParticipant && (
             <div className="absolute bottom-3 left-3 right-3 flex items-center justify-between gap-2">
               <span className="bg-black/75 text-white text-xs font-bold px-3 py-2 rounded-lg truncate">
                 {primaryVideoParticipant.name ||
                   primaryVideoParticipant.userId ||
                   'Participant'}
-                {primaryVideoParticipant.userId === registeredAccount?.id
+                {primaryVideoParticipant.userId === localStreamUserId
                   ? (currentLang === 'ar' ? ' (أنت)' : ' (You)')
                   : ''}
               </span>
@@ -1946,7 +2126,7 @@ const handleClearChatMessages = async () => {
             </div>
           )}
 
-                    {isStudent &&
+                                 {(isStudent || isGuestMode) &&
             isVideoOn &&
             streamCall &&
             studentOwnParticipant && (
@@ -2198,10 +2378,20 @@ const handleClearChatMessages = async () => {
         </div>
          <div className="flex-1 min-h-[120px] overflow-y-auto p-3 space-y-2">
           {!chatStudentId ? (
-            <p className="text-xs text-slate-400 text-center mt-6">
-              {currentLang === 'ar'
-                ? 'اختر طالباً من الصور لفتح المحادثة.'
-                : 'Select a student thumbnail to open the conversation.'}
+                        <p className="text-xs text-slate-400 text-center mt-6">
+              {isGuestMode
+                ? (
+                    currentLang === 'ar'
+                      ? 'المحادثة الخاصة متاحة بعد تسجيل الدخول واختيار أستاذ.'
+                      : currentLang === 'fr'
+                        ? 'La conversation privée nécessite une connexion et un éducateur.'
+                        : 'Private chat requires sign-in and an assigned educator.'
+                  )
+                : (
+                    currentLang === 'ar'
+                      ? 'اختر طالباً من الصور لفتح المحادثة.'
+                      : 'Select a student thumbnail to open the conversation.'
+                  )}
             </p>
           ) : chatMessages.length === 0 ? (
             <p className="text-xs text-slate-400 text-center mt-6">
@@ -2313,7 +2503,7 @@ const handleClearChatMessages = async () => {
               </div>
 
                             {/* Live classroom controls */}
-              {(isEducator || isStudent) && (
+              {(isEducator || isStudent || isGuestMode) && (
                <div className="flex flex-wrap items-center gap-2">
 
                   {/* Student Raise Hand / Lower Hand */}
@@ -2382,7 +2572,7 @@ const handleClearChatMessages = async () => {
                           )}
                     </span>
                   )}
-                                    {isStudent && (
+                   {(isStudent || isGuestMode) && (
                     <>
                       <button
                         type="button"
