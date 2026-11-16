@@ -14,7 +14,7 @@ import {
   updateDirectorAccount,
   deleteDirectorAccount 
 } from '../services/cloudflareApi';
-import type { CloudflareAccount, DirectorProfile, RegistrationSession, SchoolRecord } from '../services/cloudflareApi';
+import type { CloudflareAccount, RegistrationSession, SchoolRecord } from '../services/cloudflareApi';
 import {
   Clock,
   ShieldCheck,
@@ -68,7 +68,6 @@ export const CoursesHub: React.FC<CoursesHubProps> = ({
     typeof window === 'undefined' ? '' : window.sessionStorage.getItem('agenda-director-token') || ''
   );
   const [directorSchoolId, setDirectorSchoolId] = useState('');
-  const [directorProfile, setDirectorProfile] = useState<DirectorProfile | null>(null);
   const [directorSchools, setDirectorSchools] = useState<SchoolRecord[]>([]);
   const [settingsSchoolId, setSettingsSchoolId] = useState('');
   const [settingsSchoolName, setSettingsSchoolName] = useState('');
@@ -98,7 +97,6 @@ export const CoursesHub: React.FC<CoursesHubProps> = ({
     Promise.all([getDirectorProfile(directorToken), getSchools()])
       .then(([{ profile }, { schools }]) => {
         if (!active) return;
-        setDirectorProfile(profile);
         setDirectorSchoolId(profile.schoolId);
         setSettingsSchoolId(profile.schoolId);
         setSettingsSchoolName(profile.schoolName);
@@ -223,7 +221,6 @@ export const CoursesHub: React.FC<CoursesHubProps> = ({
       const { profile, token } = await updateDirectorProfile(directorToken, input);
       sessionStorage.setItem('agenda-director-token', token);
       setDirectorToken(token);
-      setDirectorProfile(profile);
       setDirectorSchoolId(profile.schoolId);
       setSettingsSchoolId(profile.schoolId);
       setSettingsSchoolName(profile.schoolName);
@@ -285,7 +282,7 @@ const updateAccount = async (
     // Reload the room list because assigning an educator
     // may have created a new educator-specific classroom.
     if (typeof update.registeredSessionId === 'string') {
-      const { sessions } = await getRegistrationSessions();
+      const { sessions } = await getRegistrationSessions(directorSchoolId);
       setRegistrationSessions(sessions);
     }
 
