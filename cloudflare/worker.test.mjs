@@ -86,6 +86,10 @@ function fakeEnvironment() {
     }
 
     async all() {
+      if (this.sql.includes('FROM school_grade_pricing')) {
+        const schoolId = this.values[0];
+        return { results: [...pricing.values()].filter((item) => item.school_id === schoolId) };
+      }
       if (this.sql.includes('SELECT DISTINCT grade_id FROM sessions')) {
         const schoolId = this.values[0];
         return { results: [...new Set([...sessions.values()].filter((item) => !schoolId || item.school_id === schoolId).map((item) => item.grade_id))].map((grade_id) => ({ grade_id })) };
@@ -97,10 +101,14 @@ function fakeEnvironment() {
         return { results: [...sessions.values()].filter((item) => item.school_id === schoolId && (!gradeId || item.grade_id === gradeId) && (this.sql.includes('is_live =') ? Boolean(item.is_live) === liveOnly : true)) };
       }
       if (this.sql.includes('FROM sessions ORDER BY')) return { results: [...sessions.values()] };
-      if (this.sql.includes('FROM accounts WHERE role')) {
+      if (this.sql.includes('FROM accounts') && this.sql.includes("role = '")) {
         const role = this.sql.match(/role = '([^']+)'/)?.[1];
-        const schoolId = this.sql.includes('school_id = ?') ? this.values[0] : null;
+        const schoolId = this.sql.includes('school_id = ?') ? this.values[this.sql.indexOf('school_id = ?') > this.sql.indexOf('role =') ? 0 : 0] : null;
         return { results: [...accounts.values()].filter((item) => item.role === role && (!schoolId || item.school_id === schoolId)) };
+      }
+      if (this.sql.includes('FROM accounts WHERE school_id = ?')) {
+        const schoolId = this.values[0];
+        return { results: [...accounts.values()].filter((item) => item.school_id === schoolId) };
       }
       if (this.sql.includes('FROM sessions WHERE grade_id')) {
         const gradeId = this.values[this.values.length - 1];
