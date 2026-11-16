@@ -111,7 +111,7 @@ export const Header: React.FC<HeaderProps> = ({
                 const shareUrl = 'https://malazhub.github.io/agenda/';
                 const shareData = {
                   title: schoolName || 'Agenda',
-                  text: currentLang === 'ar' ? 'منصة Agenda للتعليم والدروس الخصوصية' : 'Agenda Educational Platform',
+                  text: currentLang === 'ar' ? `منصة ${schoolName || 'Agenda'} للتعليم والدروس الخصوصية` : `${schoolName || 'Agenda'} Educational Platform`,
                   url: shareUrl,
                 };
                 if (navigator.share) {
