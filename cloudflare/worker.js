@@ -1520,7 +1520,7 @@ async function createSessions(request, env) {
     const title = typeof session?.title === "string" ? session.title.trim() : "";
     const sourceName = typeof session?.sourceName === "string" ? session.sourceName.trim() : "";
     const sourceUrl = typeof session?.sourceUrl === "string" ? session.sourceUrl.trim() : "";
-    const playbackUrl = typeof session?.playbackUrl === "string" ? session.playbackUrl.trim() : sourceUrl;
+    const playbackUrl = typeof session?.playbackUrl === "string" && session.playbackUrl.trim() ? session.playbackUrl.trim() : sourceUrl;
     const mediaKey = typeof session?.mediaKey === "string" ? session.mediaKey.trim() : "";
     let source;
     let playback;
