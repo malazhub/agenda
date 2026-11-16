@@ -29,6 +29,31 @@ interface ChatMessage {
  * independent from transient chat state so the assistant never relies on a
  * previous chat transcript to know how Agenda works.
  */
+const isQuestionAlreadyInLanguage = (value: string, language: Language): boolean => {
+  const normalized = value.toLocaleLowerCase().replace(/[^\\p{L}\\p{N}\\s'-]/gu, ' ').replace(/\\s+/g, ' ').trim();
+  if (!normalized) return false;
+  if (language === 'ar') return /[\\u0600-\\u06FF]/.test(normalized);
+
+  const strongPhrases: Record<Exclude<Language, 'ar'>, string[]> = {
+    en: ['what is', 'how do i', 'how can i', 'please explain', 'give me', 'tell me', 'my school', 'own copy', 'rename', 'overview', 'navigate', 'platform', 'application'],
+    fr: ['présentation', 'présentez', 'expliquez', 'explique-moi', 'donnez-moi', 'comment', 'mon école', 'ma propre', 'renommer', 'établissement', 'naviguer', 'plateforme', 'obtenir', 'copie'],
+    es: ['presentación', 'preséntame', 'explícame', 'dame', 'cómo', 'mi escuela', 'mi propia', 'cambiar', 'navegar', 'plataforma', 'obtener', 'copia'],
+    it: ['presentazione', 'spiegami', 'fammi', 'vorrei', 'come', 'la mia scuola', 'la mia copia', 'cambiare', 'rinominare', 'navigare', 'piattaforma', 'ottenere', 'copia'],
+  };
+  const phraseList = strongPhrases[language];
+  if (phraseList.some((phrase) => normalized.includes(phrase))) return true;
+
+  const languageWords: Record<Exclude<Language, 'ar'>, string[]> = {
+    en: ['the', 'and', 'what', 'how', 'please', 'my', 'your', 'school', 'explain', 'about', 'with', 'for', 'can', 'could', 'would', 'want', 'get', 'change', 'name', 'copy'],
+    fr: ['le', 'la', 'les', 'des', 'une', 'un', 'et', 'pour', 'avec', 'comment', 'mon', 'ma', 'mes', 'école', 'changer', 'nom', 'propre', 'copie', 'plateforme', 'obtenir'],
+    es: ['el', 'la', 'los', 'las', 'una', 'un', 'y', 'para', 'con', 'cómo', 'mi', 'mis', 'escuela', 'cambiar', 'nombre', 'propia', 'copia', 'plataforma', 'obtener', 'quiero'],
+    it: ['il', 'lo', 'la', 'gli', 'le', 'una', 'un', 'e', 'per', 'con', 'come', 'mia', 'mio', 'scuola', 'cambiare', 'nome', 'propria', 'copia', 'piattaforma', 'ottenere', 'vorrei'],
+  };
+  const tokens = new Set(normalized.split(' '));
+  const matchingWords = languageWords[language].filter((word) => tokens.has(word)).length;
+  return matchingWords >= 2;
+};
+
 const AGENDA_ASSISTANT_KNOWLEDGE = [
   'Agenda is an education and school-management platform for students, educators, and school Directors.',
   'Students use their school-specific link to register, sign in, join their assigned live classes, and access saved learning resources.',
@@ -132,12 +157,17 @@ export const AIChatBot: React.FC<AIChatBotProps> = ({ currentLang, schoolId, sch
       'rename my school', 'rename school', 'change school name', 'school name',
       'own copy', 'my own copy', 'get my own copy', 'get a copy', 'buy a copy',
       'purchase a copy', 'cost of a copy', 'price of a copy', 'copy price', 'my own school',
-      'présentation', 'présentez', 'à propos', 'comment naviguer', 'changer le nom de l’école', 'prix d’une copie',
-      'renommer mon école', 'ma propre copie', 'ma propre version', 'acheter une copie',
-      'presentación', 'sobre agenda', 'cómo navegar', 'como navegar', 'cambiar el nombre de la escuela',
-      'mi propia copia', 'obtener una copia', 'comprar una copia', 'precio de una copia',
-      'presentazione', 'informazioni su agenda', 'come navigare', 'cambiare il nome della scuola',
-      'la mia copia', 'ottenere una copia', 'acquistare una copia', 'prezzo di una copia',
+      'présentation', 'présentez', 'présentez-moi agenda', 'donnez-moi un aperçu', 'à propos', 'comment naviguer',
+      'comment renommer mon école', 'comment changer le nom de mon école', 'changer le nom de l’école', 'prix d’une copie',
+      'renommer mon école', 'ma propre copie', 'ma propre copie pour', 'ma propre version', 'obtenir ma copie', 'acheter une copie',
+      'presentación', 'dame una presentación', 'dame una descripción', 'explícame agenda', 'sobre agenda',
+      'cómo navegar', 'como navegar', 'navegar por la plataforma', 'cómo cambiar el nombre de mi escuela',
+      'cambiar el nombre de la escuela', 'mi propia copia', 'mi propia copia por', 'obtener mi copia',
+      'obtener una copia', 'comprar una copia', 'precio de una copia',
+      'presentazione', 'fammi una panoramica', 'spiegami agenda', 'informazioni su agenda',
+      'come navigare', 'navigare nella piattaforma', 'come rinominare la mia scuola', 'cambiare il nome della scuola',
+      'la mia copia', 'la mia copia per', 'ottenere la mia copia', 'ottenere una copia',
+      'acquistare una copia', 'prezzo di una copia',
       'شرح التطبيق', 'نبذة عن التطبيق', 'نبذة عن', 'تطبيق agenda', 'ما هو أجندة', 'كيف أتنقل', 'كيفية التنقل',
       'تغيير اسم المدرسة', 'تغيير اسم مدرستي', 'اسم مدرستي', 'نسختي الخاصة', 'الحصول على نسختي', 'الحصول على نسخة',
       'نسخة خاصة', 'شراء نسخة', 'سعر النسخة', 'ثمن النسخة'
@@ -283,11 +313,11 @@ export const AIChatBot: React.FC<AIChatBotProps> = ({ currentLang, schoolId, sch
     // Never put a question in the conversation until it is available in the
     // selected language. If translation is unavailable, preserve the draft
     // and show a localized explanation instead of mixing languages.
-    // Arabic questions already written in Arabic do not need a Gemini
-    // translation request. This lets the built-in Arabic Agenda guidance work
-    // even when the translation API is temporarily unreachable.
-    const isAlreadyArabic = currentLang === 'ar' && /[\\u0600-\\u06FF]/.test(text);
-    let selectedLanguageQuestion = isAlreadyArabic ? text : '';
+    // Do not call Gemini just to translate a question that is already in
+    // the currently selected language. This applies to all five app languages.
+    // Only questions written in another language need the translation request.
+    const questionAlreadyLocalized = isQuestionAlreadyInLanguage(text, currentLang);
+    let selectedLanguageQuestion = questionAlreadyLocalized ? text : '';
     if (ai && !selectedLanguageQuestion) {
       try {
         const translation = await ai.models.generateContent({
