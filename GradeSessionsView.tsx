@@ -1950,7 +1950,7 @@ const handleClearChatMessages = async () => {
               <div>
                 {isGuestMode ? (
                   <h3 className="font-bold text-sm">
-                    {currentLang === 'ar' ? 'غرفة البث المباشر' : currentLang === 'fr' ? 'Salle de diffusion' : 'Broadcast Room'}
+                    {currentLang === 'ar' ? 'غرفة البث المباشر' : currentLang === 'fr' ? 'Salle de diffusion' : currentLang === 'es' ? 'Sala de emisión' : currentLang === 'it' ? 'Sala trasmissione' : 'Broadcast Room'}
                   </h3>
                 ) : (
                   <>
@@ -2511,12 +2511,12 @@ const handleClearChatMessages = async () => {
                         ? (
                             currentLang === 'ar'
                               ? 'خفض اليد'
-                              : 'Lower Hand'
+                              : currentLang === 'fr' ? 'Baisser la main' : currentLang === 'es' ? 'Bajar la mano' : currentLang === 'it' ? 'Abbassa la mano' : 'Lower Hand'
                           )
                         : (
                             currentLang === 'ar'
                               ? 'رفع اليد'
-                              : 'Raise Hand'
+                              : currentLang === 'fr' ? 'Lever la main' : currentLang === 'es' ? 'Levantar la mano' : currentLang === 'it' ? 'Alza la mano' : 'Raise Hand'
                           )}
                     </button>
                   )}
@@ -2534,18 +2534,18 @@ const handleClearChatMessages = async () => {
                               ? (
                                   currentLang === 'ar'
                                     ? 'الميكروفون يعمل'
-                                    : 'Microphone on'
+                                    : currentLang === 'fr' ? 'Microphone activé' : currentLang === 'es' ? 'Micrófono encendido' : currentLang === 'it' ? 'Microfono attivo' : 'Microphone on'
                                 )
                               : (
                                   currentLang === 'ar'
                                     ? 'مسموح لك بالكلام — اضغط الميكروفون'
-                                    : 'Allowed — tap the microphone to speak'
+                                    : currentLang === 'fr' ? 'Vous pouvez parler — appuyez sur le micro' : currentLang === 'es' ? 'Puedes hablar — pulsa el micrófono' : currentLang === 'it' ? 'Puoi parlare — tocca il microfono' : 'Allowed — tap the microphone to speak'
                                 )
                           )
                         : (
                             currentLang === 'ar'
                               ? 'بانتظار إذن الأستاذ'
-                              : 'Waiting for educator permission'
+                              : currentLang === 'fr' ? 'En attente de l’autorisation de l’éducateur' : currentLang === 'es' ? 'Esperando el permiso del educador' : currentLang === 'it' ? 'In attesa del permesso dell’educatore' : 'Waiting for educator permission'
                           )}
                     </span>
                   )}
