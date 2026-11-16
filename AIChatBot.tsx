@@ -76,12 +76,20 @@ export const AIChatBot: React.FC<AIChatBotProps> = ({ currentLang, schoolId, sch
         : LEBANESE_GRADE_LEVELS.filter((grade) => priceMap.has(grade.id));
       const rateLines = relevantGrades.length
         ? relevantGrades.map((grade) => `${grade.name[currentLang] || grade.name.en}: ${priceMap.get(grade.id) ?? context?.defaultMonthlyRateUsd ?? 125} USD`).join('\n')
-        : `${context?.defaultMonthlyRateUsd ?? 125} USD per month (default rate)`;
+        : currentLang === 'ar'
+          ? `${context?.defaultMonthlyRateUsd ?? 125} دولار شهرياً (السعر الافتراضي)`
+          : currentLang === 'fr'
+            ? `${context?.defaultMonthlyRateUsd ?? 125} USD par mois (tarif par défaut)`
+            : currentLang === 'es'
+              ? `${context?.defaultMonthlyRateUsd ?? 125} USD al mes (tarifa predeterminada)`
+              : currentLang === 'it'
+                ? `${context?.defaultMonthlyRateUsd ?? 125} USD al mese (tariffa predefinita)`
+                : `${context?.defaultMonthlyRateUsd ?? 125} USD per month (default rate)`;
       if (currentLang === 'ar') return `المدرسة: ${context?.schoolName || schoolName || 'Agenda'}\nالأسعار الشهرية المعتمدة حسب الصف:\n${rateLines}\nالسعر الافتراضي للصف الذي لم يحدد المدير سعره هو 125 دولاراً شهرياً. هذه الأسعار خاصة بمدرستك.`;
       if (currentLang === 'fr') return `Établissement : ${context?.schoolName || schoolName || 'Agenda'}\nTarifs mensuels par classe :\n${rateLines}\nLe tarif par défaut d'une classe sans prix personnalisé est de 125 USD par mois. Ces tarifs sont propres à votre établissement.`;
-      if (currentLang === 'es') return `Escuela: ${schoolContext?.schoolName || schoolName || 'Agenda'}\nTarifas mensuales por curso:\n${rateLines}\nEl precio predeterminado para un curso sin tarifa personalizada es de 125 USD al mes. Estas tarifas pertenecen a tu escuela.`;
-      if (currentLang === 'it') return `Scuola: ${schoolContext?.schoolName || schoolName || 'Agenda'}\nTariffe mensili per classe:\n${rateLines}\nLa tariffa predefinita per una classe senza prezzo personalizzato è di 125 USD al mese. Queste tariffe appartengono alla tua scuola.`;
-      return `School: ${schoolContext?.schoolName || schoolName || 'Agenda'}\nApproved monthly rates by grade:\n${rateLines}\nThe default rate for a grade without a custom price is 125 USD per month. These prices belong to this school.`;
+      if (currentLang === 'es') return `Escuela: ${context?.schoolName || schoolName || 'Agenda'}\nTarifas mensuales por curso:\n${rateLines}\nEl precio predeterminado para un curso sin tarifa personalizada es de 125 USD al mes. Estas tarifas pertenecen a tu escuela.`;
+      if (currentLang === 'it') return `Scuola: ${context?.schoolName || schoolName || 'Agenda'}\nTariffe mensili per classe:\n${rateLines}\nLa tariffa predefinita per una classe senza prezzo personalizzato è di 125 USD al mese. Queste tariffe appartengono alla tua scuola.`;
+      return `School: ${context?.schoolName || schoolName || 'Agenda'}\nApproved monthly rates by grade:\n${rateLines}\nThe default rate for a grade without a custom price is 125 USD per month. These prices belong to this school.`;
     }
 
     const registrationQuestion = ['register', 'registration', 'sign up', 'create account', 'inscrire', 'inscription', 'registrar', 'registro', 'registrazione', 'تسجيل', 'سجل'].some((keyword) => q.includes(keyword));
@@ -190,7 +198,8 @@ Platform constraints:
 - Use the selected school's live configuration for all monthly rates, educators, sessions, and school identity.
 - Do not claim a fixed platform-wide price or timetable. Do not invent payment methods, schedules, account credentials, or school records.
 - Explain academic concepts, official Lebanese curriculum, homework, camera exercise submissions, and classroom navigation.
-Language to answer: ${({ ar: 'Arabic', en: 'English', fr: 'French', it: 'Italian', es: 'Spanish' } as Record<Language, string>)[currentLang]}.
+Required response language: ${({ ar: 'Arabic', en: 'English', fr: 'French', it: 'Italian', es: 'Spanish' } as Record<Language, string>)[currentLang]}.
+LANGUAGE RULE (mandatory): Write the complete answer in this selected language only. Do not switch to English or mix languages just because the question or school data contains another language. Translate explanations, headings, steps, and ordinary descriptions into the selected language. Keep only proper names, product names, URLs, code, and standard technical terms unchanged when necessary.
 Authoritative school configuration (use current values, never invent a rate):
 ${JSON.stringify(currentSchoolContext || { schoolName: schoolName || 'Agenda', defaultMonthlyRateUsd: 125, prices: [], sessions: [], educators: [] })}
 Platform architecture and navigation:
@@ -248,7 +257,7 @@ User question: "${text}"`
         <button
           onClick={() => setIsOpen(true)}
           className="fixed bottom-6 right-6 z-50 bg-linear-to-r from-indigo-600 to-blue-600 hover:from-indigo-500 hover:to-blue-500 text-white p-3.5 sm:px-4 sm:py-3.5 rounded-full shadow-2xl flex items-center gap-2 transition-all duration-300 hover:scale-105 cursor-pointer border-2 border-white/20"
-          title="AI Chat"
+          title={currentLang === 'ar' ? 'محادثة مع المساعد الذكي' : currentLang === 'fr' ? 'Discussion avec l’assistant IA' : currentLang === 'es' ? 'Chat con el asistente de IA' : currentLang === 'it' ? 'Chat con l’assistente IA' : 'AI Chat'}
         >
           <Bot className="w-5 h-5 text-white" />
           <span className="text-xs font-bold hidden sm:inline">
@@ -356,8 +365,12 @@ User question: "${text}"`
                 currentLang === 'ar'
                   ? 'اكتب سؤالك هنا...'
                   : currentLang === 'fr'
-                  ? 'Posez votre question ici...'
-                  : 'Type your question here...'
+                    ? 'Posez votre question ici...'
+                    : currentLang === 'es'
+                      ? 'Escribe tu pregunta aquí...'
+                      : currentLang === 'it'
+                        ? 'Scrivi qui la tua domanda...'
+                        : 'Type your question here...'
               }
               className="flex-1 text-xs sm:text-sm p-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-indigo-600 font-medium"
             />
