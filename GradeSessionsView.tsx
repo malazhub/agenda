@@ -2938,7 +2938,8 @@ const handleClearChatMessages = async () => {
               schoolId={schoolId}
               registeredAccount={registeredAccount}
               sessionToken={sessionToken}
-            />}
+            />
+          )}
         </>
       )}
     </div>
