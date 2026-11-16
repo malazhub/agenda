@@ -5,6 +5,18 @@ import worker from './worker.js';
 
 const signingKey = 'test-session-signing-key-with-enough-entropy';
 
+const originalFetch = globalThis.fetch;
+globalThis.fetch = async (input, init) => {
+  const url = new URL(typeof input === 'string' ? input : input.url);
+  if (url.hostname === 'video.stream-io-api.com') {
+    return new Response('{}', {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    });
+  }
+  return originalFetch(input, init);
+};
+
 function hashPassword(password) {
   const salt = randomBytes(16);
   const hash = pbkdf2Sync(password, salt, 100000, 32, 'sha256');
@@ -503,6 +515,7 @@ test('health and CORS preflight are served', async () => {
   }), env);
   assert.equal(options.status, 204);
   assert.equal(options.headers.get('access-control-allow-origin'), 'https://malazhub.github.io');
+  assert.match(options.headers.get('access-control-allow-methods') || '', /DELETE/);
 });
 
 test('registration hashes credentials and rejects duplicate usernames', async () => {
@@ -561,7 +574,7 @@ test('registration hashes credentials and rejects duplicate usernames', async ()
   await send(env, `/api/director/accounts/${result.account.id}`, {
     method: 'PATCH',
     token: directorToken,
-    body: { activated: true },
+    body: { activated: true, paid: true },
   });
   const login = await send(env, '/api/auth/login', {
     method: 'POST',
@@ -612,15 +625,15 @@ test('grade registration loads available grades and grants grade-scoped live acc
     token: directorToken,
     body: { activated: true, paid: true },
   });
+  sessions.get('test-registration-session').is_live = 1;
   const liveStatus = await send(env, '/api/live-stream?sessionId=test-registration-session', { token });
   assert.equal(liveStatus.status, 200);
   assert.equal((await liveStatus.json()).status, 'waiting');
-  sessions.get('test-registration-session').is_live = 1;
   const liveCatalog = await send(env, '/api/sessions?gradeId=eb8&live=true&sessionId=test-registration-session', { token });
   assert.equal(liveCatalog.status, 200);
   assert.equal((await liveCatalog.json()).sessions[0].id, 'test-registration-session');
 
-  const wrongGrade = await send(env, '/api/live-stream?gradeId=eb7', { token });
+  const wrongGrade = await send(env, '/api/sessions?gradeId=eb7&live=true&sessionId=test-registration-session', { token });
   assert.equal(wrongGrade.status, 403);
 });
 
@@ -767,7 +780,7 @@ test('Director can save a live session and the grade catalog returns its playbac
   await send(env, `/api/director/accounts/${account.id}`, {
     method: 'PATCH',
     token: directorToken,
-    body: { activated: true },
+    body: { activated: true, paid: true },
   });
   const anonymous = await send(env, '/api/sessions?gradeId=eb8&live=true&sessionId=live-eb8-math');
   assert.equal(anonymous.status, 401);
