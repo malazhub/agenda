@@ -367,6 +367,15 @@ async function handleRegister(request, env) {
     throw error;
   }
 
+  if (role === "educator") {
+    const lessonSlots = Array.from({ length: 10 }, (_, index) =>
+      env.DB.prepare(
+        "INSERT OR IGNORE INTO educator_lessons (id, school_id, educator_id, slot) VALUES (?, ?, ?, ?)"
+      ).bind(randomId(), schoolId, id, index + 1)
+    );
+    await env.DB.batch(lessonSlots);
+  }
+
   const account = await env.DB.prepare("SELECT * FROM accounts WHERE id = ?").bind(id).first();
   const token = await signToken(
     { sub: id, role, username, exp: Math.floor(Date.now() / 1000) + SESSION_TTL_SECONDS },
