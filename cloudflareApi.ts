@@ -145,6 +145,17 @@ export interface DirectorProfile {
   schoolName: string;
   username: string;
 }
+
+export interface SchoolGradePrice {
+  gradeId: string;
+  monthlyRateUsd: number;
+}
+
+export interface SchoolPublicContext {
+  schoolId: string;
+  schoolName: string;
+  prices: SchoolGradePrice[];
+}
 const API_BASE_URL = (import.meta.env.VITE_CLOUDFLARE_API_URL || '').replace(/\/+$/, '');
 function withAbsoluteLessonMedia(
   lesson: EducatorLesson
@@ -202,8 +213,14 @@ export function registerAccount(input: RegistrationInput): Promise<AuthResponse>
   });
 }
 
-export function getSchools(): Promise<{ schools: SchoolRecord[]; activeSchoolId?: string }> {
-  return request('/api/schools');
+export function getSchools(schoolId = 'default-agenda-school'): Promise<{ schools: SchoolRecord[]; activeSchoolId?: string }> {
+  const query = new URLSearchParams({ schoolId });
+  return request(`/api/schools?${query.toString()}`);
+}
+
+export function getSchoolPublicContext(schoolId: string): Promise<SchoolPublicContext> {
+  const query = new URLSearchParams({ schoolId });
+  return request(`/api/school-context?${query.toString()}`);
 }
 
 export function getRegistrationSessions(
@@ -342,7 +359,6 @@ export function getDirectorProfile(
 export function updateDirectorProfile(
   token: string,
   input: {
-    schoolId: string;
     schoolName: string;
     username: string;
     password?: string;
@@ -355,6 +371,28 @@ export function updateDirectorProfile(
     method: 'PATCH',
     headers: authHeaders(token),
     body: JSON.stringify(input),
+  });
+}
+export function getDirectorGradePricing(token: string): Promise<{ prices: SchoolGradePrice[] }> {
+  return request('/api/director/pricing', { headers: authHeaders(token) });
+}
+
+export function updateDirectorGradePricing(
+  token: string,
+  gradeId: string,
+  monthlyRateUsd: number
+): Promise<{ price: SchoolGradePrice }> {
+  return request('/api/director/pricing', {
+    method: 'PUT',
+    headers: authHeaders(token),
+    body: JSON.stringify({ gradeId, monthlyRateUsd }),
+  });
+}
+
+export function getDirectorLiveStream(token: string, sessionId: string): Promise<LiveStreamStatus> {
+  const query = new URLSearchParams({ sessionId });
+  return request(`/api/director/live-stream?${query.toString()}`, {
+    headers: authHeaders(token),
   });
 }
 export function updateDirectorAccount(
