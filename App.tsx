@@ -244,12 +244,13 @@ const registerSignOutCleanup = useCallback(
             currentUserName={registeredAccount?.fullName || userProfile.name}
           />
         ) : (
-          <CoursesHub
+                    <CoursesHub
             currentLang={currentLang}
             directorLoginRequest={directorLoginRequest}
             registeredAccount={registeredAccount}
             sessionToken={sessionToken}
             onRegisterSignOutCleanup={registerSignOutCleanup}
+            onRequestSignIn={() => setIsRegisterOpen(true)}
             onShowMessage={showToast}
             onBookTeacher={handleBookTeacherDirect}
             onSelectQuestionForBooking={handleSelectQuestionForBooking}
@@ -348,13 +349,13 @@ const registerSignOutCleanup = useCallback(
               </button>
           </div>
 
-          <div className="flex flex-wrap items-center justify-between gap-4 text-xs text-slate-400">
+                    <div className="flex flex-wrap items-center justify-between gap-4 text-xs text-slate-400">
             <div className="flex items-center gap-1">
-              <span>Made for Lebanese students & educators with</span>
+              <span>Made for students & educators with</span>
               <Heart className="w-3.5 h-3.5 text-rose-500 fill-rose-500" />
             </div>
             <div>
-              © {new Date().getFullYear()} Agenda. Certified K-12 Tutoring & Official Exam Preparation.
+              © Education. Certified Tutoring & Official Exam Preparation.
             </div>
           </div>
         </div>
