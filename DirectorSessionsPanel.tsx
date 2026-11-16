@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Language, GradeLevelDef } from '../types';
 import { deleteDirectorSession, getDirectorSessions, createDirectorSession, updateDirectorSessionLive, getDirectorGradePricing, updateDirectorGradePricing } from '../services/cloudflareApi';
 import type { SessionInput, StoredSessionRecord } from '../services/cloudflareApi';
-import { Plus, RefreshCw, Trash2, Video, Radio, Eye } from 'lucide-react';
+import { Plus, RefreshCw, Trash2, Eye } from 'lucide-react';
 
 interface DirectorSessionsPanelProps {
   currentLang: Language;
@@ -35,19 +35,23 @@ export const DirectorSessionsPanel: React.FC<DirectorSessionsPanelProps> = ({
     sessionDeleted: currentLang === 'ar' ? 'تم حذف الحصة نهائياً.' : currentLang === 'fr' ? 'Cours supprimé définitivement.' : currentLang === 'es' ? 'Sesión eliminada definitivamente.' : currentLang === 'it' ? 'Lezione eliminata definitivamente.' : 'Session permanently deleted.',
     refresh: currentLang === 'ar' ? 'تحديث الحصص' : currentLang === 'fr' ? 'Actualiser les cours' : currentLang === 'es' ? 'Actualizar sesiones' : currentLang === 'it' ? 'Aggiorna lezioni' : 'Refresh sessions',
     monthlyRate: currentLang === 'ar' ? 'السعر الشهري (USD)' : currentLang === 'fr' ? 'Tarif mensuel (USD)' : currentLang === 'es' ? 'Tarifa mensual (USD)' : currentLang === 'it' ? 'Tariffa mensile (USD)' : 'Monthly rate (USD)',
-    saveRate: currentLang === 'ar' ? 'حفظ السعر فقط' : currentLang === 'fr' ? 'Enregistrer le tarif seul' : currentLang === 'es' ? 'Guardar solo la tarifa' : currentLang === 'it' ? 'Salva solo la tariffa' : 'Save rate only',
-    rateSaved: currentLang === 'ar' ? 'تم حفظ السعر الشهري لهذا الصف.' : currentLang === 'fr' ? 'Tarif mensuel enregistré pour cette classe.' : currentLang === 'es' ? 'Tarifa mensual guardada para este curso.' : currentLang === 'it' ? 'Tariffa mensile salvata per questa classe.' : 'Monthly rate saved for this grade.',
     title: currentLang === 'ar' ? 'تعيين وإضافة حصة للأستاذ' : currentLang === 'fr' ? 'Attribuer et ajouter un cours à un éducateur' : currentLang === 'es' ? 'Asignar y añadir una sesión al educador' : currentLang === 'it' ? 'Assegna e aggiungi una lezione all’educatore' : 'Assign & add educator session',
     subtitle: currentLang === 'ar' ? 'حدد الصف واسم الأستاذ والمادة والحد الأقصى للطلاب والسعر الشهري.' : currentLang === 'fr' ? 'Définissez la classe, l’éducateur, la matière, le nombre maximum d’élèves et le tarif mensuel.' : currentLang === 'es' ? 'Define el curso, el educador, la materia, el máximo de estudiantes y la tarifa mensual.' : currentLang === 'it' ? 'Imposta la classe, l’educatore, la materia, il numero massimo di studenti e la tariffa mensile.' : 'Set the grade, educator, subject, maximum students, and monthly rate.',
     educatorPrefix: currentLang === 'ar' ? 'الأستاذ: ' : currentLang === 'fr' ? 'Éducateur : ' : currentLang === 'es' ? 'Educador: ' : currentLang === 'it' ? 'Educatore: ' : 'Educator: ',
     month: currentLang === 'ar' ? 'شهرياً' : currentLang === 'fr' ? 'par mois' : currentLang === 'es' ? 'al mes' : currentLang === 'it' ? 'al mese' : 'per month',
+    saveError: currentLang === 'ar' ? 'تعذر حفظ الحصة والسعر الشهري.' : currentLang === 'fr' ? 'Impossible d’enregistrer le cours et le tarif mensuel.' : currentLang === 'es' ? 'No se pudieron guardar la sesión y la tarifa mensual.' : currentLang === 'it' ? 'Impossibile salvare la lezione e la tariffa mensile.' : 'Unable to save session and monthly rate.',
+    deleteError: currentLang === 'ar' ? 'تعذر حذف الحصة.' : currentLang === 'fr' ? 'Impossible de supprimer le cours.' : currentLang === 'es' ? 'No se pudo eliminar la sesión.' : currentLang === 'it' ? 'Impossibile eliminare la lezione.' : 'Unable to delete session.',
+    statusError: currentLang === 'ar' ? 'تعذر تحديث حالة البث.' : currentLang === 'fr' ? 'Impossible de mettre à jour l’état du direct.' : currentLang === 'es' ? 'No se pudo actualizar el estado de la emisión.' : currentLang === 'it' ? 'Impossibile aggiornare lo stato della diretta.' : 'Unable to update live status.',
+    educatorPlaceholder: currentLang === 'ar' ? 'مثال: الأستاذ مالاز' : currentLang === 'fr' ? 'Ex. : Prof. Malaz' : currentLang === 'es' ? 'P. ej.: Prof. Malaz' : currentLang === 'it' ? 'Es.: Prof. Malaz' : 'e.g. Prof. Malaz',
+    subjectPlaceholder: currentLang === 'ar' ? 'مثال: الرياضيات' : currentLang === 'fr' ? 'Ex. : Mathématiques' : currentLang === 'es' ? 'P. ej.: Matemáticas' : currentLang === 'it' ? 'Es.: Matematica' : 'e.g. Mathematics',
+    maxCapacity: currentLang === 'ar' ? (count: string) => `الحد الأقصى: ${count} طالباً` : currentLang === 'fr' ? (count: string) => `Capacité max. : ${count} élèves` : currentLang === 'es' ? (count: string) => `Capacidad máx.: ${count} estudiantes` : currentLang === 'it' ? (count: string) => `Capienza max.: ${count} studenti` : (count: string) => `Max capacity: ${count} students`,
+    monitorAlert: currentLang === 'ar' ? (name: string) => `جارٍ الانضمام لمراقبة حصة الأستاذ: ${name}` : currentLang === 'fr' ? (name: string) => `Connexion pour surveiller le cours de ${name}` : currentLang === 'es' ? (name: string) => `Entrando para supervisar la sesión de ${name}` : currentLang === 'it' ? (name: string) => `Accesso per monitorare la lezione di ${name}` : (name: string) => `Joining to monitor ${name}’s session`,
   };
 
   const [gradeId, setGradeId] = useState<string>(grades[0]?.id || 'g12_lh');
   const [sessions, setSessions] = useState<StoredSessionRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [savingRate, setSavingRate] = useState(false);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   const [monthlyRateUsd, setMonthlyRateUsd] = useState(125);
@@ -73,7 +77,7 @@ export const DirectorSessionsPanel: React.FC<DirectorSessionsPanelProps> = ({
       setPricesByGrade(nextPrices);
       setMonthlyRateUsd(nextPrices[gradeId] ?? 125);
     } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : 'Unable to load sessions.');
+      setError(currentLang === 'en' && loadError instanceof Error ? loadError.message : t.loadError);
     } finally {
       setLoading(false);
     }
@@ -84,21 +88,6 @@ export const DirectorSessionsPanel: React.FC<DirectorSessionsPanelProps> = ({
   }, [token, gradeId]);
 
   const gradeSessions = useMemo(() => sessions.filter((session) => session.gradeId === gradeId), [sessions, gradeId]);
-
-  const saveMonthlyRate = async () => {
-    setSavingRate(true);
-    setError('');
-    setMessage('');
-    try {
-      await updateDirectorGradePricing(token, gradeId, monthlyRateUsd);
-      setPricesByGrade((current) => ({ ...current, [gradeId]: monthlyRateUsd }));
-      setMessage(t.rateSaved);
-    } catch (rateError) {
-      setError(rateError instanceof Error ? rateError.message : 'Unable to save monthly rate.');
-    } finally {
-      setSavingRate(false);
-    }
-  };
 
   // Save session assigned by Grade, Educator Name, Subject, Max Students
   const saveSession = async (event: React.FormEvent) => {
@@ -126,7 +115,7 @@ export const DirectorSessionsPanel: React.FC<DirectorSessionsPanelProps> = ({
       await loadSessions();
       setMessage(t.sessionSaved);
     } catch (saveError) {
-      setError(saveError instanceof Error ? saveError.message : 'Unable to save session.');
+      setError(currentLang === 'en' && saveError instanceof Error ? saveError.message : t.saveError);
     } finally {
       setForm({ educatorName: '', subject: '', maxStudents: 25 });
       setSaving(false);
@@ -143,7 +132,7 @@ export const DirectorSessionsPanel: React.FC<DirectorSessionsPanelProps> = ({
       await loadSessions();
       setMessage(t.sessionDeleted);
     } catch (deleteError) {
-      setError(deleteError instanceof Error ? deleteError.message : 'Unable to delete session.');
+      setError(currentLang === 'en' && deleteError instanceof Error ? deleteError.message : t.deleteError);
     }
   };
 
@@ -155,7 +144,7 @@ export const DirectorSessionsPanel: React.FC<DirectorSessionsPanelProps> = ({
       await updateDirectorSessionLive(token, session.id, !session.isLive);
       await loadSessions();
     } catch (toggleError) {
-      setError(toggleError instanceof Error ? toggleError.message : 'Unable to update live status.');
+      setError(currentLang === 'en' && toggleError instanceof Error ? toggleError.message : t.statusError);
     }
   };
 
@@ -194,7 +183,7 @@ export const DirectorSessionsPanel: React.FC<DirectorSessionsPanelProps> = ({
               className={fieldClass}
               required
               maxLength={100}
-              placeholder={currentLang === 'ar' ? 'مثال: Prof. Malaz' : 'e.g. Prof. Malaz'}
+              placeholder={t.educatorPlaceholder}
               value={form.educatorName}
               onChange={(e) => setForm({ ...form, educatorName: e.target.value })}
             />
@@ -207,7 +196,7 @@ export const DirectorSessionsPanel: React.FC<DirectorSessionsPanelProps> = ({
               className={fieldClass}
               required
               maxLength={80}
-              placeholder={currentLang === 'ar' ? 'مثال: Mathematics' : 'e.g. Mathematics'}
+              placeholder={t.subjectPlaceholder}
               value={form.subject}
               onChange={(e) => setForm({ ...form, subject: e.target.value })}
             />
@@ -240,20 +229,7 @@ export const DirectorSessionsPanel: React.FC<DirectorSessionsPanelProps> = ({
             value={monthlyRateUsd}
             onChange={(event) => setMonthlyRateUsd(Number(event.target.value))}
           />
-          <span className="block text-[10px] font-medium text-slate-500">
-            {currentLang === 'ar' ? 'السعر الافتراضي 125 دولاراً شهرياً لكل طالب في هذا الصف.' : currentLang === 'fr' ? 'Valeur par défaut : 125 USD par mois et par élève pour cette classe.' : currentLang === 'es' ? 'Predeterminado: 125 USD al mes por estudiante en este curso.' : currentLang === 'it' ? 'Predefinito: 125 USD al mese per studente in questa classe.' : 'Default: 125 USD per month per student in this grade.'}
-          </span>
         </label>
-        <div className="flex justify-start">
-          <button
-            type="button"
-            onClick={() => void saveMonthlyRate()}
-            disabled={savingRate}
-            className="rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-2 text-xs font-black text-indigo-700 hover:bg-indigo-100 disabled:opacity-60"
-          >
-            {savingRate ? '…' : t.saveRate}
-          </button>
-        </div>
         <div className="flex flex-wrap items-center justify-end gap-3 pt-2">
           {/* Save Session Card Button */}
           <button
@@ -323,7 +299,7 @@ export const DirectorSessionsPanel: React.FC<DirectorSessionsPanelProps> = ({
                   </span>
 
                   <span className="text-[10px] text-slate-500 font-semibold block">
-                    {currentLang === 'ar' ? `الحد الأقصى للطلاب: ${maxStudents}` : `Max Capacity: ${maxStudents} students`}
+                    {t.maxCapacity(maxStudents)}
                   </span>
                 </div>
 
@@ -352,7 +328,7 @@ export const DirectorSessionsPanel: React.FC<DirectorSessionsPanelProps> = ({
                         onJoinSession(session);
                       } else {
                         window.location.href = '#classroom';
-                        alert(currentLang === 'ar' ? `الانضمام لمراقبة حصة الأستاذ: ${session.title}` : `Joining to monitor ${session.title}'s session`);
+                        alert(t.monitorAlert(session.title));
                       }
                     }}
                     className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 px-3 py-2 text-xs font-black text-white transition cursor-pointer shadow-xs"
