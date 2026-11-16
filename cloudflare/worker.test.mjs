@@ -155,7 +155,7 @@ function fakeEnvironment() {
         return { meta: { changes: school ? 1 : 0 } };
       }
       if (this.sql.startsWith('UPDATE accounts SET')) {
-        const id = this.values[this.values.length - 1];
+        const id = this.values[this.sql.includes('AND school_id = ?') ? this.values.length - 2 : this.values.length - 1];
         const account = accounts.get(id);
         if (!account || account.role === 'director') return { meta: { changes: 0 } };
         let valueIndex = 0;
