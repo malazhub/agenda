@@ -106,7 +106,7 @@ const command = [
   `INSERT OR IGNORE INTO schools (id, name) VALUES ('school-' || lower(hex(randomblob(8))), ${escapeSql(schoolName)});`,
   'INSERT INTO accounts (id, username, password_hash, role, school_id, full_name, email, activated, paid)',
   `SELECT lower(hex(randomblob(16))), ${escapeSql(username)}, ${escapeSql(passwordHash)}, 'director', id, 'Director', '', 1, 1 FROM schools WHERE name = ${escapeSql(schoolName)}`,
-  'ON CONFLICT(username) DO UPDATE SET password_hash = excluded.password_hash WHERE accounts.role = \'director\' AND accounts.school_id = excluded.school_id;',
+  'ON CONFLICT(username) DO UPDATE SET password_hash = excluded.password_hash, school_id = excluded.school_id WHERE accounts.role = \'director\' AND (accounts.school_id IS NULL OR accounts.school_id = excluded.school_id);',
 ].join(' ');
 
 const tempDir = await mkdtemp(join(tmpdir(), 'agenda-director-bootstrap-'));
