@@ -114,7 +114,7 @@ export interface Teacher {
     ar: string;
     it?: string;
     es?: string;
-    [key: string]: string | undefined;
+    [key: string]: any;
   };
   availableSlots: string[]; // e.g. ["Today 4:00 PM", "Today 5:30 PM", "Tomorrow 3:00 PM"]
   acceptsTrials: boolean; // all certified teachers accept the 3 free trials
