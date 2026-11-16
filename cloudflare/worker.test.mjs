@@ -897,3 +897,178 @@ test('live stream endpoint rejects users without an assigned activated session',
   const response = await send(env, '/api/live-stream?sessionId=test-registration-session');
   assert.equal(response.status, 401);
 });
+
+
+test('schools isolate educator directories and the ten permanent lesson slots', async () => {
+  const { env, accounts, lessons, bucketObjects } = fakeEnvironment();
+
+  const schoolsResponse = await send(env, '/api/schools');
+  assert.equal(schoolsResponse.status, 200);
+  const schoolList = await schoolsResponse.json();
+  assert.ok(schoolList.schools.some((school) => school.id === 'default-agenda-school'));
+  assert.ok(schoolList.schools.some((school) => school.id === 'other-school'));
+
+  const registration = await send(env, '/api/auth/register', {
+    method: 'POST',
+    body: {
+      schoolId: 'other-school',
+      username: 'other.educator',
+      password: 'OtherEducatorPassword#2026',
+      role: 'educator',
+      fullName: 'Other School Educator',
+      email: 'other.educator@example.com',
+      phone: '',
+      schoolOrSubject: 'Science',
+      gradeId: 'eb8',
+    },
+  });
+  assert.equal(registration.status, 201);
+  const { account, token } = await registration.json();
+  assert.equal(account.schoolId, 'other-school');
+  assert.equal(lessons.size, 10);
+
+  const otherDirectory = await send(env, '/api/schools/other-school/educators');
+  assert.equal(otherDirectory.status, 200);
+  assert.deepEqual(
+    (await otherDirectory.json()).educators.map((educator) => educator.id),
+    [account.id]
+  );
+
+  const defaultDirectory = await send(env, '/api/schools/default-agenda-school/educators');
+  assert.equal(defaultDirectory.status, 200);
+  assert.ok(
+    !(await defaultDirectory.json()).educators.some((educator) => educator.id === account.id)
+  );
+
+  const lessonList = await send(
+    env,
+    `/api/learning/educators/${account.id}/lessons?schoolId=other-school`
+  );
+  assert.equal(lessonList.status, 200);
+  const { lessons: educatorLessons } = await lessonList.json();
+  assert.equal(educatorLessons.length, 10);
+  assert.deepEqual(
+    educatorLessons.map((lesson) => lesson.slot),
+    [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+  );
+
+  const forbiddenLessonList = await send(
+    env,
+    `/api/learning/educators/${account.id}/lessons?schoolId=default-agenda-school`
+  );
+  assert.equal(forbiddenLessonList.status, 404);
+
+  const selectedLesson = educatorLessons[0];
+  const form = new FormData();
+  form.append('title', 'Cells and organisms');
+  form.append('subject', 'Science');
+  form.append('description', 'A lesson with an uploaded illustration.');
+  form.append('file', new Blob(['lesson image bytes'], { type: 'image/png' }), 'cells.png');
+
+  const saved = await send(env, `/api/learning/lessons/${selectedLesson.id}`, {
+    method: 'PUT',
+    token,
+    body: form,
+  });
+  assert.equal(saved.status, 200);
+  const savedLesson = (await saved.json()).lesson;
+  assert.equal(savedLesson.title, 'Cells and organisms');
+  assert.equal(savedLesson.subject, 'Science');
+  assert.equal(savedLesson.mediaName, 'cells.png');
+  assert.match(savedLesson.mediaUrl, /schoolId=other-school/);
+  assert.equal(bucketObjects.size, 1);
+
+  const media = await send(
+    env,
+    `/api/learning/lessons/${selectedLesson.id}/media?schoolId=other-school`
+  );
+  assert.equal(media.status, 200);
+  assert.equal(media.headers.get('content-type'), 'image/png');
+  assert.equal(await media.text(), 'lesson image bytes');
+
+  const wrongSchoolMedia = await send(
+    env,
+    `/api/learning/lessons/${selectedLesson.id}/media?schoolId=default-agenda-school`
+  );
+  assert.equal(wrongSchoolMedia.status, 404);
+
+  const deleted = await send(env, `/api/learning/lessons/${selectedLesson.id}`, {
+    method: 'DELETE',
+    token,
+  });
+  assert.equal(deleted.status, 200);
+  const clearedLesson = (await deleted.json()).lesson;
+  assert.equal(clearedLesson.slot, 1);
+  assert.equal(clearedLesson.title, '');
+  assert.equal(clearedLesson.mediaUrl, null);
+  assert.equal(bucketObjects.size, 0);
+  assert.equal(lessons.size, 10);
+
+  const defaultDirectorLogin = await send(env, '/api/auth/login', {
+    method: 'POST',
+    body: { username: 'director', password: 'DirectorPassword#2026' },
+  });
+  const { token: directorToken } = await defaultDirectorLogin.json();
+
+  const defaultDirectorAccounts = await send(env, '/api/director/accounts', {
+    token: directorToken,
+  });
+  const directorLists = await defaultDirectorAccounts.json();
+  assert.ok(!directorLists.educators.some((educator) => educator.id === account.id));
+
+  const crossSchoolDelete = await send(env, `/api/director/accounts/${account.id}`, {
+    method: 'DELETE',
+    token: directorToken,
+  });
+  assert.equal(crossSchoolDelete.status, 404);
+  assert.equal(accounts.has(account.id), true);
+});
+
+test('Director profile updates only the Director-owned school and username', async () => {
+  const { env, schools, accounts } = fakeEnvironment();
+  const login = await send(env, '/api/auth/login', {
+    method: 'POST',
+    body: { username: 'director', password: 'DirectorPassword#2026' },
+  });
+  assert.equal(login.status, 200);
+  const { token } = await login.json();
+
+  const initialProfile = await send(env, '/api/director/profile', { token });
+  assert.equal(initialProfile.status, 200);
+  assert.deepEqual(await initialProfile.json(), {
+    profile: {
+      schoolId: 'default-agenda-school',
+      schoolName: 'Agenda',
+      username: 'director',
+    },
+  });
+
+  const updated = await send(env, '/api/director/profile', {
+    method: 'PATCH',
+    token,
+    body: {
+      schoolName: 'Agenda Secondary School',
+      username: 'agenda.director',
+    },
+  });
+  assert.equal(updated.status, 200);
+  const result = await updated.json();
+  assert.equal(result.profile.schoolId, 'default-agenda-school');
+  assert.equal(result.profile.schoolName, 'Agenda Secondary School');
+  assert.equal(result.profile.username, 'agenda.director');
+  assert.ok(result.token);
+  assert.equal(schools.get('default-agenda-school').name, 'Agenda Secondary School');
+  assert.equal(accounts.get('director-account-0000000000000').username, 'director');
+
+  const refreshedProfile = await send(env, '/api/director/profile', {
+    token: result.token,
+  });
+  assert.equal(refreshedProfile.status, 200);
+  assert.equal((await refreshedProfile.json()).profile.schoolName, 'Agenda Secondary School');
+
+  const renamedLogin = await send(env, '/api/auth/login', {
+    method: 'POST',
+    body: { username: 'agenda.director', password: 'DirectorPassword#2026' },
+  });
+  assert.equal(renamedLogin.status, 200);
+});
