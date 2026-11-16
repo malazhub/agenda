@@ -2227,11 +2227,13 @@ async function classroomChatAccess(request, env, sessionId, studentId) {
      WHERE id = ?
        AND role = 'student'
        AND registered_session_id = ?
-       AND grade_id = ?`
+       AND grade_id = ?
+       AND school_id = ?`
   ).bind(
     studentId,
     sessionId,
-    access.session.grade_id
+    access.session.grade_id,
+    access.session.school_id
   ).first();
 
   if (!student) {
@@ -2256,8 +2258,9 @@ async function classroomChatAccess(request, env, sessionId, studentId) {
        FROM accounts
        WHERE role = 'educator'
          AND registered_session_id = ?
+         AND school_id = ?
        LIMIT 1`
-    ).bind(sessionId).first();
+    ).bind(sessionId, access.session.school_id).first();
 
     if (!educator) {
       return {
