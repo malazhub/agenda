@@ -414,6 +414,7 @@ export function updateDirectorAccount(
     paid?: boolean;
     renew?: boolean;
     password?: string;
+    username?: string;
     registeredSessionId?: string;
     educatorId?: string;
   },
