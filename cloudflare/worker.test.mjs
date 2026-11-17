@@ -311,8 +311,8 @@ test('Workers AI endpoint converts chat content and returns model text', async (
     method: 'POST',
     body: {
       contents: [
-        { text: 'Explain how to plan a study day.' },
-        'Keep the answer concise.'
+        { role: 'system', parts: [{ text: 'Answer in the language of the latest user message.' }] },
+        { role: 'user', parts: [{ text: 'مرحبا، كيف حالك؟' }] }
       ],
       maxOutputTokens: 384
     }
@@ -320,13 +320,10 @@ test('Workers AI endpoint converts chat content and returns model text', async (
   assert.equal(response.status, 200);
   assert.deepEqual(await response.json(), { text: 'Qwen test response' });
   assert.equal(capturedModel, '@cf/qwen/qwen3.8-27b');
-  assert.deepEqual(capturedInput.messages, [{
-    role: 'user',
-    content: [
-      { type: 'text', text: 'Explain how to plan a study day.' },
-      { type: 'text', text: 'Keep the answer concise.' }
-    ]
-  }]);
+  assert.deepEqual(capturedInput.messages, [
+    { role: 'system', content: 'Answer in the language of the latest user message.' },
+    { role: 'user', content: 'مرحبا، كيف حالك؟' }
+  ]);
   assert.equal(capturedInput.max_tokens, 384);
   assert.equal(capturedInput.reasoning_effort, 'low');
 });
