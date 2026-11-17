@@ -35,6 +35,59 @@ jobs:
           accountId: 15cd99734560c6868dd06d79236a0334
           command: deploy --config cloudflare/wrangler.toml
 
+      - name: Verify GitHub Pages browser CORS access to Owner API
+        shell: bash
+        run: |
+          node --input-type=module <<'NODE'
+          const origin = "https://malazhub.github.io";
+          const endpoint = "https://agenda-api.malazhub-agenda.workers.dev/api/owner/directors";
+
+          for (const method of ["GET", "POST"]) {
+            const requestedHeaders = method === "POST"
+              ? "authorization,content-type"
+              : "authorization";
+            const response = await fetch(endpoint, {
+              method: "OPTIONS",
+              headers: {
+                Origin: origin,
+                "Access-Control-Request-Method": method,
+                "Access-Control-Request-Headers": requestedHeaders
+              }
+            });
+            const allowedOrigin = response.headers.get("access-control-allow-origin");
+            const allowedHeaders = (response.headers.get("access-control-allow-headers") || "")
+              .toLowerCase().split(",").map(value => value.trim());
+            if (response.status !== 204 || allowedOrigin !== origin ||
+                !allowedHeaders.includes("authorization") ||
+                (method === "POST" && !allowedHeaders.includes("content-type"))) {
+              console.error("Owner API CORS preflight failed:", {
+                method,
+                status: response.status,
+                allowedOrigin,
+                allowedHeaders
+              });
+              process.exit(1);
+            }
+            console.log(`Owner API ${method} preflight passed for ${origin}`);
+          }
+
+          const response = await fetch(endpoint, {
+            headers: { Origin: origin, Authorization: "Bearer invalid-smoke-test-token" }
+          });
+          if (response.headers.get("access-control-allow-origin") !== origin) {
+            console.error("Owner API response did not include the expected CORS origin:", {
+              status: response.status,
+              allowedOrigin: response.headers.get("access-control-allow-origin")
+            });
+            process.exit(1);
+          }
+          if (response.status !== 401) {
+            console.error("Owner API auth smoke test returned an unexpected status:", response.status);
+            process.exit(1);
+          }
+          console.log("Owner API authenticated route is reachable and returns 401 for an invalid test token.");
+          NODE
+
       - name: Verify live Cloudflare Workers AI response
         shell: bash
         run: |
