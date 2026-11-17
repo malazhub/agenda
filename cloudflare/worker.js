@@ -249,23 +249,45 @@ async function authenticate(request, env, requiredRole) {
   const match = authorization.match(/^Bearer ([A-Za-z0-9._-]+)$/);
   if (!match) return null;
   const payload = await verifyToken(match[1], env.SESSION_SIGNING_KEY);
-  if (!payload || (requiredRole && payload.role !== requiredRole)) return null;
+  if (!payload) return null;
+
+  let authenticated = payload;
+  // A platform Owner may also manage their own school when their account is
+  // explicitly registered as that school's Director. The subject remains the
+  // Owner's own account ID, so all Director queries stay scoped to that school.
+  if (requiredRole === "director" && payload.role === "owner") {
+    const ownerDirector = await env.DB.prepare(
+      `SELECT platform_owners.account_id
+       FROM platform_owners
+       INNER JOIN accounts ON accounts.id = platform_owners.account_id
+         AND accounts.role = 'director'
+       INNER JOIN schools ON schools.id = accounts.school_id
+         AND schools.director_id = accounts.id
+       WHERE platform_owners.account_id = ?`
+    ).bind(payload.sub).first();
+    if (!ownerDirector) return null;
+    authenticated = { ...payload, role: "director", isPlatformOwner: true };
+  } else if (requiredRole && payload.role !== requiredRole) {
+    return null;
+  }
+
   // Re-check Director school licensing on every authenticated API request so a
   // suspended or expired licence cannot keep using a still-valid 12-hour token.
-  if (payload.role === "director") {
+  // Platform Owners retain access to administer their own school.
+  if (authenticated.role === "director" && !authenticated.isPlatformOwner) {
     const licence = await env.DB.prepare(
       `SELECT accounts.expires_at, schools.license_active, schools.license_expires_at
        FROM accounts
        INNER JOIN schools ON schools.id = accounts.school_id
          AND schools.director_id = accounts.id
        WHERE accounts.id = ? AND accounts.role = 'director'`
-    ).bind(payload.sub).first();
+    ).bind(authenticated.sub).first();
     if (!licence || Number(licence.license_active ?? 1) !== 1) return null;
     const expiry = licence.license_expires_at || licence.expires_at;
     const expiryTime = expiry ? Date.parse(String(expiry).replace(" ", "T") + "Z") : null;
     if (expiryTime !== null && (!Number.isFinite(expiryTime) || expiryTime <= Date.now())) return null;
   }
-  return payload;
+  return authenticated;
 }
 
 async function getDirectorSchoolId(env, director) {
@@ -681,7 +703,7 @@ async function updateDirectorProfile(request, env) {
   }
 
   const token = await signToken(
-    { sub: director.sub, role: "director", username, exp: Math.floor(Date.now() / 1000) + SESSION_TTL_SECONDS },
+    { sub: director.sub, role: director.isPlatformOwner ? "owner" : "director", username, exp: Math.floor(Date.now() / 1000) + SESSION_TTL_SECONDS },
     env.SESSION_SIGNING_KEY,
   );
   return json({ profile: { schoolId: account.school_id, schoolName, username }, token });
