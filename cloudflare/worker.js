@@ -921,10 +921,10 @@ async function claimDirectorSetup(request, env) {
      WHERE t.token_hash = ? AND t.used_at IS NULL
        AND t.expires_at > datetime('now') AND a.role = 'director'`
   ).bind(tokenHash).first();
-  if (!setup?.phone || String(setup.phone).trim().length < 6) {
+  if (!setup) return json({ error: "This setup link is invalid, has expired, or has already been used." }, 400);
+  if (!setup.phone || String(setup.phone).trim().length < 6) {
     return json({ error: "The Owner must add a valid phone number before this Director account can be set up." }, 400);
   }
-  if (!setup) return json({ error: "This setup link is invalid, has expired, or has already been used." }, 400);
   const duplicate = await env.DB.prepare("SELECT id FROM accounts WHERE username = ? COLLATE NOCASE AND id != ?").bind(username, setup.id).first();
   if (duplicate) return json({ error: "That username is already in use. Choose another." }, 409);
   const consumed = await env.DB.prepare(
