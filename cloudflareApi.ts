@@ -646,7 +646,7 @@ export interface OwnerDirector {
   setupPending:boolean; studentCount:number; educatorCount:number; directorLink:string;
 }
 export interface CreateOwnerDirectorInput {
-  username:string; fullName:string; email:string; phone:string;
+  fullName:string; email:string; phone:string;
   schoolName:string; paymentReceived:true;
 }
 export interface CreatedOwnerDirector {
@@ -669,8 +669,8 @@ export function deleteOwnerDirector(token:string,id:string):Promise<{deleted:boo
 export function issueDirectorSetupLink(token:string,id:string):Promise<{setupLink:string}> {
   return request('/api/owner/directors/'+encodeURIComponent(id)+'/setup-link',{method:'POST',headers:authHeaders(token)});
 }
-export function claimDirectorSetup(token:string,password:string):Promise<{account:CloudflareAccount;token:string}> {
-  return request('/api/director/claim',{method:'POST',body:JSON.stringify({token,password})});
+export function claimDirectorSetup(token:string,username:string,password:string):Promise<{account:CloudflareAccount;token:string}> {
+  return request('/api/director/claim',{method:'POST',body:JSON.stringify({token,username,password})});
 }
 export function getDirectorPayment(token:string):Promise<{paymentMethod:DirectorPaymentMethod;paymentValue:string}> {
   return request('/api/director/payment',{headers:authHeaders(token)});
