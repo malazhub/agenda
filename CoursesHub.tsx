@@ -745,6 +745,22 @@ const updateAccount = async (
           </button>
         </div>
 
+        <div role="note" className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
+          <p className="font-bold">
+            {currentLang === 'ar' ? 'كلمة المرور الأولية للمدير' : currentLang === 'fr' ? 'Mot de passe initial du directeur' : currentLang === 'es' ? 'Contraseña inicial del director' : currentLang === 'it' ? 'Password iniziale del direttore' : 'Director initial password'}
+          </p>
+          <p className="mt-1">
+            {currentLang === 'ar'
+              ? 'في أول تسجيل دخول، استخدم رقم الهاتف الذي أدخله المالك لهذا الحساب ككلمة المرور. أدخله تماماً كما تم تسجيله، بما في ذلك رمز البلد والمسافات. بعد الدخول، يمكنك تغييره من لوحة المدير.'
+              : currentLang === 'fr'
+                ? 'Lors de votre première connexion, utilisez comme mot de passe le numéro de téléphone que le propriétaire a enregistré pour votre compte. Saisissez-le exactement comme indiqué, avec l’indicatif du pays et les espaces. Vous pourrez le modifier depuis votre tableau de bord après connexion.'
+                : currentLang === 'es'
+                  ? 'En el primer inicio de sesión, usa como contraseña el número de teléfono que el propietario registró para tu cuenta. Escríbelo exactamente como se guardó, incluido el código de país y los espacios. Después podrás cambiarlo desde tu panel de Director.'
+                  : currentLang === 'it'
+                    ? 'Al primo accesso, usa come password il numero di telefono che il proprietario ha registrato per il tuo account. Inseriscilo esattamente come salvato, incluso il prefisso internazionale e gli spazi. Dopo l’accesso potrai modificarlo dalla dashboard del Direttore.'
+                    : 'For your first sign-in, use the phone number the Owner entered for your account as your password. Enter it exactly as recorded, including the country code and spaces. After signing in, you can change it from your Director dashboard.'}
+          </p>
+        </div>
         <form
           className="space-y-4"
           onSubmit={(event) => {
