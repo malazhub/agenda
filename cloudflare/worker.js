@@ -2653,8 +2653,8 @@ async function generateGeminiResponse(request, env) {
   }
   // Only allow known, supported Gemini models. Use the faster everyday Flash
   // model for chat, while allowing the advanced model for exercise solving.
-  const allowedModels = new Set(["gemini-3.6-flash", "gemini-3.8-flash"]);
-  const model = allowedModels.has(payload?.model) ? payload.model : "gemini-3.6-flash";
+  const allowedModels = new Set(["gemini-2.5-flash", "gemini-3.6-flash", "gemini-3.8-flash"]);
+  const model = allowedModels.has(payload?.model) ? payload.model : "gemini-2.5-flash";
 
   const requestedThinkingLevel = payload?.generationConfig?.thinkingConfig?.thinkingLevel;
   const thinkingLevel = ["low", "medium", "high"].includes(requestedThinkingLevel)
@@ -2669,7 +2669,7 @@ async function generateGeminiResponse(request, env) {
     ...(thinkingLevel ? { thinkingConfig: { thinkingLevel } } : {}),
   };
 
-  const fallbackModel = model === "gemini-3.6-flash" ? "gemini-3.8-flash" : "gemini-3.6-flash";
+  const fallbackModel = model === "gemini-2.5-flash" ? "gemini-3.6-flash" : "gemini-2.5-flash";
   let upstream;
   let result;
   let activeModel = model;
