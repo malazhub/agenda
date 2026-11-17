@@ -232,8 +232,11 @@ const registerSignOutCleanup = useCallback(
 
     // Only remove the account credentials after classroom cleanup.
     sessionStorage.removeItem('agenda-session-token');
+    sessionStorage.removeItem('agenda-director-token');
 
     setSessionToken('');
+    setDirectorAccessToken('');
+    setDirectorSetupToken('');
     setRegisteredAccount(null);
     setOwnerAccount(null);
     setOwnerToken('');
