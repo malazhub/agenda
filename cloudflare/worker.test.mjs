@@ -529,7 +529,8 @@ test('registration hashes credentials and rejects duplicate usernames', async ()
     method: 'POST',
     body: { username: registration.username, password: registration.password },
   });
-  assert.equal(pendingLogin.status, 401);
+  assert.equal(pendingLogin.status, 403);
+  assert.match((await pendingLogin.json()).error, /not activated/i);
 
   const legacyAccount = accounts.get(result.account.id);
   legacyAccount.registered_session_id = null;
@@ -731,7 +732,8 @@ test('Owner creates a one-year Director school and Director sets their own usern
     method: 'POST',
     body: { username: 'new.director', password: 'x' },
   });
-  assert.equal(blockedDirectorLogin.status, 401);
+  assert.equal(blockedDirectorLogin.status, 403);
+  assert.match((await blockedDirectorLogin.json()).error, /Director account is inactive/i);
   const blockedExistingSession = await send(env, '/api/director/profile', { token: directorToken });
   assert.equal(blockedExistingSession.status, 401);
 
