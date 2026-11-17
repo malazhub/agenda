@@ -648,7 +648,7 @@ async function handleLogin(request, env) {
 
 async function getCurrentAccount(request, env) {
   const claims = await authenticate(request, env, null);
-  if (!claims || !["student", "educator", "owner"].includes(claims.role)) {
+  if (!claims || !["student", "educator", "director", "owner"].includes(claims.role)) {
     return json({ error: "Account authentication required." }, 401);
   }
   const account = await env.DB.prepare("SELECT * FROM accounts WHERE id = ?").bind(claims.sub).first();
@@ -979,6 +979,48 @@ async function deleteOwnerDirector(request, env, directorId) {
   return json({ deleted: true });
 }
 
+async function saveOwnerDirectorStatuses(request, env) {
+  const owner = await requireOwner(request, env);
+  if (!owner) return json({ error: "Owner access required." }, 401);
+  const body = await requestJson(request);
+  if (!Array.isArray(body?.updates) || body.updates.length < 1 || body.updates.length > 500) {
+    return json({ error: "Provide between 1 and 500 Director status changes." }, 400);
+  }
+  const seen = new Set();
+  const updates = [];
+  for (const item of body.updates) {
+    const id = typeof item?.id === "string" ? item.id : "";
+    if (!/^[A-Za-z0-9_-]{1,100}$/.test(id) || seen.has(id) ||
+        typeof item.activated !== "boolean" || typeof item.paid !== "boolean") {
+      return json({ error: "Each status change must contain a unique Director ID and Account/Paid checkbox values." }, 400);
+    }
+    seen.add(id);
+    updates.push({ id, activated: item.activated, paid: item.paid });
+  }
+  const ids = updates.map((item) => item.id);
+  const placeholders = ids.map(() => "?").join(", ");
+  const found = await env.DB.prepare(
+    `SELECT a.id
+     FROM accounts a
+     INNER JOIN schools s ON s.director_id = a.id AND s.id = a.school_id
+     WHERE a.role = 'director'
+       AND NOT EXISTS (SELECT 1 FROM platform_owners p WHERE p.account_id = a.id)
+       AND a.id IN (${placeholders})`
+  ).bind(...ids).all();
+  const foundIds = new Set((found.results || []).map((row) => row.id));
+  if (ids.some((id) => !foundIds.has(id))) {
+    return json({ error: "One or more Directors could not be found. No status changes were saved." }, 404);
+  }
+  const statements = updates.flatMap((item) => [
+    env.DB.prepare("UPDATE accounts SET activated = ?, paid = ? WHERE id = ? AND role = 'director'")
+      .bind(item.activated ? 1 : 0, item.paid ? 1 : 0, item.id),
+    env.DB.prepare("DELETE FROM login_attempts WHERE username = (SELECT username FROM accounts WHERE id = ?)")
+      .bind(item.id),
+  ]);
+  await env.DB.batch(statements);
+  return json({ updated: updates.length });
+}
+
 async function updateOwnerDirector(request, env, directorId) {
   const owner = await requireOwner(request, env);
   if (!owner) return json({ error: "Owner access required." }, 401);
@@ -1030,6 +1072,7 @@ async function updateOwnerDirector(request, env, directorId) {
     }
     await env.DB.prepare(`UPDATE accounts SET ${accountSet.join(", ")} WHERE id = ?`)
       .bind(...accountValues, directorId).run();
+    await env.DB.prepare("DELETE FROM login_attempts WHERE username = (SELECT username FROM accounts WHERE id = ?)").bind(directorId).run();
   }
 
   if (schoolUpdates.length > 0) {
@@ -3133,6 +3176,7 @@ async function handle(request, env) {
   if (request.method === "GET" && path === "/api/school-payment") return publicSchoolPayment(url, env);
     const ownerDirectorSetupMatch = path.match(/^\/api\/owner\/directors\/([a-zA-Z0-9_-]{1,100})\/setup-link$/i);
   if (request.method === "POST" && ownerDirectorSetupMatch) return issueOwnerDirectorSetupLink(request, env, ownerDirectorSetupMatch[1]);
+  if (request.method === "PATCH" && path === "/api/owner/directors/status") return saveOwnerDirectorStatuses(request, env);
   const ownerDirectorMatch = path.match(/^\/api\/owner\/directors\/([a-zA-Z0-9_-]{1,100})$/i);
   if (request.method === "PATCH" && ownerDirectorMatch) return updateOwnerDirector(request, env, ownerDirectorMatch[1]);
   if (request.method === "DELETE" && ownerDirectorMatch) return deleteOwnerDirector(request, env, ownerDirectorMatch[1]);
