@@ -906,7 +906,7 @@ async function claimDirectorSetup(request, env) {
     .bind(username, await hashPassword(password), setup.id).run();
   const account = await env.DB.prepare("SELECT * FROM accounts WHERE id = ?").bind(setup.id).first();
   const authToken = await signToken(
-    { sub: setup.id, role: "director", username: setup.username, exp: Math.floor(Date.now() / 1000) + SESSION_TTL_SECONDS },
+    { sub: setup.id, role: "director", username, exp: Math.floor(Date.now() / 1000) + SESSION_TTL_SECONDS },
     env.SESSION_SIGNING_KEY,
   );
   return json({ account: publicAccount(account), token: authToken });
