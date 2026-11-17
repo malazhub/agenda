@@ -46,7 +46,7 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
   const [isLogin, setIsLogin] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [schoolPayment, setSchoolPayment] = useState({paymentMethod:'suyool',paymentValue:'https://payments.suyool.com/qr/p585_malazjanbeih'});
+  const [schoolPayment, setSchoolPayment] = useState({paymentMethod:'unset',paymentValue:''});
 
     // All registered educators are loaded from the Cloudflare database.
   const [educatorsList, setEducatorsList] = useState<RegistrationEducator[]>([]);
@@ -147,7 +147,7 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
     onClose();
   };
 
-  useEffect(() => { if (!isOpen || !showPayment) return; getSchoolPayment(schoolId).then(setSchoolPayment).catch(() => {}); }, [isOpen, showPayment, schoolId]);
+  useEffect(() => { if (!isOpen || !showPayment) return; getSchoolPayment(schoolId).then(setSchoolPayment).catch(() => setSchoolPayment({paymentMethod:'unset',paymentValue:''})); }, [isOpen, showPayment, schoolId]);
 
   if (!isOpen) return null;
 
@@ -284,7 +284,9 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
               <h3 className="text-lg font-black text-slate-900">{t.paymentTitle}</h3>
               <p className="text-sm font-semibold text-slate-700">{t.paymentDescription}</p>
             </div>
-            <a
+            {schoolPayment.paymentMethod === 'unset' || !schoolPayment.paymentValue ? (
+              <p className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-center text-sm font-semibold text-amber-900">{currentLang === 'ar' ? 'لم يحدد المدير طريقة الدفع بعد. يرجى التواصل معه.' : currentLang === 'fr' ? 'Le Directeur n’a pas encore configuré le paiement. Veuillez le contacter.' : currentLang === 'es' ? 'El Director aún no ha configurado el pago. Ponte en contacto con él.' : currentLang === 'it' ? 'Il Direttore non ha ancora configurato il pagamento. Contattalo.' : 'The Director has not configured a payment method yet. Please contact the Director.'}</p>
+            ) : <a
               href={schoolPayment.paymentMethod === 'whatsapp' ? 'https://wa.me/' + schoolPayment.paymentValue.replace(/\D/g, '') : schoolPayment.paymentMethod === 'phone' ? 'tel:' + schoolPayment.paymentValue : schoolPayment.paymentMethod === 'email' ? 'mailto:' + schoolPayment.paymentValue : schoolPayment.paymentValue}
               target="_blank"
               rel="noopener noreferrer"
