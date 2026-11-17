@@ -2583,57 +2583,82 @@ async function clearClassroomMessages(request, env) {
     cleared: true
   });
 }
-function normalizeGeminiContents(contents) {
+function normalizeWorkersAIMessages(contents) {
+  let conversation;
   if (typeof contents === "string") {
     const text = contents.trim();
-    return text ? [{ role: "user", parts: [{ text }] }] : null;
-  }
-  if (!Array.isArray(contents) || contents.length === 0) return null;
-
-  // Preserve already-valid Gemini Content objects.
-  if (contents.every((item) => item && typeof item === "object" && Array.isArray(item.parts))) {
-    return contents;
-  }
-
-  // Convert the app's flat list of strings/text/image parts into REST Content.
-  const parts = [];
-  for (const item of contents) {
-    if (typeof item === "string") {
-      if (item.trim()) parts.push({ text: item });
-      continue;
+    conversation = text ? [{ role: "user", parts: [{ text }] }] : [];
+  } else if (
+    Array.isArray(contents) &&
+    contents.length > 0 &&
+    contents.every((item) => item && typeof item === "object" && Array.isArray(item.parts))
+  ) {
+    conversation = contents;
+  } else if (Array.isArray(contents) && contents.length > 0) {
+    const parts = [];
+    for (const item of contents) {
+      if (typeof item === "string") {
+        if (item.trim()) parts.push({ text: item });
+        continue;
+      }
+      if (!item || typeof item !== "object") return null;
+      if (typeof item.text === "string") {
+        parts.push({ text: item.text });
+        continue;
+      }
+      if (item.inlineData && typeof item.inlineData === "object") {
+        parts.push({ inlineData: item.inlineData });
+        continue;
+      }
+      if (item.inline_data && typeof item.inline_data === "object") {
+        const data = item.inline_data;
+        parts.push({ inlineData: { mimeType: data.mimeType || data.mime_type, data: data.data } });
+        continue;
+      }
+      return null;
     }
-    if (!item || typeof item !== "object") return null;
-    if (typeof item.text === "string") {
-      parts.push({ text: item.text });
-      continue;
-    }
-    if (item.inlineData && typeof item.inlineData === "object") {
-      parts.push({ inlineData: item.inlineData });
-      continue;
-    }
-    if (item.inline_data && typeof item.inline_data === "object") {
-      const data = item.inline_data;
-      parts.push({ inlineData: { mimeType: data.mimeType || data.mime_type, data: data.data } });
-      continue;
-    }
-    if (item.fileData && typeof item.fileData === "object") {
-      parts.push({ fileData: item.fileData });
-      continue;
-    }
-    if (item.file_data && typeof item.file_data === "object") {
-      const data = item.file_data;
-      parts.push({ fileData: { mimeType: data.mimeType || data.mime_type, fileUri: data.fileUri || data.file_uri } });
-      continue;
-    }
+    conversation = parts.length ? [{ role: "user", parts }] : [];
+  } else {
     return null;
   }
 
-  return parts.length ? [{ role: "user", parts }] : null;
+  const messages = [];
+  for (const item of conversation) {
+    const role = item.role === "model"
+      ? "assistant"
+      : ["user", "assistant", "system"].includes(item.role)
+        ? item.role
+        : "user";
+    const content = [];
+    for (const part of item.parts || []) {
+      if (typeof part?.text === "string" && part.text.length > 0) {
+        content.push({ type: "text", text: part.text });
+      } else if (part?.inlineData && typeof part.inlineData === "object") {
+        const mimeType = part.inlineData.mimeType || part.inlineData.mime_type || "image/jpeg";
+        const data = part.inlineData.data;
+        if (!/^image\/(jpeg|png|webp|gif)$/i.test(mimeType) || typeof data !== "string" || !data) {
+          return null;
+        }
+        content.push({
+          type: "image_url",
+          image_url: { url: `data:${mimeType};base64,${data}` },
+        });
+      }
+    }
+    if (content.length === 0) continue;
+    messages.push({
+      role,
+      content: content.length === 1 && content[0].type === "text" ? content[0].text : content,
+    });
+  }
+  return messages.length ? messages : null;
 }
 
-async function generateGeminiResponse(request, env) {
+async function generateWorkersAIResponse(request, env) {
   if (request.method !== "POST") return json({ error: "Method not allowed." }, 405);
-  if (!env.GEMINI_API_KEY) return json({ error: "Gemini is not configured on the server. Add the GEMINI_API_KEY Worker secret." }, 503);
+  if (!env.AI || typeof env.AI.run !== "function") {
+    return json({ error: "Cloudflare Workers AI is not enabled for this Worker. Add the AI binding in Wrangler configuration." }, 503);
+  }
 
   const declaredLength = Number(request.headers.get("Content-Length") || 0);
   if (declaredLength > 1_500_000) return json({ error: "AI request is too large." }, 413);
@@ -2647,85 +2672,44 @@ async function generateGeminiResponse(request, env) {
     return json({ error: "Invalid AI request body." }, 400);
   }
 
-  const contents = normalizeGeminiContents(payload?.contents);
-  if (!contents) {
-    return json({ error: "AI contents are required in a supported text or media format." }, 400);
+  const messages = normalizeWorkersAIMessages(payload?.contents);
+  if (!messages) {
+    return json({ error: "AI contents are required in a supported text or image format." }, 400);
   }
-  // Only allow known, supported Gemini models. Use the faster everyday Flash
-  // model for chat, while allowing the advanced model for exercise solving.
-  const allowedModels = new Set(["gemini-2.5-flash", "gemini-3.6-flash", "gemini-3.8-flash"]);
-  const model = allowedModels.has(payload?.model) ? payload.model : "gemini-2.5-flash";
 
-  const requestedThinkingLevel = payload?.generationConfig?.thinkingConfig?.thinkingLevel;
-  const thinkingLevel = ["low", "medium", "high"].includes(requestedThinkingLevel)
-    ? requestedThinkingLevel
-    : null;
-  const requestedMaxOutputTokens = Number(payload?.generationConfig?.maxOutputTokens);
-  const maxOutputTokens = Number.isFinite(requestedMaxOutputTokens)
+  const requestedMaxOutputTokens = Number(payload?.maxOutputTokens ?? payload?.generationConfig?.maxOutputTokens);
+  const maxTokens = Number.isFinite(requestedMaxOutputTokens)
     ? Math.min(2048, Math.max(32, Math.floor(requestedMaxOutputTokens)))
     : 1024;
-  const generationConfig = {
-    maxOutputTokens,
-    ...(thinkingLevel ? { thinkingConfig: { thinkingLevel } } : {}),
-  };
+  const model = "@cf/qwen/qwen3.8-27b";
 
-  const fallbackModel = model === "gemini-2.5-flash" ? "gemini-3.6-flash" : "gemini-2.5-flash";
-  let upstream;
   let result;
-  let activeModel = model;
-  let lastErrorMessage = "";
-  for (const candidateModel of [model, fallbackModel]) {
-    activeModel = candidateModel;
-    try {
-      upstream = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${candidateModel}:generateContent`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-goog-api-key": env.GEMINI_API_KEY
-        },
-        body: JSON.stringify({ contents, generationConfig }),
-        signal: AbortSignal.timeout(18_000),
-      });
-    } catch (error) {
-      const timedOut = error?.name === "TimeoutError" || error?.name === "AbortError";
-      return json({
-        error: timedOut
-          ? "Gemini took too long to respond. Please try again."
-          : "Gemini could not be reached. Please try again.",
-      }, timedOut ? 504 : 502);
-    }
-
-    result = await upstream.json().catch(() => null);
-    if (upstream.ok || upstream.status !== 503 || candidateModel === fallbackModel) break;
-    console.warn("Gemini model temporarily unavailable; trying fallback model.", {
-      failedModel: candidateModel,
-      fallbackModel,
-      upstreamStatus: upstream.status,
+  try {
+    result = await env.AI.run(model, {
+      messages,
+      max_tokens: maxTokens,
+      reasoning_effort: "low",
     });
-  }
-
-  if (!upstream.ok) {
-    // Log safe Google diagnostics only; never log the API key or prompt.
-    lastErrorMessage = typeof result?.error?.message === "string"
-      ? result.error.message.slice(0, 240)
-      : "";
-    console.error("Gemini API request failed.", {
-      model: activeModel,
-      upstreamStatus: upstream.status,
-      upstreamMessage: lastErrorMessage,
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
+    console.error("Cloudflare Workers AI inference failed.", {
+      model,
+      message: detail.slice(0, 240),
     });
-    const status = upstream.status === 429 ? 429 : 502;
     return json({
-      error: status === 429
-        ? "Gemini is temporarily rate-limited. Please try again shortly."
-        : `Gemini request failed (Google API HTTP ${upstream.status})${lastErrorMessage ? `: ${lastErrorMessage}` : ""}. Check Google AI Studio service availability and model access.`,
-    }, status);
+      error: `Cloudflare Workers AI request failed: ${detail.slice(0, 240) || "unknown inference error"}`,
+    }, 503);
   }
-  const text = (result?.candidates?.[0]?.content?.parts || [])
-    .map((part) => typeof part.text === "string" ? part.text : "")
-    .join("")
-    .trim();
-  if (!text) return json({ error: "Gemini returned an empty response." }, 502);
+
+  const generatedText =
+    result?.choices?.[0]?.message?.content ??
+    result?.response ??
+    "";
+  const text = typeof generatedText === "string" ? generatedText.trim() : "";
+  if (!text) {
+    console.error("Cloudflare Workers AI returned no text.", { model });
+    return json({ error: "Cloudflare Workers AI returned an empty response." }, 502);
+  }
   return json({ text });
 }
 
@@ -2774,7 +2758,7 @@ async function handle(request, env) {
       classroomAttachmentMatch[1]
     );
   }
-  if (request.method === "POST" && path === "/api/ai/generate") return generateGeminiResponse(request, env);
+  if (request.method === "POST" && path === "/api/ai/generate") return generateWorkersAIResponse(request, env);
   if (request.method === "GET" && path === "/api/health") return json({ status: "ok" });
   if (request.method === "POST" && path === "/api/auth/register") return handleRegister(request, env);
   if (request.method === "POST" && path === "/api/auth/login") return handleLogin(request, env);
