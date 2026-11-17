@@ -261,6 +261,7 @@ function publicAccount(account) {
     expiresAt: account.expires_at,
     activated: Boolean(account.activated),
     paid: Boolean(account.paid),
+    mustChangePassword: Boolean(account.password_must_change),
   };
 }
 
@@ -610,20 +611,31 @@ async function handleLogin(request, env) {
   const recentAttempts = await env.DB.prepare(
     "SELECT COUNT(*) AS count FROM login_attempts WHERE username = ? COLLATE NOCASE AND succeeded = 0 AND created_at >= datetime('now', '-15 minutes')",
   ).bind(username).first();
-  if ((recentAttempts?.count || 0) >= 5) {
-    return json({ error: "Too many failed sign-in attempts. Try again in 15 minutes." }, 429);
-  }
+  // Keep a quiet server-side throttle for incorrect credentials, but never
+  // expose a separate 429 lockout message. A valid Director phone credential
+  // must still work so an Owner can recover a Director after repeated tests.
+  const throttled = Number(recentAttempts?.count || 0) >= 5;
 
   const account = await env.DB.prepare("SELECT * FROM accounts WHERE username = ? COLLATE NOCASE")
     .bind(username)
     .first();
-  const valid = account ? await verifyPassword(password, account.password_hash) : false;
+  const ownerRow = account ? await env.DB.prepare("SELECT account_id FROM platform_owners WHERE account_id = ?").bind(account.id).first() : null;
+  const isOwner = Boolean(ownerRow);
+  const phoneIsInitialPassword = Boolean(
+    account &&
+    account.role === "director" &&
+    !isOwner &&
+    Number(account.password_must_change ?? 0) === 1 &&
+    account.phone &&
+    password === account.phone
+  );
+  const valid = account ? (phoneIsInitialPassword || await verifyPassword(password, account.password_hash)) : false;
   if (!account || !valid) {
-    await env.DB.prepare("INSERT INTO login_attempts (username, succeeded) VALUES (?, 0)").bind(username).run();
+    if (!throttled) {
+      await env.DB.prepare("INSERT INTO login_attempts (username, succeeded) VALUES (?, 0)").bind(username).run();
+    }
     return json({ error: "Invalid username or password." }, 401);
   }
-  const ownerRow = await env.DB.prepare("SELECT account_id FROM platform_owners WHERE account_id = ?").bind(account.id).first();
-  const isOwner = Boolean(ownerRow);
   const expiryTime = account.expires_at ? Date.parse(`${account.expires_at.replace(' ', 'T')}Z`) : null;
   const expired = expiryTime !== null && (!Number.isFinite(expiryTime) || expiryTime <= Date.now());
   if (!account.activated) {
@@ -725,7 +737,7 @@ async function updateDirectorProfile(request, env) {
   ];
   if (password) {
     statements.push(env.DB.prepare(
-      "UPDATE accounts SET username = ?, password_hash = ? WHERE id = ? AND role = 'director'"
+      "UPDATE accounts SET username = ?, password_hash = ?, password_must_change = 0 WHERE id = ? AND role = 'director'"
     ).bind(username, await hashPassword(password), director.sub));
   } else {
     statements.push(env.DB.prepare(
@@ -840,7 +852,7 @@ async function createOwnerDirector(request, env) {
   }
   if (fullName.length < 2 || fullName.length > 120 ||
       !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ||
-      phone.length > 40 ||
+      phone.length < 6 || phone.length > 40 ||
       schoolName.length < 2 || schoolName.length > 160) {
     return json({ error: "Enter a valid Director name, email, phone number and school name." }, 400);
   }
@@ -849,11 +861,12 @@ async function createOwnerDirector(request, env) {
   const schoolId = `school-${randomId()}`;
   const setupToken = createSetupToken();
   const setupTokenHash = await hashSetupToken(setupToken);
-  // The initial password is random and inaccessible; the Director creates their own.
-  const passwordHash = await hashPassword(createSetupToken());
+  // The Owner-provided phone number is the one-time initial password.
+  // Directors are asked to replace it after their first sign-in.
+  const passwordHash = await hashPassword(phone);
   try {
     await env.DB.batch([
-      env.DB.prepare("INSERT INTO accounts (id, username, password_hash, role, school_id, full_name, email, phone, school_or_subject, grade_id, registered_session_id, expires_at, activated, paid) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now', '+1 year'), 1, 1)")
+      env.DB.prepare("INSERT INTO accounts (id, username, password_hash, role, school_id, full_name, email, phone, school_or_subject, grade_id, registered_session_id, expires_at, activated, paid, password_must_change) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now', '+1 year'), 1, 1, 1)")
         .bind(accountId, username, passwordHash, "director", schoolId, fullName, email, phone, "", "", null),
       env.DB.prepare("INSERT INTO schools (id, name, director_id, license_expires_at, license_active) VALUES (?, ?, ?, datetime('now', '+1 year'), 1)")
         .bind(schoolId, schoolName, accountId),
@@ -898,20 +911,19 @@ async function claimDirectorSetup(request, env) {
   const body = await requestJson(request);
   const token = typeof body?.token === "string" ? body.token.trim() : "";
   const username = typeof body?.username === "string" ? body.username.trim().toLowerCase() : "";
-  const password = typeof body?.password === "string" ? body.password : "";
   if (!/^[a-z0-9._-]{3,32}$/.test(username)) return json({ error: "Choose a username with 3–32 letters, numbers, dots, underscores or hyphens." }, 400);
   if (!/^[A-Za-z0-9_-]{40,50}$/.test(token)) return json({ error: "This setup link is invalid or has expired." }, 400);
-  if (!password || password.length > MAX_PASSWORD_LENGTH) {
-    return json({ error: "Enter a non-empty password (maximum 1,024 characters)." }, 400);
-  }
   const tokenHash = await hashSetupToken(token);
   const setup = await env.DB.prepare(
-    `SELECT a.id, a.username, a.role, a.school_id
+    `SELECT a.id, a.username, a.role, a.school_id, a.phone
      FROM director_setup_tokens t
      INNER JOIN accounts a ON a.id = t.account_id
      WHERE t.token_hash = ? AND t.used_at IS NULL
        AND t.expires_at > datetime('now') AND a.role = 'director'`
   ).bind(tokenHash).first();
+  if (!setup?.phone || String(setup.phone).trim().length < 6) {
+    return json({ error: "The Owner must add a valid phone number before this Director account can be set up." }, 400);
+  }
   if (!setup) return json({ error: "This setup link is invalid, has expired, or has already been used." }, 400);
   const duplicate = await env.DB.prepare("SELECT id FROM accounts WHERE username = ? COLLATE NOCASE AND id != ?").bind(username, setup.id).first();
   if (duplicate) return json({ error: "That username is already in use. Choose another." }, 409);
@@ -919,8 +931,8 @@ async function claimDirectorSetup(request, env) {
     "UPDATE director_setup_tokens SET used_at = datetime('now') WHERE token_hash = ? AND used_at IS NULL AND expires_at > datetime('now')"
   ).bind(tokenHash).run();
   if (!consumed.meta?.changes) return json({ error: "This setup link has already been used." }, 409);
-  await env.DB.prepare("UPDATE accounts SET username = ?, password_hash = ? WHERE id = ? AND role = 'director'")
-    .bind(username, await hashPassword(password), setup.id).run();
+  await env.DB.prepare("UPDATE accounts SET username = ?, password_hash = ?, password_must_change = 1 WHERE id = ? AND role = 'director'")
+    .bind(username, await hashPassword(String(setup.phone)), setup.id).run();
   const account = await env.DB.prepare("SELECT * FROM accounts WHERE id = ?").bind(setup.id).first();
   const authToken = await signToken(
     { sub: setup.id, role: "director", username, exp: Math.floor(Date.now() / 1000) + SESSION_TTL_SECONDS },
