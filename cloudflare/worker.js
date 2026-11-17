@@ -1001,7 +1001,8 @@ async function resetOwnerDirectorPhonePassword(request, env, directorId) {
   const owner = await requireOwner(request, env);
   if (!owner) return json({ error: "Owner access required." }, 401);
   const director = await env.DB.prepare(
-    `SELECT a.id, a.phone
+    `SELECT a.id, a.phone, a.username, a.activated, a.paid, a.expires_at,
+            s.license_active, s.license_expires_at
      FROM accounts a
      INNER JOIN schools s ON s.director_id = a.id AND s.id = a.school_id
      WHERE a.id = ? AND a.role = 'director'
@@ -1032,7 +1033,12 @@ async function resetOwnerDirectorPhonePassword(request, env, directorId) {
     phoneDigits: normalizePhoneCredential(saved.phone).length,
     phoneLastTwo: normalizePhoneCredential(saved.phone).slice(-2),
     activated: Boolean(saved.activated), paid: Boolean(saved.paid),
-    message: "Verified: the initial password is now the phone number saved on this Director account. The Director must change it after signing in.",
+    licenceActive: Boolean(director.license_active),
+    accessReady: Boolean(saved.activated) && Number(saved.paid) === 1 &&
+      Number(director.license_active ?? 1) === 1 &&
+      (!director.expires_at || Date.parse(String(director.expires_at).replace(' ', 'T') + 'Z') > Date.now()) &&
+      (!director.license_expires_at || Date.parse(String(director.license_expires_at).replace(' ', 'T') + 'Z') > Date.now()),
+    message: "The phone password hash has been reset and verified against the Owner-saved phone number.",
   });
 }
 
@@ -1088,26 +1094,41 @@ async function saveOwnerDirectorStatuses(request, env) {
   const ids = updates.map((item) => item.id);
   const placeholders = ids.map(() => "?").join(", ");
   const found = await env.DB.prepare(
-    `SELECT a.id
+    `SELECT a.id, a.phone, a.phone_password_disabled_at
      FROM accounts a
      INNER JOIN schools s ON s.director_id = a.id AND s.id = a.school_id
      WHERE a.role = 'director'
        AND NOT EXISTS (SELECT 1 FROM platform_owners p WHERE p.account_id = a.id)
        AND a.id IN (${placeholders})`
   ).bind(...ids).all();
-  const foundIds = new Set((found.results || []).map((row) => row.id));
-  if (ids.some((id) => !foundIds.has(id))) {
+  const foundRows = new Map((found.results || []).map((row) => [row.id, row]));
+  if (ids.some((id) => !foundRows.has(id))) {
     return json({ error: "One or more Directors could not be found. No status changes were saved." }, 404);
   }
-  const statements = updates.flatMap((item) => [
-    env.DB.prepare("UPDATE accounts SET activated = ?, paid = ? WHERE id = ? AND role = 'director'")
-      .bind(item.activated ? 1 : 0, item.paid ? 1 : 0, item.id),
-    env.DB.prepare("DELETE FROM login_attempts WHERE username = (SELECT username FROM accounts WHERE id = ?)")
-      .bind(item.id),
-  ]);
+  const statements = updates.flatMap((item) => {
+    const savedAccount = foundRows.get(item.id);
+    const phone = typeof savedAccount.phone === "string" ? savedAccount.phone.trim() : "";
+    const keepPhoneAsInitialPassword = savedAccount.phone_password_disabled_at == null &&
+      normalizePhoneCredential(phone).length >= 6;
+    const updateAccount = keepPhoneAsInitialPassword
+      ? env.DB.prepare("UPDATE accounts SET activated = ?, paid = ? WHERE id = ? AND role = 'director'")
+          .bind(item.activated ? 1 : 0, item.paid ? 1 : 0, item.id)
+      : env.DB.prepare("UPDATE accounts SET activated = ?, paid = ? WHERE id = ? AND role = 'director'")
+          .bind(item.activated ? 1 : 0, item.paid ? 1 : 0, item.id);
+    return [
+      updateAccount,
+      // Keep the actual hash synchronized with the Owner-entered phone while
+      // phone-login remains enabled. A stale hash must not leave first login broken.
+      ...(keepPhoneAsInitialPassword ? [env.DB.prepare(
+        "UPDATE accounts SET password_hash = ?, password_must_change = 1, phone_password_disabled_at = NULL WHERE id = ? AND role = 'director'"
+      ).bind(await hashPassword(phone), item.id)] : []),
+      env.DB.prepare("DELETE FROM login_attempts WHERE username = (SELECT username FROM accounts WHERE id = ?)")
+        .bind(item.id),
+    ];
+  });
   await env.DB.batch(statements);
   const savedRows = await env.DB.prepare(
-    `SELECT a.id, a.activated, a.paid
+    `SELECT a.id, a.activated, a.paid, a.phone, a.password_hash, a.phone_password_disabled_at
      FROM accounts a
      INNER JOIN schools s ON s.director_id = a.id AND s.id = a.school_id
      WHERE a.role = 'director' AND a.id IN (${placeholders})`
@@ -1116,6 +1137,8 @@ async function saveOwnerDirectorStatuses(request, env) {
     id: row.id,
     activated: Boolean(row.activated),
     paid: Boolean(row.paid),
+    phonePasswordReady: Boolean(row.phone) && row.phone_password_disabled_at == null &&
+      await verifyPassword(String(row.phone).trim(), row.password_hash),
   }));
   if (statuses.length !== updates.length || updates.some((item) => {
     const saved = statuses.find((row) => row.id === item.id);
