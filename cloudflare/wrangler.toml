@@ -6,6 +6,9 @@ account_id = "15cd99734560c6868dd06d79236a0334"
 [vars]
 ALLOWED_ORIGINS = "https://malazhub.github.io,http://localhost:3000"
 
+[ai]
+binding = "AI"
+
 [[d1_databases]]
 binding = "DB"
 database_name = "agenda-db"
