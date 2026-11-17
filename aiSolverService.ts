@@ -1,4 +1,4 @@
-import { generateGeminiContent } from './cloudflareApi';
+import { generateAIContent } from './cloudflareApi';
 
 export interface AISolutionResult {
   transcription: string;
@@ -46,7 +46,7 @@ Return your response in clean JSON matching this format:
       }
       contents.push(prompt);
 
-      const response = await generateGeminiContent(contents, { model: 'gemini-3.8-flash', thinkingLevel: 'low', maxOutputTokens: 2048 });
+      const response = await generateAIContent(contents, { maxOutputTokens: 2048 });
 
       const text = response.text || '';
       const jsonMatch = text.match(/\{[\s\S]*\}/);
@@ -62,7 +62,7 @@ Return your response in clean JSON matching this format:
         }
       }
     } catch (err) {
-      console.warn('Gemini live solve failed or key unavailable, using verified Lebanese curriculum heuristics:', err);
+      console.warn('Workers AI exercise solve failed, using verified Lebanese curriculum heuristics:', err);
   }
 
   // High-fidelity fallback compliant with official Lebanese MEHE / CRDP standards
