@@ -35,6 +35,33 @@ jobs:
           accountId: 15cd99734560c6868dd06d79236a0334
           command: deploy --config cloudflare/wrangler.toml
 
+      - name: Verify live Gemini response
+        shell: bash
+        run: |
+          node --input-type=module <<'NODE'
+          const endpoint = "https://agenda-api.malazhub-agenda.workers.dev/api/ai/generate";
+          const response = await fetch(endpoint, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              model: "gemini-3.6-flash",
+              contents: [{ text: "Reply with exactly: AGENDA_AI_OK" }],
+              generationConfig: { maxOutputTokens: 64 }
+            }),
+            signal: AbortSignal.timeout(55000)
+          });
+          const body = await response.json().catch(() => ({}));
+          if (!response.ok) {
+            console.error(`Gemini smoke test failed: HTTP ${response.status} — ${body.error || "No error details returned"}`);
+            process.exit(1);
+          }
+          if (typeof body.text !== "string" || !body.text.trim()) {
+            console.error("Gemini smoke test failed: the Worker returned no answer text.");
+            process.exit(1);
+          }
+          console.log("Gemini live-response test passed:", body.text.trim().slice(0, 160));
+          NODE
+
   build:
     runs-on: ubuntu-latest
     steps:
