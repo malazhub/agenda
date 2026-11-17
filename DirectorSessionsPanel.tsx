@@ -34,12 +34,12 @@ export const DirectorSessionsPanel: React.FC<DirectorSessionsPanelProps> = ({
     sessionSaved: currentLang === 'ar' ? 'تم حفظ وتعيين الحصة بنجاح.' : currentLang === 'fr' ? 'Cours enregistré avec succès.' : currentLang === 'es' ? 'Sesión guardada correctamente.' : currentLang === 'it' ? 'Lezione salvata correttamente.' : 'Session saved successfully.',
     sessionDeleted: currentLang === 'ar' ? 'تم حذف الحصة نهائياً.' : currentLang === 'fr' ? 'Cours supprimé définitivement.' : currentLang === 'es' ? 'Sesión eliminada definitivamente.' : currentLang === 'it' ? 'Lezione eliminata definitivamente.' : 'Session permanently deleted.',
     refresh: currentLang === 'ar' ? 'تحديث الحصص' : currentLang === 'fr' ? 'Actualiser les cours' : currentLang === 'es' ? 'Actualizar sesiones' : currentLang === 'it' ? 'Aggiorna lezioni' : 'Refresh sessions',
-    monthlyRate: currentLang === 'ar' ? 'السعر الشهري (USD)' : currentLang === 'fr' ? 'Tarif mensuel (USD)' : currentLang === 'es' ? 'Tarifa mensual (USD)' : currentLang === 'it' ? 'Tariffa mensile (USD)' : 'Monthly rate (USD)',
+    monthlyRate: currentLang === 'ar' ? 'سعر الطالب لكل حصة (USD)' : currentLang === 'fr' ? 'Tarif étudiant par séance (USD)' : currentLang === 'es' ? 'Tarifa del estudiante por sesión (USD)' : currentLang === 'it' ? 'Tariffa studente per lezione (USD)' : 'Student rate per session (USD)',
     title: currentLang === 'ar' ? 'تعيين وإضافة حصة للأستاذ' : currentLang === 'fr' ? 'Attribuer et ajouter un cours à un éducateur' : currentLang === 'es' ? 'Asignar y añadir una sesión al educador' : currentLang === 'it' ? 'Assegna e aggiungi una lezione all’educatore' : 'Assign & add educator session',
-    subtitle: currentLang === 'ar' ? 'حدد الصف واسم الأستاذ والمادة والحد الأقصى للطلاب والسعر الشهري.' : currentLang === 'fr' ? 'Définissez la classe, l’éducateur, la matière, le nombre maximum d’élèves et le tarif mensuel.' : currentLang === 'es' ? 'Define el curso, el educador, la materia, el máximo de estudiantes y la tarifa mensual.' : currentLang === 'it' ? 'Imposta la classe, l’educatore, la materia, il numero massimo di studenti e la tariffa mensile.' : 'Set the grade, educator, subject, maximum students, and monthly rate.',
+    subtitle: currentLang === 'ar' ? 'حدد الصف واسم الأستاذ والمادة والحد الأقصى للطلاب وسعر الطالب لكل حصة.' : currentLang === 'fr' ? 'Définissez la classe, l’éducateur, la matière, le nombre maximum d’élèves et le tarif étudiant par séance.' : currentLang === 'es' ? 'Define el curso, el educador, la materia, el máximo de estudiantes y la tarifa del estudiante por sesión.' : currentLang === 'it' ? 'Imposta la classe, l’educatore, la materia, il numero massimo di studenti e la tariffa studente per lezione.' : 'Set the grade, educator, subject, maximum students, and student rate per session.',
     educatorPrefix: currentLang === 'ar' ? 'الأستاذ: ' : currentLang === 'fr' ? 'Éducateur : ' : currentLang === 'es' ? 'Educador: ' : currentLang === 'it' ? 'Educatore: ' : 'Educator: ',
-    month: currentLang === 'ar' ? 'شهرياً' : currentLang === 'fr' ? 'par mois' : currentLang === 'es' ? 'al mes' : currentLang === 'it' ? 'al mese' : 'per month',
-    saveError: currentLang === 'ar' ? 'تعذر حفظ الحصة والسعر الشهري.' : currentLang === 'fr' ? 'Impossible d’enregistrer le cours et le tarif mensuel.' : currentLang === 'es' ? 'No se pudieron guardar la sesión y la tarifa mensual.' : currentLang === 'it' ? 'Impossibile salvare la lezione e la tariffa mensile.' : 'Unable to save session and monthly rate.',
+    month: currentLang === 'ar' ? 'لكل حصة' : currentLang === 'fr' ? 'par séance' : currentLang === 'es' ? 'por sesión' : currentLang === 'it' ? 'por sesióne' : 'per session',
+    saveError: currentLang === 'ar' ? 'تعذر حفظ الحصة وسعر الطالب لكل حصة.' : currentLang === 'fr' ? 'Impossible d’enregistrer le cours et le tarif étudiant par séance.' : currentLang === 'es' ? 'No se pudieron guardar la sesión y la tarifa del estudiante por sesión.' : currentLang === 'it' ? 'Impossibile salvare la lezione e la tariffa studente per lezione.' : 'Unable to save session and student rate per session.',
     deleteError: currentLang === 'ar' ? 'تعذر حذف الحصة.' : currentLang === 'fr' ? 'Impossible de supprimer le cours.' : currentLang === 'es' ? 'No se pudo eliminar la sesión.' : currentLang === 'it' ? 'Impossibile eliminare la lezione.' : 'Unable to delete session.',
     statusError: currentLang === 'ar' ? 'تعذر تحديث حالة البث.' : currentLang === 'fr' ? 'Impossible de mettre à jour l’état du direct.' : currentLang === 'es' ? 'No se pudo actualizar el estado de la emisión.' : currentLang === 'it' ? 'Impossibile aggiornare lo stato della diretta.' : 'Unable to update live status.',
     educatorPlaceholder: currentLang === 'ar' ? 'مثال: الأستاذ مالاز' : currentLang === 'fr' ? 'Ex. : Prof. Malaz' : currentLang === 'es' ? 'P. ej.: Prof. Malaz' : currentLang === 'it' ? 'Es.: Prof. Malaz' : 'e.g. Prof. Malaz',
@@ -61,7 +61,7 @@ export const DirectorSessionsPanel: React.FC<DirectorSessionsPanelProps> = ({
   const [form, setForm] = useState({
     educatorName: '',
     subject: '',
-    maxStudents: 25,
+    maxStudents: 5,
   });
 
   const loadSessions = async () => {
@@ -117,7 +117,7 @@ export const DirectorSessionsPanel: React.FC<DirectorSessionsPanelProps> = ({
     } catch (saveError) {
       setError(currentLang === 'en' && saveError instanceof Error ? saveError.message : t.saveError);
     } finally {
-      setForm({ educatorName: '', subject: '', maxStudents: 25 });
+      setForm({ educatorName: '', subject: '', maxStudents: 5 });
       setSaving(false);
     }
   };
