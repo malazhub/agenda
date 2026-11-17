@@ -19,6 +19,7 @@ function hashPassword(password) {
 function fakeEnvironment() {
   const accounts = new Map();
   const platformOwners = new Set();
+  const setupTokens = new Map();
   const schools = new Map([['default-agenda-school', { id: 'default-agenda-school', name: 'Agenda', director_id: 'director-account-0000000000000000' }]]);
   const pricing = new Map();
   const attempts = [];
@@ -50,6 +51,12 @@ function fakeEnvironment() {
     }
 
     async first() {
+      if (this.sql.includes('FROM director_setup_tokens')) {
+        const record = setupTokens.get(this.values[0]);
+        if (!record || record.used_at) return null;
+        const account = accounts.get(record.account_id);
+        return account ? { id: account.id, username: account.username, role: account.role, school_id: account.school_id } : null;
+      }
       if (this.sql.includes('FROM platform_owners')) {
         const accountId = this.values[0];
         const account = accounts.get(accountId);
@@ -161,6 +168,17 @@ function fakeEnvironment() {
     }
 
     async run() {
+      if (this.sql.startsWith('INSERT INTO director_setup_tokens')) {
+        const [token_hash, account_id] = this.values;
+        setupTokens.set(token_hash, { token_hash, account_id, used_at: null });
+        return { meta: { changes: 1 } };
+      }
+      if (this.sql.startsWith("UPDATE director_setup_tokens SET used_at")) {
+        const record = setupTokens.get(this.values[0]);
+        if (!record || record.used_at) return { meta: { changes: 0 } };
+        record.used_at = '2026-11-17 10:00:00';
+        return { meta: { changes: 1 } };
+      }
       if (this.sql.startsWith('INSERT INTO accounts')) {
         const [id, username, password_hash, role, school_id, full_name, email, phone, school_or_subject, grade_id, registered_session_id] = this.values;
         if ([...accounts.values()].some((item) => item.username.toLowerCase() === username.toLowerCase())) {
@@ -202,6 +220,14 @@ function fakeEnvironment() {
         const school = schools.get(this.values[1]);
         if (school && (!this.values[2] || school.director_id === this.values[2])) school.name = this.values[0];
         return { meta: { changes: school ? 1 : 0 } };
+      }
+      if (this.sql.startsWith('UPDATE accounts SET username = ?, password_hash = ?')) {
+        const [username, password_hash, id] = this.values;
+        const account = accounts.get(id);
+        if (!account || account.role !== 'director') return { meta: { changes: 0 } };
+        account.username = username;
+        account.password_hash = password_hash;
+        return { meta: { changes: 1 } };
       }
       if (this.sql.startsWith('UPDATE accounts') && this.sql.includes(' SET ')) {
         const id = this.values[this.sql.includes('AND school_id = ?') ? this.values.length - 2 : this.values.length - 1];
@@ -294,6 +320,7 @@ function fakeEnvironment() {
     },
     accounts,
     platformOwners,
+    setupTokens,
     schools,
     sessions,
     pricing,
@@ -511,8 +538,8 @@ test('grade registration loads available grades and grants grade-scoped live acc
   assert.equal(wrongGrade.status, 403);
 });
 
-test('Owner creates a paid one-year Director school and receives its login link', async () => {
-  const { env, platformOwners } = fakeEnvironment();
+test('Owner creates a one-year Director school and Director sets their own username and password', async () => {
+  const { env, platformOwners, setupTokens } = fakeEnvironment();
   platformOwners.add('director-account-0000000000000000');
 
   const ownerLogin = await send(env, '/api/auth/login', {
@@ -526,47 +553,43 @@ test('Owner creates a paid one-year Director school and receives its login link'
   const missingPaymentConfirmation = await send(env, '/api/owner/directors', {
     method: 'POST',
     token: ownerToken,
-    body: {
-      username: 'new.director',
-      password: 'TemporaryDirectorPassword#2026',
-      fullName: 'New Director',
-      email: 'new.director@example.com',
-      schoolName: 'New Learning School',
-      paymentReceived: false,
-    },
+    body: { fullName: 'New Director', email: 'new.director@example.com', phone: '+961 70 123 456', schoolName: 'New Learning School', paymentReceived: false },
   });
   assert.equal(missingPaymentConfirmation.status, 400);
 
   const created = await send(env, '/api/owner/directors', {
     method: 'POST',
     token: ownerToken,
-    body: {
-      username: 'new.director',
-      password: 'TemporaryDirectorPassword#2026',
-      fullName: 'New Director',
-      email: 'new.director@example.com',
-      phone: '+961 70 123 456',
-      schoolName: 'New Learning School',
-      paymentReceived: true,
-    },
+    body: { fullName: 'New Director', email: 'new.director@example.com', phone: '+961 70 123 456', schoolName: 'New Learning School', paymentReceived: true },
   });
   assert.equal(created.status, 201);
-  const { director } = await created.json();
-  assert.equal(director.username, 'new.director');
+  const { director, setupLink } = await created.json();
   assert.equal(director.schoolName, 'New Learning School');
   assert.equal(director.licenseActive, true);
   assert.equal(director.paid, true);
-  assert.match(director.directorLink, /agenda\.malazhub-agenda\.workers\.dev/);
-  assert.equal(env.DB ? true : false, true);
+  assert.equal(director.setupPending, true);
+  assert.match(setupLink, /directorSetup=/);
+  assert.equal(director.username.startsWith('pending-'), true);
 
-  const newLogin = await send(env, '/api/auth/login', {
+  const setupToken = new URL(setupLink).searchParams.get('directorSetup');
+  const setupRecord = [...setupTokens.values()].find((row) => row.account_id === director.id);
+  assert.ok(setupRecord);
+
+  const claimed = await send(env, '/api/director/claim', {
     method: 'POST',
-    body: { username: 'new.director', password: 'TemporaryDirectorPassword#2026' },
+    body: { token: setupToken, username: 'new.director', password: 'ChosenByDirectorPassword#2026' },
   });
-  assert.equal(newLogin.status, 200);
-  const { token: directorToken, account } = await newLogin.json();
+  assert.equal(claimed.status, 200);
+  const { token: directorToken, account } = await claimed.json();
   assert.equal(account.role, 'director');
+  assert.equal(account.username, 'new.director');
   assert.equal(account.schoolId, director.schoolId);
+
+  const replay = await send(env, '/api/director/claim', {
+    method: 'POST',
+    body: { token: setupToken, username: 'new.director', password: 'AnotherPassword#2026' },
+  });
+  assert.equal(replay.status, 400);
 
   const profile = await send(env, '/api/director/profile', { token: directorToken });
   assert.equal(profile.status, 200);
