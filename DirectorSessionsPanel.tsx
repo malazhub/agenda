@@ -212,7 +212,7 @@ export const DirectorSessionsPanel: React.FC<DirectorSessionsPanelProps> = ({
               max={200}
               required
               value={form.maxStudents}
-              onChange={(e) => setForm({ ...form, maxStudents: parseInt(e.target.value) || 25 })}
+              onChange={(e) => setForm({ ...form, maxStudents: parseInt(e.target.value) || 5 })}
             />
           </label>
         </div>
@@ -272,7 +272,7 @@ export const DirectorSessionsPanel: React.FC<DirectorSessionsPanelProps> = ({
         <div className="space-y-3">
           {gradeSessions.map((session) => {
             const currentGradeName = grades.find((g) => g.id === session.gradeId)?.name[currentLang] || session.gradeId.toUpperCase();
-            const maxStudents = localStorage.getItem(`max_students_${session.id}`) || '25';
+            const maxStudents = localStorage.getItem(`max_students_${session.id}`) || '5';
 
             return (
               <article
