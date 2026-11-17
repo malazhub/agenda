@@ -165,7 +165,10 @@ export interface SchoolPublicContext {
     lessons: string;
   };
 }
-const API_BASE_URL = (import.meta.env.VITE_CLOUDFLARE_API_URL || '').replace(/\/+$/, '');
+const API_BASE_URL = (
+  import.meta.env.VITE_CLOUDFLARE_API_URL ||
+  'https://agenda-api.malazhub-agenda.workers.dev'
+).replace(/\/+$/, '');
 function withAbsoluteLessonMedia(
   lesson: EducatorLesson
 ): EducatorLesson {
