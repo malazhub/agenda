@@ -557,27 +557,42 @@ async function handleLogin(request, env) {
     .bind(username)
     .first();
   const valid = account ? await verifyPassword(password, account.password_hash) : false;
+  const ownerRow = account ? await env.DB.prepare("SELECT account_id FROM platform_owners WHERE account_id = ?").bind(account.id).first() : null;
+  const isOwner = Boolean(ownerRow);
   const expiryTime = account?.expires_at ? Date.parse(`${account.expires_at.replace(' ', 'T')}Z`) : null;
   const expired = expiryTime !== null && (!Number.isFinite(expiryTime) || expiryTime <= Date.now());
-  if (!account || !valid || !account.activated || expired) {
+  if (!account || !valid || !account.activated || (!isOwner && expired)) {
     await env.DB.prepare("INSERT INTO login_attempts (username, succeeded) VALUES (?, 0)").bind(username).run();
     return json({ error: "Invalid username or password, or account is not activated or has expired." }, 401);
   }
+  if (account.role === "director" && !isOwner) {
+    const school = await env.DB.prepare("SELECT license_active, license_expires_at FROM schools WHERE id = ? AND director_id = ?").bind(account.school_id, account.id).first();
+    const licenseExpiry = school?.license_expires_at ? Date.parse(`${String(school.license_expires_at).replace(' ', 'T')}Z`) : null;
+    if (!school || !Number(school.license_active) || (licenseExpiry !== null && (!Number.isFinite(licenseExpiry) || licenseExpiry <= Date.now()))) {
+      return json({ error: "This school's one-year licence has expired or is suspended. Contact the platform Owner." }, 403);
+    }
+  }
 
   await env.DB.prepare("DELETE FROM login_attempts WHERE username = ? COLLATE NOCASE AND succeeded = 0").bind(username).run();
+  const effectiveAccount = isOwner ? { ...account, role: "owner" } : account;
   const token = await signToken(
-    { sub: account.id, role: account.role, username: account.username, exp: Math.floor(Date.now() / 1000) + SESSION_TTL_SECONDS },
+    { sub: account.id, role: effectiveAccount.role, username: account.username, exp: Math.floor(Date.now() / 1000) + SESSION_TTL_SECONDS },
     env.SESSION_SIGNING_KEY,
   );
-  return json({ account: publicAccount(account), token });
+  return json({ account: publicAccount(effectiveAccount), token });
 }
 
 async function getCurrentAccount(request, env) {
   const claims = await authenticate(request, env, null);
-  if (!claims || !["student", "educator"].includes(claims.role)) {
-    return json({ error: "Student or educator authentication required." }, 401);
+  if (!claims || !["student", "educator", "owner"].includes(claims.role)) {
+    return json({ error: "Account authentication required." }, 401);
   }
   const account = await env.DB.prepare("SELECT * FROM accounts WHERE id = ?").bind(claims.sub).first();
+  if (claims.role === "owner") {
+    const owner = await env.DB.prepare("SELECT account_id FROM platform_owners WHERE account_id = ?").bind(claims.sub).first();
+    if (!account || !owner) return json({ error: "Owner account not found." }, 404);
+    return json({ account: publicAccount({ ...account, role: "owner" }) });
+  }
   if (!account || account.role !== claims.role) return json({ error: "Account not found." }, 404);
   return json({ account: publicAccount(account) });
 }
@@ -691,6 +706,98 @@ async function updateDirectorGradePricing(request, env) {
        updated_at = datetime('now')`
   ).bind(schoolId, gradeId, monthlyRateUsd).run();
   return json({ price: { gradeId, monthlyRateUsd } });
+}
+
+
+async function requireOwner(request, env) {
+  const claims = await authenticate(request, env, "owner");
+  if (!claims) return null;
+  const owner = await env.DB.prepare("SELECT account_id FROM platform_owners WHERE account_id = ?").bind(claims.sub).first();
+  return owner ? claims : null;
+}
+
+async function ownerDirectors(request, env) {
+  const owner = await requireOwner(request, env);
+  if (!owner) return json({ error: "Owner access required." }, 401);
+  const result = await env.DB.prepare(`
+    SELECT a.id, a.username, a.full_name, a.email, a.phone, a.created_at,
+           a.activated, a.paid, a.expires_at,
+           s.id AS school_id, s.name AS school_name, s.license_expires_at,
+           s.license_active, s.payment_method, s.payment_value,
+           (SELECT COUNT(*) FROM accounts students
+             WHERE students.school_id = s.id AND students.role = 'student') AS student_count,
+           (SELECT COUNT(*) FROM accounts educators
+             WHERE educators.school_id = s.id AND educators.role = 'educator') AS educator_count
+    FROM accounts a
+    INNER JOIN schools s ON s.director_id = a.id AND s.id = a.school_id
+    WHERE a.role = 'director'
+    ORDER BY a.created_at DESC
+  `).all();
+  return json({ directors: (result.results || []).map((row) => ({
+    id: row.id, username: row.username, fullName: row.full_name,
+    email: row.email, phone: row.phone, createdAt: row.created_at,
+    activated: Boolean(row.activated), paid: Boolean(row.paid),
+    expiresAt: row.license_expires_at || row.expires_at,
+    schoolId: row.school_id, schoolName: row.school_name,
+    licenseActive: Boolean(row.license_active),
+    paymentMethod: row.payment_method || "suyool",
+    paymentValue: row.payment_value || "https://payments.suyool.com/qr/p585_malazjanbeih",
+    studentCount: Number(row.student_count || 0),
+    educatorCount: Number(row.educator_count || 0),
+    directorLink: `https://malazhub.github.io/agenda/?schoolId=${encodeURIComponent(row.school_id)}`,
+  })) });
+}
+
+async function updateOwnerDirector(request, env, directorId) {
+  const owner = await requireOwner(request, env);
+  if (!owner) return json({ error: "Owner access required." }, 401);
+  const body = await requestJson(request);
+  const director = await env.DB.prepare(
+    "SELECT a.id, a.school_id FROM accounts a INNER JOIN schools s ON s.director_id = a.id AND s.id = a.school_id WHERE a.id = ? AND a.role = 'director'"
+  ).bind(directorId).first();
+  if (!director) return json({ error: "Director not found." }, 404);
+  const updates = [];
+  const values = [];
+  if (body?.paymentMethod !== undefined || body?.paymentValue !== undefined) {
+    const method = String(body.paymentMethod || "").toLowerCase();
+    const value = typeof body.paymentValue === "string" ? body.paymentValue.trim() : "";
+    const methods = ["suyool", "whatsapp", "phone", "email", "bank"];
+    if (!methods.includes(method) || !value || value.length > 500) {
+      return json({ error: "Choose a supported payment method and provide its destination." }, 400);
+    }
+    if (["suyool", "bank"].includes(method) && !/^https:\/\//i.test(value)) return json({ error: "Payment links must use HTTPS." }, 400);
+    if (method === "email" && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) return json({ error: "Enter a valid email address." }, 400);
+    if (["phone", "whatsapp"].includes(method) && !/^\+?[0-9\s().-]{6,25}$/.test(value)) return json({ error: "Enter a valid phone number with country code." }, 400);
+    updates.push("payment_method = ?", "payment_value = ?");
+    values.push(method, value);
+  }
+  if (body?.renewLicense === true) {
+    updates.push("license_expires_at = datetime('now', '+1 year')", "license_active = 1");
+    await env.DB.prepare("UPDATE accounts SET expires_at = datetime('now', '+1 year'), activated = 1, paid = 1 WHERE id = ?").bind(directorId).run();
+  }
+  if (typeof body?.licenseActive === "boolean") {
+    updates.push("license_active = ?");
+    values.push(body.licenseActive ? 1 : 0);
+  }
+  if (!updates.length) return json({ error: "No supported Director changes were provided." }, 400);
+  values.push(director.school_id);
+  await env.DB.prepare(`UPDATE schools SET ${updates.join(", ")}, updated_at = datetime('now') WHERE id = ?`).bind(...values).run().catch(async () => {
+    // Older D1 schemas may not have updated_at on schools.
+    const safeUpdates = updates.filter((item) => item !== "updated_at = datetime('now')");
+    await env.DB.prepare(`UPDATE schools SET ${safeUpdates.join(", ")} WHERE id = ?`).bind(...values).run();
+  });
+  return json({ updated: true });
+}
+
+async function publicSchoolPayment(url, env) {
+  const schoolId = url.searchParams.get("schoolId") || "";
+  if (!schoolId || schoolId.length > 100) return json({ error: "A valid schoolId is required." }, 400);
+  const school = await env.DB.prepare("SELECT payment_method, payment_value FROM schools WHERE id = ?").bind(schoolId).first();
+  if (!school) return json({ error: "School not found." }, 404);
+  return json({
+    paymentMethod: school.payment_method || "suyool",
+    paymentValue: school.payment_value || "https://payments.suyool.com/qr/p585_malazjanbeih",
+  });
 }
 
 async function schoolPublicContext(env, schoolId) {
@@ -2763,6 +2870,10 @@ async function handle(request, env) {
   if (request.method === "POST" && path === "/api/auth/register") return handleRegister(request, env);
   if (request.method === "POST" && path === "/api/auth/login") return handleLogin(request, env);
   if (request.method === "GET" && path === "/api/auth/me") return getCurrentAccount(request, env);
+  if (request.method === "GET" && path === "/api/owner/directors") return ownerDirectors(request, env);
+  if (request.method === "GET" && path === "/api/school-payment") return publicSchoolPayment(url, env);
+  const ownerDirectorMatch = path.match(/^\\/api\\/owner\\/directors\\/([0-9a-f-]{36})$/i);
+  if (request.method === "PATCH" && ownerDirectorMatch) return updateOwnerDirector(request, env, ownerDirectorMatch[1]);
     const schoolEducatorsMatch = path.match(/^\/api\/schools\/([^/]+)\/educators$/);
   if (request.method === "GET" && schoolEducatorsMatch) {
     return schoolEducators(env, decodeURIComponent(schoolEducatorsMatch[1]));
