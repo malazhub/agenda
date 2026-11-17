@@ -229,7 +229,9 @@ export function getSchools(schoolId = 'default-agenda-school'): Promise<{ school
 
 export function getSchoolPublicContext(schoolId: string): Promise<SchoolPublicContext> {
   const query = new URLSearchParams({ schoolId });
-  return request(`/api/school-context?${query.toString()}`);
+  return request(`/api/school-context?${query.toString()}`, {
+    signal: AbortSignal.timeout(5_000),
+  });
 }
 
 export function getRegistrationSessions(
@@ -623,7 +625,7 @@ export async function generateGeminiContent(
 ): Promise<{ text: string }> {
   return request<{ text: string }>('/api/ai/generate', {
     method: 'POST',
-    signal: AbortSignal.timeout(30_000),
+    signal: AbortSignal.timeout(18_000),
     body: JSON.stringify({
       model: 'gemini-3.8-flash',
       contents,
