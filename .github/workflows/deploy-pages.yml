@@ -28,6 +28,13 @@ jobs:
           accountId: 15cd99734560c6868dd06d79236a0334
           command: d1 migrations apply agenda-db --remote --config cloudflare/wrangler.toml
 
+      - name: Verify Director phone-password database schema
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: 15cd99734560c6868dd06d79236a0334
+          command: d1 execute agenda-db --remote --command "SELECT password_must_change FROM accounts LIMIT 0" --config cloudflare/wrangler.toml
+
       - name: Deploy Cloudflare Worker
         uses: cloudflare/wrangler-action@v3
         with:
