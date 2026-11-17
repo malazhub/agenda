@@ -59,7 +59,7 @@ function fakeEnvironment() {
         if (!account || account.role !== 'director' ||
             !school || school.director_id !== account.id ||
             platformOwners.has(account.id)) return null;
-        return { id: account.id, school_id: account.school_id };
+        return { id: account.id, school_id: account.school_id, phone: account.phone };
       }
       if (this.sql.includes('FROM director_setup_tokens')) {
         const record = setupTokens.get(this.values[0]);
@@ -284,6 +284,14 @@ function fakeEnvironment() {
         const school = schools.get(this.values[1]);
         if (school && (!this.values[2] || school.director_id === this.values[2])) school.name = this.values[0];
         return { meta: { changes: school ? 1 : 0 } };
+      }
+      if (this.sql.startsWith('UPDATE accounts SET password_hash = ?, password_must_change = 1')) {
+        const [password_hash, id] = this.values;
+        const account = accounts.get(id);
+        if (!account || account.role !== 'director') return { meta: { changes: 0 } };
+        account.password_hash = password_hash;
+        account.password_must_change = 1;
+        return { meta: { changes: 1 } };
       }
       if (this.sql.startsWith('UPDATE accounts SET username = ?, password_hash = ?')) {
         const [username, password_hash, id] = this.values;
@@ -703,6 +711,11 @@ test('Owner creates a one-year Director school with phone initial password; Dire
   const directorLoginResult = await directorLogin.json();
   assert.equal(directorLoginResult.account.role, 'director');
   assert.equal(directorLoginResult.account.mustChangePassword, true);
+  const phoneReset = await send(env, `/api/owner/directors/${director.id}/reset-phone-password`, {
+    method: 'POST', token: ownerToken,
+  });
+  assert.equal(phoneReset.status, 200);
+  assert.equal(accounts.get(director.id).password_must_change, 1);
   for (let attempt = 0; attempt < 6; attempt += 1) {
     const wrongPassword = await send(env, '/api/auth/login', {
       method: 'POST', body: { username: 'new.director', password: 'incorrect' },
@@ -714,6 +727,10 @@ test('Owner creates a one-year Director school with phone initial password; Dire
     method: 'POST', body: { username: 'new.director', password: '+961 70 123 456' },
   });
   assert.equal(phoneLoginAfterFailedAttempts.status, 200);
+  const normalizedPhoneLogin = await send(env, '/api/auth/login', {
+    method: 'POST', body: { username: 'new.director', password: '+96170123456' },
+  });
+  assert.equal(normalizedPhoneLogin.status, 200);
   const currentDirector = await send(env, '/api/auth/me', { token: directorToken });
   assert.equal(currentDirector.status, 200);
   assert.equal((await currentDirector.json()).account.role, 'director');
