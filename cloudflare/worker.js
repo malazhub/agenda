@@ -1129,13 +1129,13 @@ async function saveOwnerDirectorStatuses(request, env) {
      INNER JOIN schools s ON s.director_id = a.id AND s.id = a.school_id
      WHERE a.role = 'director' AND a.id IN (${placeholders})`
   ).bind(...ids).all();
-  const statuses = (savedRows.results || []).map((row) => ({
+  const statuses = await Promise.all((savedRows.results || []).map(async (row) => ({
     id: row.id,
     activated: Boolean(row.activated),
     paid: Boolean(row.paid),
     phonePasswordReady: Boolean(row.phone) && row.phone_password_disabled_at == null &&
       await verifyPassword(String(row.phone).trim(), row.password_hash),
-  }));
+  })));
   if (statuses.length !== updates.length || updates.some((item) => {
     const saved = statuses.find((row) => row.id === item.id);
     return !saved || saved.activated !== item.activated || saved.paid !== item.paid;
