@@ -46,7 +46,6 @@ export const Header: React.FC<HeaderProps> = ({
                 <span className="max-w-40 truncate text-xs font-bold text-slate-800" title={signedInName}>
                   {signedInName}
                 </span>
-                {isOwner && <button type="button" onClick={onOpenOwner} className="rounded-lg bg-amber-100 px-2.5 py-1 text-xs font-black text-amber-900">{currentLang === 'ar' ? 'لوحة المالك' : currentLang === 'fr' ? 'Contrôle propriétaire' : currentLang === 'es' ? 'Panel del propietario' : currentLang === 'it' ? 'Pannello proprietario' : 'Owner Control'}</button>}
                 <button
                   type="button"
                   onClick={onSignOut}
@@ -118,6 +117,7 @@ export const Header: React.FC<HeaderProps> = ({
 
           {/* Right Side: Share Button & 3 Languages */}
           <div className="flex items-center justify-end gap-2 order-3">
+            {isOwner && <button type="button" onClick={onOpenOwner} className="rounded-lg bg-amber-100 px-3 py-1.5 text-xs font-black text-amber-900">{currentLang === 'ar' ? 'لوحة المالك' : currentLang === 'fr' ? 'Contrôle propriétaire' : currentLang === 'es' ? 'Panel del propietario' : currentLang === 'it' ? 'Pannello proprietario' : 'Owner Control'}</button>}
             {/* Share Agenda Platform Button */}
             <button
               type="button"
