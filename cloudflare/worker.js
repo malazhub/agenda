@@ -731,6 +731,7 @@ async function ownerDirectors(request, env) {
     FROM accounts a
     INNER JOIN schools s ON s.director_id = a.id AND s.id = a.school_id
     WHERE a.role = 'director'
+      AND NOT EXISTS (SELECT 1 FROM platform_owners p WHERE p.account_id = a.id)
     ORDER BY a.created_at DESC
   `).all();
   return json({ directors: (result.results || []).map((row) => ({
