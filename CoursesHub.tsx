@@ -274,8 +274,20 @@ export const CoursesHub: React.FC<CoursesHubProps> = ({
       setDirectorForm({ username: '', password: '' });
     } catch (error) {
       const detail = error instanceof Error ? error.message : 'Unable to sign in.';
+      const credentialHint = detail.includes('Invalid username or password.')
+        ? currentLang === 'ar'
+          ? 'إذا كنت قد اخترت كلمة مرور جديدة بالفعل، فاستخدمها بدلاً من رقم الهاتف.'
+          : currentLang === 'fr'
+            ? 'Si vous avez déjà choisi un nouveau mot de passe, utilisez-le à la place du numéro de téléphone.'
+            : currentLang === 'es'
+              ? 'Si ya elegiste una contraseña nueva, úsala en lugar del número de teléfono.'
+              : currentLang === 'it'
+                ? 'Se hai già scelto una nuova password, usa quella al posto del numero di telefono.'
+                : 'If you already set a new password, use it instead of the phone number.'
+        : '';
+      const explainedDetail = credentialHint ? `${detail} ${credentialHint}` : detail;
       const prefix = currentLang === 'ar' ? 'تعذر تسجيل دخول المدير' : currentLang === 'fr' ? 'Connexion du Directeur impossible' : currentLang === 'es' ? 'No se pudo iniciar sesión como Director' : currentLang === 'it' ? 'Accesso Direttore non riuscito' : 'Director sign-in failed';
-      setDirectorError(currentLang === 'en' ? detail : `${prefix}: ${detail}`);
+      setDirectorError(currentLang === 'en' ? explainedDetail : `${prefix}: ${explainedDetail}`);
     }
   };
 
@@ -751,14 +763,14 @@ const updateAccount = async (
           </p>
           <p className="mt-1">
             {currentLang === 'ar'
-              ? 'استخدم اسم المستخدم الذي اخترته عبر رابط الإعداد الخاص. أدخل رقم الهاتف في خانة كلمة المرور.'
+              ? 'استخدم اسم المستخدم الحالي وكلمة المرور التي اخترتها. عند تسجيل الدخول لأول مرة فقط، استخدم رقم الهاتف الذي حفظه المالك؛ بعد تعيين كلمة مرور جديدة، استخدمها في كل مرة.'
               : currentLang === 'fr'
-                ? 'Utilisez le nom d’utilisateur choisi via votre lien privé. Saisissez ce numéro de téléphone dans le champ Mot de passe.'
+                ? 'Utilisez votre nom d’utilisateur actuel et votre mot de passe. Lors de la première connexion uniquement, utilisez le numéro de téléphone enregistré par le propriétaire ; après avoir choisi un nouveau mot de passe, utilisez celui-ci à chaque connexion.'
                 : currentLang === 'es'
-                  ? 'Usa el nombre de usuario que elegiste mediante tu enlace privado. Escribe ese número de teléfono en el campo Contraseña.'
+                  ? 'Usa tu nombre de usuario actual y tu contraseña. Solo en el primer inicio de sesión, usa el número de teléfono guardado por el propietario; después de crear una contraseña nueva, úsala siempre.'
                   : currentLang === 'it'
-                    ? 'Usa il nome utente scelto tramite il tuo link privato. Inserisci quel numero di telefono nel campo Password.'
-                    : 'Use the username you chose through your private setup link. Enter that phone number in the Password field.'}
+                    ? 'Usa il tuo nome utente attuale e la password che hai scelto. Solo al primo accesso, usa il numero di telefono salvato dal proprietario; dopo aver impostato una nuova password, usa sempre quella.'
+                    : 'Use your current username and password. For your first sign-in only, use the phone number saved by the Owner; after you set a new password, use that password every time.'}
           </p>
         </div>
         <form
