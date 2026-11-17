@@ -583,7 +583,7 @@ async function handleLogin(request, env) {
   if (account.role === "director" && !isOwner) {
     const school = await env.DB.prepare("SELECT license_active, license_expires_at FROM schools WHERE id = ? AND director_id = ?").bind(account.school_id, account.id).first();
     const licenseExpiry = school?.license_expires_at ? Date.parse(`${String(school.license_expires_at).replace(' ', 'T')}Z`) : null;
-    if (!school || !Number(school.license_active) || (licenseExpiry !== null && (!Number.isFinite(licenseExpiry) || licenseExpiry <= Date.now()))) {
+    if (!school || Number(school.license_active ?? 1) !== 1 || (licenseExpiry !== null && (!Number.isFinite(licenseExpiry) || licenseExpiry <= Date.now()))) {
       return json({ error: "This school's one-year licence has expired or is suspended. Contact the platform Owner." }, 403);
     }
   }
