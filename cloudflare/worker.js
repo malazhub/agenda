@@ -781,39 +781,6 @@ async function ownerDirectors(request, env) {
            a.activated, a.paid, a.expires_at,
            s.id AS school_id, s.name AS school_name, s.license_expires_at,
            s.license_active, s.payment_method, s.payment_value,
-           (SELECT COUNT(*) FROM accounts students
-             WHERE students.school_id = s.id AND students.role = 'student') AS student_count,
-           (SELECT COUNT(*) FROM accounts educators
-             WHERE educators.school_id = s.id AND educators.role = 'educator') AS educator_count
-    FROM accounts a
-    INNER JOIN schools s ON s.director_id = a.id AND s.id = a.school_id
-    WHERE a.role = 'director'
-      AND NOT EXISTS (SELECT 1 FROM platform_owners p WHERE p.account_id = a.id)
-    ORDER BY a.created_at DESC
-  `).all();
-  return json({ directors: (result.results || []).map((row) => ({
-    id: row.id, username: row.username, fullName: row.full_name,
-    email: row.email, phone: row.phone, createdAt: row.created_at,
-    activated: Boolean(row.activated), paid: Boolean(row.paid),
-    expiresAt: row.license_expires_at || row.expires_at,
-    schoolId: row.school_id, schoolName: row.school_name,
-    licenseActive: Boolean(row.license_active),
-    paymentMethod: row.payment_method || "unset",
-    paymentValue: row.payment_value || "",
-    studentCount: Number(row.student_count || 0),
-    educatorCount: Number(row.educator_count || 0),
-    directorLink: `https://agenda.malazhub-agenda.workers.dev/?schoolId=${encodeURIComponent(row.school_id)}`,
-  })) });
-}
-
-async function ownerDirectors(request, env) {
-  const owner = await requireOwner(request, env);
-  if (!owner) return json({ error: "Owner access required." }, 401);
-  const result = await env.DB.prepare(`
-    SELECT a.id, a.username, a.full_name, a.email, a.phone, a.created_at,
-           a.activated, a.paid, a.expires_at,
-           s.id AS school_id, s.name AS school_name, s.license_expires_at,
-           s.license_active, s.payment_method, s.payment_value,
            EXISTS(SELECT 1 FROM director_setup_tokens t
                   WHERE t.account_id = a.id AND t.used_at IS NULL) AS setup_pending,
            (SELECT COUNT(*) FROM accounts students
