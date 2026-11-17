@@ -7,6 +7,7 @@ const componentFiles = [
   'ArchiveSessionsModal.tsx',
   'BookingModal.tsx',
   'CoursesHub.tsx',
+  'OwnerDashboard.tsx',
   'DirectorSessionsPanel.tsx',
   'CurriculumOverview.tsx',
   'ExamPracticeModal.tsx',
