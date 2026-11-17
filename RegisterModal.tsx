@@ -293,7 +293,7 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
               className="flex w-full items-center justify-center rounded-xl bg-indigo-700 px-5 py-3 text-sm font-black text-white transition hover:bg-indigo-800"
             >
               {schoolPayment.paymentMethod === 'whatsapp' ? (currentLang === 'ar' ? 'فتح واتساب' : currentLang === 'fr' ? 'Ouvrir WhatsApp' : currentLang === 'es' ? 'Abrir WhatsApp' : currentLang === 'it' ? 'Apri WhatsApp' : 'Open WhatsApp') : schoolPayment.paymentMethod === 'phone' ? (currentLang === 'ar' ? 'اتصال بالمدير' : currentLang === 'fr' ? 'Appeler le directeur' : currentLang === 'es' ? 'Llamar al director' : currentLang === 'it' ? 'Chiama il direttore' : 'Call Director') : schoolPayment.paymentMethod === 'email' ? (currentLang === 'ar' ? 'مراسلة المدير' : currentLang === 'fr' ? 'Écrire au directeur' : currentLang === 'es' ? 'Escribir al director' : currentLang === 'it' ? 'Scrivi al direttore' : 'Email Director') : schoolPayment.paymentMethod === 'bank' ? (currentLang === 'ar' ? 'فتح رابط الدفع المصرفي' : currentLang === 'fr' ? 'Ouvrir le paiement bancaire' : currentLang === 'es' ? 'Abrir pago bancario' : currentLang === 'it' ? 'Apri pagamento bancario' : 'Open bank payment') : t.paymentProvider}
-            </a>
+            </a>}
           </div>
         ) : (
         /* Form */
