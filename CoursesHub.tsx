@@ -263,7 +263,9 @@ export const CoursesHub: React.FC<CoursesHubProps> = ({
       setDirectorScreen('dashboard');
       setDirectorForm({ username: '', password: '' });
     } catch (error) {
-      setDirectorError(currentLang === 'ar' ? 'تعذر تسجيل دخول المدير. تحقق من اسم المستخدم وكلمة المرور.' : currentLang === 'fr' ? 'Connexion du Directeur impossible. Vérifiez le nom d’utilisateur et le mot de passe.' : currentLang === 'es' ? 'No se pudo iniciar sesión como Director. Comprueba el usuario y la contraseña.' : currentLang === 'it' ? 'Accesso Direttore non riuscito. Verifica nome utente e password.' : error instanceof Error ? error.message : 'Unable to sign in.');
+      const detail = error instanceof Error ? error.message : 'Unable to sign in.';
+      const prefix = currentLang === 'ar' ? 'تعذر تسجيل دخول المدير' : currentLang === 'fr' ? 'Connexion du Directeur impossible' : currentLang === 'es' ? 'No se pudo iniciar sesión como Director' : currentLang === 'it' ? 'Accesso Direttore non riuscito' : 'Director sign-in failed';
+      setDirectorError(currentLang === 'en' ? detail : `${prefix}: ${detail}`);
     }
   };
 
