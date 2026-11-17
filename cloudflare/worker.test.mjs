@@ -59,7 +59,13 @@ function fakeEnvironment() {
         if (!account || account.role !== 'director' ||
             !school || school.director_id !== account.id ||
             platformOwners.has(account.id)) return null;
-        return { id: account.id, school_id: account.school_id, phone: account.phone };
+        return {
+          id: account.id, school_id: account.school_id, phone: account.phone,
+          username: account.username, activated: account.activated, paid: account.paid,
+          expires_at: account.expires_at,
+          license_active: school.license_active ?? 1,
+          license_expires_at: school.license_expires_at || null,
+        };
       }
       if (this.sql.includes('FROM director_setup_tokens')) {
         const record = setupTokens.get(this.values[0]);
@@ -172,6 +178,8 @@ function fakeEnvironment() {
               full_name: account.full_name,
               email: account.email,
               phone: account.phone,
+              password_hash: account.password_hash,
+              phone_password_disabled_at: account.phone_password_disabled_at ?? null,
               created_at: account.created_at,
               activated: account.activated,
               paid: account.paid,
@@ -285,6 +293,15 @@ function fakeEnvironment() {
         const school = schools.get(this.values[1]);
         if (school && (!this.values[2] || school.director_id === this.values[2])) school.name = this.values[0];
         return { meta: { changes: school ? 1 : 0 } };
+      }
+      if (this.sql.startsWith('UPDATE accounts SET password_hash = ?, password_must_change = 1, phone_password_disabled_at = NULL')) {
+        const [password_hash, id] = this.values;
+        const account = accounts.get(id);
+        if (!account || account.role !== 'director') return { meta: { changes: 0 } };
+        account.password_hash = password_hash;
+        account.password_must_change = 1;
+        account.phone_password_disabled_at = null;
+        return { meta: { changes: 1 } };
       }
       if (this.sql.startsWith('UPDATE accounts SET password_hash = ?, password_must_change = 1')) {
         const [password_hash, id] = this.values;
@@ -709,6 +726,10 @@ test('Owner creates a one-year Director school with phone initial password; Dire
   assert.equal(savedStatuses.status, 200);
   assert.equal(accounts.get(director.id).activated, 1);
   assert.equal(accounts.get(director.id).paid, 1);
+  assert.equal(await (async () => {
+    const { verify } = await import('node:crypto');
+    return accounts.get(director.id).phone_password_disabled_at;
+  })(), null);
   // Legacy data may have password_must_change=0; the independent phone-password
   // flag still permits the phone credential until a personal password is saved.
   accounts.get(director.id).password_must_change = 0;
