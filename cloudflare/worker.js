@@ -250,6 +250,21 @@ async function authenticate(request, env, requiredRole) {
   if (!match) return null;
   const payload = await verifyToken(match[1], env.SESSION_SIGNING_KEY);
   if (!payload || (requiredRole && payload.role !== requiredRole)) return null;
+  // Re-check Director school licensing on every authenticated API request so a
+  // suspended or expired licence cannot keep using a still-valid 12-hour token.
+  if (payload.role === "director") {
+    const licence = await env.DB.prepare(
+      `SELECT accounts.expires_at, schools.license_active, schools.license_expires_at
+       FROM accounts
+       INNER JOIN schools ON schools.id = accounts.school_id
+         AND schools.director_id = accounts.id
+       WHERE accounts.id = ? AND accounts.role = 'director'`
+    ).bind(payload.sub).first();
+    if (!licence || Number(licence.license_active ?? 1) !== 1) return null;
+    const expiry = licence.license_expires_at || licence.expires_at;
+    const expiryTime = expiry ? Date.parse(String(expiry).replace(" ", "T") + "Z") : null;
+    if (expiryTime !== null && (!Number.isFinite(expiryTime) || expiryTime <= Date.now())) return null;
+  }
   return payload;
 }
 
