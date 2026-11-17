@@ -2636,14 +2636,21 @@ async function generateGeminiResponse(request, env) {
   if (!contents) {
     return json({ error: "AI contents are required in a supported text or media format." }, 400);
   }
-  const model = payload?.model === "gemini-3.8-flash" ? payload.model : "gemini-3.8-flash";
+  // Only allow known, supported Gemini models. Use the faster everyday Flash
+  // model for chat, while allowing the advanced model for exercise solving.
+  const allowedModels = new Set(["gemini-3.6-flash", "gemini-3.8-flash"]);
+  const model = allowedModels.has(payload?.model) ? payload.model : "gemini-3.6-flash";
 
   const requestedThinkingLevel = payload?.generationConfig?.thinkingConfig?.thinkingLevel;
   const thinkingLevel = ["low", "medium", "high"].includes(requestedThinkingLevel)
     ? requestedThinkingLevel
     : null;
+  const requestedMaxOutputTokens = Number(payload?.generationConfig?.maxOutputTokens);
+  const maxOutputTokens = Number.isFinite(requestedMaxOutputTokens)
+    ? Math.min(2048, Math.max(32, Math.floor(requestedMaxOutputTokens)))
+    : 1024;
   const generationConfig = {
-    maxOutputTokens: 2048,
+    maxOutputTokens,
     ...(thinkingLevel ? { thinkingConfig: { thinkingLevel } } : {}),
   };
 
