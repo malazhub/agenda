@@ -99,7 +99,10 @@ function fakeEnvironment() {
         } : null;
       }
       if (this.sql.includes('SELECT id FROM accounts WHERE username')) {
-        const account = [...accounts.values()].find((item) => item.username.toLowerCase() === this.values[0].toLowerCase());
+        const account = [...accounts.values()].find((item) =>
+          item.username.toLowerCase() === this.values[0].toLowerCase() &&
+          (!this.sql.includes('id != ?') || item.id !== this.values[1])
+        );
         return account ? { id: account.id } : null;
       }
       if (this.sql.includes('SELECT COUNT(*) AS count FROM login_attempts')) {
