@@ -630,7 +630,7 @@ export async function generateGeminiContent(
 ): Promise<{ text: string }> {
   return request<{ text: string }>('/api/ai/generate', {
     method: 'POST',
-    signal: AbortSignal.timeout(18_000),
+    signal: AbortSignal.timeout(45_000),
     body: JSON.stringify({
       model: options?.model || 'gemini-3.6-flash',
       contents,
