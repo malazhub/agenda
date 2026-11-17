@@ -296,6 +296,40 @@ async function send(env, path, { method = 'GET', body, token, origin } = {}) {
   return worker.fetch(request, env);
 }
 
+test('Gemini endpoint normalizes flat text and image parts to REST Content format', async () => {
+  const { env } = fakeEnvironment();
+  env.GEMINI_API_KEY = 'test-gemini-key';
+  let captured;
+  globalThis.fetch = async (url, init) => {
+    assert.match(String(url), /models\/gemini-3\.8-flash:generateContent$/);
+    captured = JSON.parse(init.body);
+    assert.equal(new Headers(init.headers).get('x-goog-api-key'), 'test-gemini-key');
+    return new Response(JSON.stringify({
+      candidates: [{ content: { parts: [{ text: 'Gemini test response' }] } }]
+    }), { status: 200, headers: { 'content-type': 'application/json' } });
+  };
+
+  const response = await send(env, '/api/ai/generate', {
+    method: 'POST',
+    body: {
+      model: 'gemini-3.8-flash',
+      contents: [
+        { text: 'Explain how to plan a study day.' },
+        'Keep the answer concise.'
+      ]
+    }
+  });
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), { text: 'Gemini test response' });
+  assert.deepEqual(captured.contents, [{
+    role: 'user',
+    parts: [
+      { text: 'Explain how to plan a study day.' },
+      { text: 'Keep the answer concise.' }
+    ]
+  }]);
+});
+
 test('health and CORS preflight are served', async () => {
   const { env } = fakeEnvironment();
   const health = await send(env, '/api/health');
