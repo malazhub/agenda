@@ -711,7 +711,8 @@ test('Owner creates a one-year Director school with phone initial password; Dire
     body: { updates: [{ id: director.id, activated: false, paid: false }] },
   });
   assert.equal(stagedStatuses.status, 200);
-  assert.deepEqual((await stagedStatuses.json()).statuses, [{ id: director.id, activated: false, paid: false }]);
+  const stagedStatusResult = await stagedStatuses.json();
+  assert.deepEqual(stagedStatusResult.statuses, [{ id: director.id, activated: false, paid: false, phonePasswordReady: true }]);
   assert.equal(accounts.get(director.id).activated, 0);
   assert.equal(accounts.get(director.id).paid, 0);
   const blockedLogin = await send(env, '/api/auth/login', {
@@ -726,10 +727,9 @@ test('Owner creates a one-year Director school with phone initial password; Dire
   assert.equal(savedStatuses.status, 200);
   assert.equal(accounts.get(director.id).activated, 1);
   assert.equal(accounts.get(director.id).paid, 1);
-  assert.equal(await (async () => {
-    const { verify } = await import('node:crypto');
-    return accounts.get(director.id).phone_password_disabled_at;
-  })(), null);
+  assert.equal(accounts.get(director.id).phone_password_disabled_at, null);
+  const savedStatusResult = await savedStatuses.json();
+  assert.deepEqual(savedStatusResult.statuses, [{ id: director.id, activated: true, paid: true, phonePasswordReady: true }]);
   // Legacy data may have password_must_change=0; the independent phone-password
   // flag still permits the phone credential until a personal password is saved.
   accounts.get(director.id).password_must_change = 0;
