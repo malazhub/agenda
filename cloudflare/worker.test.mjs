@@ -248,6 +248,7 @@ function fakeEnvironment() {
           activated: isDirectorCreation ? 1 : 0,
           paid: isDirectorCreation ? 1 : 0,
           password_must_change: isDirectorCreation ? 1 : 0,
+          phone_password_disabled_at: null,
         });
         return { meta: { changes: 1 } };
       }
@@ -291,6 +292,7 @@ function fakeEnvironment() {
         if (!account || account.role !== 'director') return { meta: { changes: 0 } };
         account.password_hash = password_hash;
         account.password_must_change = 1;
+        account.phone_password_disabled_at = null;
         return { meta: { changes: 1 } };
       }
       if (this.sql.startsWith('UPDATE accounts SET username = ?, password_hash = ?')) {
@@ -300,6 +302,7 @@ function fakeEnvironment() {
         account.username = username;
         account.password_hash = password_hash;
         account.password_must_change = this.sql.includes('password_must_change = 1') ? 1 : 0;
+        account.phone_password_disabled_at = this.sql.includes('phone_password_disabled_at = datetime') ? '2026-11-17 12:00:00' : account.phone_password_disabled_at;
         return { meta: { changes: 1 } };
       }
       if (this.sql.startsWith('UPDATE accounts SET') && this.sql.includes('WHERE id = ?') && !this.sql.includes('username = ?')) {
@@ -309,6 +312,8 @@ function fakeEnvironment() {
         let valueIndex = 0;
         if (this.sql.includes('activated = ?')) account.activated = this.values[valueIndex++];
         if (this.sql.includes('paid = ?')) account.paid = this.values[valueIndex++];
+        if (this.sql.includes('password_must_change = 1')) account.password_must_change = 1;
+        if (this.sql.includes("phone_password_disabled_at = datetime('now')")) account.phone_password_disabled_at = '2026-11-17 12:00:00';
         if (this.sql.includes("expires_at = datetime('now', '+1 year')")) account.expires_at = '2027-11-17 10:00:00';
         return { meta: { changes: 1 } };
       }
@@ -704,6 +709,9 @@ test('Owner creates a one-year Director school with phone initial password; Dire
   assert.equal(savedStatuses.status, 200);
   assert.equal(accounts.get(director.id).activated, 1);
   assert.equal(accounts.get(director.id).paid, 1);
+  // Legacy data may have password_must_change=0; the independent phone-password
+  // flag still permits the phone credential until a personal password is saved.
+  accounts.get(director.id).password_must_change = 0;
   const directorLogin = await send(env, '/api/auth/login', {
     method: 'POST', body: { username: 'new.director', password: '+961 70 123 456' },
   });
@@ -711,6 +719,7 @@ test('Owner creates a one-year Director school with phone initial password; Dire
   const directorLoginResult = await directorLogin.json();
   assert.equal(directorLoginResult.account.role, 'director');
   assert.equal(directorLoginResult.account.mustChangePassword, true);
+  assert.equal(accounts.get(director.id).password_must_change, 1);
   const phoneReset = await send(env, `/api/owner/directors/${director.id}/reset-phone-password`, {
     method: 'POST', token: ownerToken,
   });
