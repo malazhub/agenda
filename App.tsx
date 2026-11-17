@@ -20,6 +20,7 @@ import { RegisterModal } from './components/RegisterModal';
 import { ArchiveSessionsModal } from './components/ArchiveSessionsModal';
 import { ExamPracticeModal } from './components/ExamPracticeModal';
 import { AIChatBot } from './components/AIChatBot';
+import { OwnerDashboard } from './components/OwnerDashboard';
 
 import { 
   CheckCircle2, 
@@ -58,6 +59,8 @@ export default function App() {
   const [directorLoginRequest, setDirectorLoginRequest] = useState(0);
   const [registeredAccount, setRegisteredAccount] = useState<CloudflareAccount | null>(null);
   const [sessionToken, setSessionToken] = useState('');
+  const [ownerAccount, setOwnerAccount] = useState<CloudflareAccount | null>(null);
+  const [ownerToken, setOwnerToken] = useState('');
   const [schools, setSchools] = useState<SchoolRecord[]>([]);
   const [activeSchoolId, setActiveSchoolId] = useState(() => new URLSearchParams(window.location.search).get('schoolId') || 'default-agenda-school');
   const activeSchoolName = schools.find((school) => school.id === activeSchoolId)?.name || '';
@@ -117,6 +120,8 @@ const registerSignOutCleanup = useCallback(
   }, [activeSchoolId]);
 
   useEffect(() => {
+    const storedOwnerToken = sessionStorage.getItem('agenda-owner-token');
+    if (storedOwnerToken) { setOwnerToken(storedOwnerToken); void getCurrentAccount(storedOwnerToken).then(({account}) => setOwnerAccount(account)).catch(() => { sessionStorage.removeItem('agenda-owner-token'); setOwnerToken(''); }); }
     const storedToken = sessionStorage.getItem('agenda-session-token');
     if (storedToken) setSessionToken(storedToken);
   }, []);
@@ -128,6 +133,7 @@ const registerSignOutCleanup = useCallback(
       try {
         const { account } = await getCurrentAccount(sessionToken);
         if (!active) return;
+        if (account.role === 'owner') { setOwnerAccount(account); setOwnerToken(sessionToken); return; }
         setRegisteredAccount(account);
         setUserProfile((previous) => ({
           ...previous,
@@ -225,6 +231,9 @@ const registerSignOutCleanup = useCallback(
 
     setSessionToken('');
     setRegisteredAccount(null);
+    setOwnerAccount(null);
+    setOwnerToken('');
+    sessionStorage.removeItem('agenda-owner-token');
 
     setUserProfile({
       name: '',
@@ -273,7 +282,9 @@ const registerSignOutCleanup = useCallback(
         userProfile={userProfile}
         onRoleChange={(role) => setUserProfile(prev => ({ ...prev, role }))}
         onOpenRegister={() => setIsRegisterOpen(true)}
-        signedInName={registeredAccount?.fullName}
+        signedInName={ownerAccount?.fullName || registeredAccount?.fullName}
+        isOwner={Boolean(ownerAccount)}
+        onOpenOwner={() => setIsClassroomActive(false)}
         schoolName={activeSchoolName}
         schoolId={activeSchoolId}
         onOpenArchiveSessions={() => setIsArchiveSessionsOpen(true)}
@@ -282,7 +293,9 @@ const registerSignOutCleanup = useCallback(
 
       {/* Main Content: Courses Hub or Live Classroom */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8 flex-1 w-full">
-        {isClassroomActive ? (
+        {ownerAccount && ownerToken ? (
+          <OwnerDashboard currentLang={currentLang} token={ownerToken} onSignOut={handleSignOut} />
+        ) : isClassroomActive ? (
           <VirtualClassroom
             currentLang={currentLang}
             teacher={selectedTeacherForBooking || MOCK_TEACHERS[0]}
@@ -295,6 +308,7 @@ const registerSignOutCleanup = useCallback(
             currentLang={currentLang}
             directorLoginRequest={directorLoginRequest}
             registeredAccount={registeredAccount}
+            onOwnerLogin={(account, token) => { sessionStorage.setItem('agenda-owner-token', token); setOwnerAccount(account); setOwnerToken(token); setRegisteredAccount(null); }}
             schoolId={registeredAccount?.schoolId || activeSchoolId}
             sessionToken={sessionToken}
             onSchoolBrandChange={(schoolId, schoolName) => {
