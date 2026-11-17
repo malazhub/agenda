@@ -50,7 +50,7 @@ function randomId() {
 }
 
 function normalizePhoneCredential(value) {
-  let digits = String(value || '').trim().replace(/\\D/g, '');
+  let digits = String(value || '').trim().replace(/\D/g, '');
   if (digits.startsWith('00')) digits = digits.slice(2);
   return digits;
 }
