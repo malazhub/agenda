@@ -2656,7 +2656,7 @@ async function generateGeminiResponse(request, env) {
         "x-goog-api-key": env.GEMINI_API_KEY
       },
       body: JSON.stringify({ contents, generationConfig }),
-      signal: AbortSignal.timeout(25_000),
+      signal: AbortSignal.timeout(15_000),
     });
   } catch (error) {
     const timedOut = error?.name === "TimeoutError" || error?.name === "AbortError";
