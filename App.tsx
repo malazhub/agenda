@@ -308,7 +308,7 @@ const registerSignOutCleanup = useCallback(
             currentLang={currentLang}
             directorLoginRequest={directorLoginRequest}
             registeredAccount={registeredAccount}
-            onOwnerLogin={(account, token) => { sessionStorage.setItem('agenda-owner-token', token); setOwnerAccount(account); setOwnerToken(token); setRegisteredAccount(null); }}
+            onOwnerLogin={(account, token) => { sessionStorage.setItem('agenda-owner-token', token); sessionStorage.removeItem('agenda-session-token'); setSessionToken(''); setOwnerAccount(account); setOwnerToken(token); setRegisteredAccount(null); }}
             schoolId={registeredAccount?.schoolId || activeSchoolId}
             sessionToken={sessionToken}
             onSchoolBrandChange={(schoolId, schoolName) => {
