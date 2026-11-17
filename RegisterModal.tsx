@@ -285,7 +285,7 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
               <p className="text-sm font-semibold text-slate-700">{t.paymentDescription}</p>
             </div>
             <a
-              href={schoolPayment.paymentMethod === 'whatsapp' ? 'https://wa.me/' + schoolPayment.paymentValue.replace(/\\D/g, '') : schoolPayment.paymentMethod === 'phone' ? 'tel:' + schoolPayment.paymentValue : schoolPayment.paymentMethod === 'email' ? 'mailto:' + schoolPayment.paymentValue : schoolPayment.paymentValue}
+              href={schoolPayment.paymentMethod === 'whatsapp' ? 'https://wa.me/' + schoolPayment.paymentValue.replace(/\D/g, '') : schoolPayment.paymentMethod === 'phone' ? 'tel:' + schoolPayment.paymentValue : schoolPayment.paymentMethod === 'email' ? 'mailto:' + schoolPayment.paymentValue : schoolPayment.paymentValue}
               target="_blank"
               rel="noopener noreferrer"
               className="flex w-full items-center justify-center rounded-xl bg-indigo-700 px-5 py-3 text-sm font-black text-white transition hover:bg-indigo-800"
