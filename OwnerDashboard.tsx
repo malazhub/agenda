@@ -111,7 +111,7 @@ export const OwnerDashboard: React.FC<{ currentLang:Language; token:string; onSi
     const confirmed = window.confirm(currentLang === 'ar' ? 'إعادة تعيين كلمة المرور الأولية لهذا المدير إلى رقم الهاتف المسجل؟' : 'Reset this Director’s initial password to the phone number recorded by the Owner?');
     if (!confirmed) return;
     setBusy(row.id); setError(''); setMessage('');
-    try { const result = await resetOwnerDirectorPhonePassword(token,row.id); if (!result.verified) throw new Error('The saved phone password could not be verified.'); setMessage(`${result.message} Login username: ${result.username}. Registered phone ends in ${result.phoneLastTwo}.`); await refresh(); }
+    try { const result = await resetOwnerDirectorPhonePassword(token,row.id); if (!result.verified) throw new Error('The saved phone password could not be verified.'); setMessage(`${result.message} Username: ${result.username}; phone ending ${result.phoneLastTwo}; Account ${result.activated?'active':'inactive'}; Paid ${result.paid?'yes':'no'}; licence ${result.licenceActive?'active':'inactive'}; sign-in ready ${result.accessReady?'YES':'NO'}.`); await refresh(); }
     catch(e) { setError(e instanceof Error ? e.message : t.error); }
     finally { setBusy(''); }
   };
