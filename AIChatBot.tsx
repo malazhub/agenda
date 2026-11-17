@@ -321,50 +321,10 @@ export const AIChatBot: React.FC<AIChatBotProps> = ({ currentLang, schoolId, sch
     setInputText('');
     setIsTyping(true);
 
-    // Never put a question in the conversation until it is available in the
-    // selected language. If translation is unavailable, preserve the draft
-    // and show a localized explanation instead of mixing languages.
-    // Do not call Gemini just to translate a question that is already in
-    // the currently selected language. This applies to all five app languages.
-    // Only questions written in another language need the translation request.
-    const questionAlreadyLocalized = isQuestionAlreadyInLanguage(text, currentLang);
-    let selectedLanguageQuestion = questionAlreadyLocalized ? text : '';
-    if (!selectedLanguageQuestion) {
-      try {
-        const translation = await generateGeminiContent([{
-          text: `Translate the user question below into ${languageNames[currentLang]}.
-Return ONLY the translation: no explanation, no answer, no quotes, and no language label.
-Preserve proper names, school names, usernames, numbers, prices, grade identifiers, and technical product names exactly.
-If the question is already in ${languageNames[currentLang]}, return it unchanged.
-Question: ${JSON.stringify(text)}`,
-        }], { thinkingLevel: 'low' });
-        selectedLanguageQuestion = translation.text?.trim().replace(/^["']|["']$/g, '') || '';
-      } catch (translationError) {
-        console.warn('Unable to translate the submitted AI question.', translationError);
-      }
-    }
-
-    if (!selectedLanguageQuestion) {
-      if (activeLanguageRef.current === currentLang) {
-        setInputText(text);
-        setMessages(prev => [...prev, {
-          id: `bot_${Date.now()}`,
-          sender: 'assistant',
-          text: currentLang === 'ar'
-            ? 'تعذرت ترجمة سؤالك إلى اللغة المحددة حالياً. بقي سؤالك في خانة الكتابة؛ حاول مرة أخرى بعد استعادة خدمة الترجمة.'
-            : currentLang === 'fr'
-              ? 'La traduction de votre question dans la langue sélectionnée est momentanément indisponible. Votre question a été conservée dans le champ de saisie ; veuillez réessayer lorsque le service sera rétabli.'
-              : currentLang === 'es'
-                ? 'La traducción de tu pregunta al idioma seleccionado no está disponible en este momento. Tu pregunta se ha conservado en el campo de texto; inténtalo de nuevo cuando se restablezca el servicio.'
-                : currentLang === 'it'
-                  ? 'La traduzione della domanda nella lingua selezionata non è momentaneamente disponibile. La domanda è stata conservata nel campo di testo; riprova quando il servizio sarà ripristinato.'
-                  : 'Translation into your selected language is temporarily unavailable. Your question has been kept in the input field; please try again when the translation service is available.',
-          time: formatChatTime(),
-        }]);
-      }
-      setIsTyping(false);
-      return;
-    }
+    // Send the user's original question directly to Gemini. Gemini can
+    // understand the source language and answer in the selected app language;
+    // a separate translation request added latency and could block the chat.
+    const selectedLanguageQuestion = text;
 
     const userMessageId = `user_${Date.now()}`;
     const userMsg: ChatMessage = {
@@ -427,12 +387,12 @@ Platform constraints:
 - Explain academic concepts, official Lebanese curriculum, homework, camera exercise submissions, and classroom navigation.
 REQUIRED OUTPUT LANGUAGE: ${languageNames[currentLang]}.
 MANDATORY LANGUAGE POLICY:
-- The user's visible question has already been translated into ${languageNames[currentLang]}.
+- The user's question may be written in any supported language. Understand it directly and answer in ${languageNames[currentLang]}.
 - Answer in ${languageNames[currentLang]} only, using natural, fluent, complete sentences.
 - Do not answer in the source language of the original question.
 - Do not mix English with the selected language. Translate explanations, headings, lists, UI navigation names, examples, and ordinary text.
 - Keep only proper names, school names, usernames, URLs, code, and standard technical product terms unchanged where translation would be incorrect.
-- Do not quote or restate the question in its original language.
+- Do not quote or restate the question in a different language.
 - Before sending, check that every sentence is in ${languageNames[currentLang]} and rewrite any sentence that is not.
 Authoritative school configuration (use current values, never invent a rate):
 ${JSON.stringify(currentSchoolContext || { schoolName: schoolName || 'Agenda', defaultMonthlyRateUsd: 125, prices: [], sessions: [], educators: [] })}
