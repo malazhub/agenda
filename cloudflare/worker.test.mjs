@@ -609,7 +609,7 @@ test('grade registration loads available grades and grants grade-scoped live acc
 });
 
 test('Owner creates a one-year Director school and Director sets their own username and password', async () => {
-  const { env, platformOwners, setupTokens } = fakeEnvironment();
+  const { env, accounts, platformOwners, setupTokens } = fakeEnvironment();
   platformOwners.add('director-account-0000000000000000');
 
   const ownerLogin = await send(env, '/api/auth/login', {
