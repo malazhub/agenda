@@ -102,8 +102,8 @@ export const OwnerDashboard: React.FC<{ currentLang:Language; token:string; onSi
   };
   const copyLoginSms = async (row:OwnerDirector) => {
     const message = currentLang === 'ar'
-      ? `مرحباً ${row.fullName}،\nاسم المستخدم: ${row.username}\nكلمة المرور الأولية: ${row.phone}\nكلمة المرور هي رقم الهاتف الذي سجّله المالك لحسابك. أدخل الرقم نفسه في خانة كلمة المرور لتسجيل الدخول أول مرة. بعد الدخول يمكنك تغييره من لوحة المدير.\nرابط المدرسة: ${row.schoolLink}`
-      : `Hello ${row.fullName},\nDirector username: ${row.username}\nINITIAL PASSWORD: ${row.phone}\nYour initial password is the exact phone number the Owner registered for your account. Enter that number in the Password field for your first sign-in. You can change it after signing in.\nSchool link: ${row.schoolLink}`;
+      ? `مرحباً ${row.fullName}،\nاسم المستخدم: ${row.username}\nكلمة المرور الأولية: ${row.phone}\nكلمة المرور هي رقم الهاتف الذي سجّله المالك لحسابك. أدخل الرقم نفسه في خانة كلمة المرور لتسجيل الدخول أول مرة. بعد الدخول يمكنك تغييره من لوحة المدير.\nرابط المدرسة: ${row.directorLink}`
+      : `Hello ${row.fullName},\nDirector username: ${row.username}\nINITIAL PASSWORD: ${row.phone}\nYour initial password is the exact phone number the Owner registered for your account. Enter that number in the Password field for your first sign-in. You can change it after signing in.\nSchool link: ${row.directorLink}`;
     try { await navigator.clipboard.writeText(message); setMessage(t.smsCopied); setError(''); }
     catch { setError(currentLang === 'ar' ? 'تعذر نسخ الرسالة.' : 'Could not copy the SMS.'); }
   };
