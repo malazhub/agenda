@@ -621,17 +621,24 @@ export function getGradeSessions(
  */
 export async function generateGeminiContent(
   contents: unknown,
-  options?: { thinkingLevel?: 'low' | 'medium' | 'high' },
+  options?: {
+    model?: 'gemini-3.6-flash' | 'gemini-3.8-flash';
+    thinkingLevel?: 'low' | 'medium' | 'high';
+    maxOutputTokens?: number;
+  },
 ): Promise<{ text: string }> {
   return request<{ text: string }>('/api/ai/generate', {
     method: 'POST',
     signal: AbortSignal.timeout(18_000),
     body: JSON.stringify({
-      model: 'gemini-3.8-flash',
+      model: options?.model || 'gemini-3.6-flash',
       contents,
-      ...(options?.thinkingLevel
-        ? { generationConfig: { thinkingConfig: { thinkingLevel: options.thinkingLevel } } }
-        : {}),
+      generationConfig: {
+        maxOutputTokens: options?.maxOutputTokens || 1024,
+        ...(options?.thinkingLevel
+          ? { thinkingConfig: { thinkingLevel: options.thinkingLevel } }
+          : {}),
+      },
     }),
   });
 }
