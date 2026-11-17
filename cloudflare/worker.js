@@ -2872,7 +2872,7 @@ async function handle(request, env) {
   if (request.method === "GET" && path === "/api/auth/me") return getCurrentAccount(request, env);
   if (request.method === "GET" && path === "/api/owner/directors") return ownerDirectors(request, env);
   if (request.method === "GET" && path === "/api/school-payment") return publicSchoolPayment(url, env);
-  const ownerDirectorMatch = path.match(/^\\/api\\/owner\\/directors\\/([a-zA-Z0-9_-]{1,100})$/i);
+    const ownerDirectorMatch = path.match(new RegExp("^/api/owner/directors/([a-zA-Z0-9_-]{1,100})$", "i"));
   if (request.method === "PATCH" && ownerDirectorMatch) return updateOwnerDirector(request, env, ownerDirectorMatch[1]);
     const schoolEducatorsMatch = path.match(/^\/api\/schools\/([^/]+)\/educators$/);
   if (request.method === "GET" && schoolEducatorsMatch) {
