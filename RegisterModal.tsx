@@ -281,7 +281,7 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
               <p className="text-sm font-semibold text-slate-700">{t.paymentDescription}</p>
             </div>
             <a
-              href="https://payments.suyool.com/RluEji2qtjDlMKyk9xm4G"
+              href="https://payments.suyool.com/qr/p585_malazjanbeih"
               target="_blank"
               rel="noopener noreferrer"
               className="flex w-full items-center justify-center rounded-xl bg-indigo-700 px-5 py-3 text-sm font-black text-white transition hover:bg-indigo-800"
@@ -593,18 +593,15 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
           >
             {isLogin ? t.switchToRegister : t.signInPrompt}
           </button>
-          {!isLogin && (
-            <div className="rounded-xl border border-indigo-100 bg-indigo-50 p-2.5 flex items-center justify-between">
-              <span className="text-xs font-bold text-indigo-950">{t.paymentTitle}</span>
-              <button 
-                type="button" 
-                onClick={() => setShowPayment(true)} 
-                className="text-xs font-bold text-indigo-700 hover:text-indigo-900 underline cursor-pointer"
-              >
-                {t.paymentBtn}
-              </button>
-            </div>
-          )}
+          <div className="flex justify-end">
+            <button
+              type="button"
+              onClick={() => setShowPayment(true)}
+              className="text-xs font-bold text-indigo-700 hover:text-indigo-900 underline cursor-pointer"
+            >
+              {t.paymentBtn}
+            </button>
+          </div>
         </form>
         )}
       </div>
