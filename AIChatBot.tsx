@@ -120,7 +120,7 @@ export const AIChatBot: React.FC<AIChatBotProps> = ({ currentLang, schoolId, sch
   }, [messages, isOpen]);
 
   // Deterministic answers use the selected school's live configuration.
-  const getSavedResponse = (query: string, context = schoolContext): string | null => {
+  const getSavedResponse = (query: string, context = schoolContext, allowComposite = true): string | null => {
     const q = query.toLowerCase().trim();
 
     // Lightweight greetings should be instant and should not spend a Gemini
@@ -133,20 +133,30 @@ export const AIChatBot: React.FC<AIChatBotProps> = ({ currentLang, schoolId, sch
       return 'Hello! I’m doing well, thank you. How can I help you with Agenda today?';
     }
 
-    // Quick replies are useful for a single, narrow intent. For a question
-    // combining multiple workflows, let Gemini compose one complete answer
-    // instead of returning only the first matching canned response.
+    // Combine multiple prepared Agenda support answers when a question covers
+    // more than one topic. Unmatched and educational questions continue to Gemini.
     const matchesAny = (terms: string[]) => terms.some((term) => q.includes(term));
-    const intentMatches = [
-      matchesAny(['register', 'registration', 'sign up', 'create account', 'inscription', 'registrar', 'registrazione', 'تسجيل', 'التسجيل']),
-      matchesAny(['password', 'username', 'sign in', 'sign-in', 'login', 'log in', 'mot de passe', 'contraseña', 'nome utente', 'كلمة المرور']),
-      matchesAny(['live class', 'live classes', 'live session', 'broadcast', 'join class', 'join the class', 'classroom', 'en direct', 'en vivo', 'diretta', 'صف مباشر', 'الصف المباشر']),
-      matchesAny(['saved lesson', 'saved lessons', 'learning resources', 'recording', 'archive', 'lesson', 'leçon', 'lección', 'lezione', 'دروس محفوظة']),
-      matchesAny(['price', 'pricing', 'rate', 'cost', 'fee', 'payment', 'tarif', 'prix', 'precio', 'prezzo', 'لكل حصة', 'سعر', 'دولار']),
-      matchesAny(['privacy', 'data isolation', 'separate schools', 'separate school', 'another school', 'school tenant', 'tenant isolation', 'خصوصية', 'بيانات المدارس']),
-    ].filter(Boolean).length;
-
-    if (intentMatches > 1) return null;
+    const quickTopics = [
+      { seed: 'registration', terms: ['register', 'registration', 'sign up', 'create account', 'inscription', 'registrar', 'registrazione', 'تسجيل', 'التسجيل'] },
+      { seed: 'sign in', terms: ['password', 'username', 'sign in', 'sign-in', 'login', 'log in', 'mot de passe', 'contraseña', 'nome utente', 'كلمة المرور', 'اسم المستخدم', 'دخول'] },
+      { seed: 'live class', terms: ['live class', 'live classes', 'live session', 'broadcast', 'join class', 'join the class', 'classroom', 'en direct', 'en vivo', 'diretta', 'صف مباشر', 'الصف المباشر'] },
+      { seed: 'saved lessons', terms: ['saved lesson', 'saved lessons', 'learning resources', 'recording', 'archive', 'lesson', 'leçon', 'lección', 'lezione', 'دروس محفوظة'] },
+      { seed: 'student session rate', terms: ['student rate', 'student price', 'session rate', 'per session', 'per class', 'price', 'pricing', 'rate', 'cost', 'fee', 'fees', 'usd', 'dollar', 'tarif', 'prix', 'precio', 'prezzo', 'سعر', 'أسعار', 'بكم', 'دولار'] },
+      { seed: 'school purchase', terms: ['school price', 'price of a school', 'buy a school', 'purchase a school', 'school setup', 'school name price', 'own school', 'own copy', 'independent school', 'سعر المدرسة', 'شراء مدرسة', 'شراء اسم المدرسة', 'نسخة مستقلة'] },
+      { seed: 'school privacy', terms: ['privacy', 'data isolation', 'separate schools', 'another school', 'school tenant', 'tenant isolation', 'خصوصية', 'بيانات المدارس'] },
+      { seed: 'student educator assignment', terms: ['assign student', 'student assignment', 'assigned educator', 'change educator', 'change teacher', 'reassign', 'belongs to educator', 'تعيين الطالب', 'تغيير الأستاذ', 'تغيير المعلم'] },
+      { seed: 'director account management', terms: ['director dashboard', 'director manage', 'manage accounts', 'reset password', 'activate account', 'change username', 'change password', 'لوحة المدير', 'تفعيل الحساب', 'إعادة كلمة المرور'] },
+      { seed: 'class size', terms: ['how many students', 'number of students', 'class size', 'students per class', 'five students', '5 students', 'unlimited students', 'unlimited educators', 'عدد الطلاب', 'خمسة طلاب', 'عدد التلاميذ'] },
+      { seed: 'conference room', terms: ['conference room', 'video conference', 'video call', 'meeting room', 'classroom chat', 'camera and microphone', 'غرفة المؤتمر', 'مؤتمر فيديو', 'اجتماع مباشر'] },
+      { seed: 'school navigation', terms: ['student screen', 'educator screen', 'student dashboard', 'educator dashboard', 'navigate between', 'navigation', 'how to use agenda', 'دور الطالب', 'دور المعلم', 'شاشة الطالب', 'شاشة الأستاذ', 'التنقل بين'] },
+    ];
+    const matchedTopics = quickTopics.filter((topic) => matchesAny(topic.terms));
+    if (allowComposite && matchedTopics.length > 1) {
+      const preparedAnswers = matchedTopics
+        .map((topic) => getSavedResponse(topic.seed, context, false))
+        .filter((answer): answer is string => Boolean(answer));
+      if (preparedAnswers.length) return [...new Set(preparedAnswers)].join('\\n\\n');
+    }
 
     const schoolPurchaseQuestion = [
       'school price', 'price of a school', 'buy a school', 'purchase a school', 'school setup',
@@ -199,7 +209,7 @@ export const AIChatBot: React.FC<AIChatBotProps> = ({ currentLang, schoolId, sch
         'نبذة عن Agenda:',
         'Agenda منصة تعليمية وإدارية للمدارس. تتيح للطلاب الوصول إلى الصفوف المباشرة والدروس والموارد التعليمية المحفوظة، وللمعلمين تقديم الحصص وإدارة موادهم، وللمدير إدارة المدرسة ومراقبة الصفوف.',
         'تغيير اسم المدرسة: سجّل الدخول من بطاقة «دخول المدير» في الشاشة الرئيسية، ثم افتح «لوحة المدير» ← «الحسابات». غيّر حقل «اسم المدرسة» واضغط «حفظ». سيظهر الاسم الجديد في رأس المنصة وفي هوية رابط المدرسة.',
-        'التنقل: يستخدم الطلاب «غرفة البث» للدخول إلى الحصة المباشرة المخصصة لهم عندما يبدأ الأستاذ البث، ثم يفتحون «الموارد التعليمية» لاسترجاع الدروس والملفات المحفوظة. يفتح المعلم غرفته من «غرفة البث» ويبدأ الحصة. ومن «لوحة المدير» ← «الحسابات» يدير المدير الطلاب والمعلمين، ومن «إدارة الحصص» يضيف الحصص ويحدد السعر الشهري لكل صف ويراقب الصفوف.',
+        'التنقل: يستخدم الطلاب «غرفة البث» للدخول إلى الحصة المباشرة المخصصة لهم عندما يبدأ الأستاذ البث، ثم يفتحون «الموارد التعليمية» لاسترجاع الدروس والملفات المحفوظة. يفتح المعلم غرفته من «غرفة البث» ويبدأ الحصة. ومن «لوحة المدير» ← «الحسابات» يدير المدير الطلاب والمعلمين، ومن «إدارة الحصص» يضيف الحصص ويحدد رسوم الطالب لكل حصة ويراقب الصفوف.',
         'نسختك الخاصة: يمكن لأي مستخدم الحصول على نسخة مستقلة من Agenda مقابل 150 دولاراً أمريكياً. يصبح صاحب النسخة مديرها، ويمكنه إدارة مدرسته واسمها ومعلميها وطلابها وحصصها ودروسها المحفوظة وأسعارها الشهرية، ومراقبة الحصص وتقديمها. وتبقى مدرسته وبياناتها مستقلة عن مدارس المديرين الآخرين.',
         'لطلب نسخة مستقلة، تواصل مع إدارة Agenda؛ هذه المحادثة لا تعالج المدفوعات.'
       ].join('\n\n');
@@ -251,7 +261,7 @@ export const AIChatBot: React.FC<AIChatBotProps> = ({ currentLang, schoolId, sch
       if (currentLang === 'fr') return `Le tarif étudiant par défaut est de 125 USD par séance. Le montant peut varier selon les conditions de l’établissement et la décision du Directeur ; veuillez donc confirmer le tarif final et le nombre de séances auprès de votre Directeur. Il s’agit d’un tarif par séance, et non d’un abonnement mensuel.\\nÉtablissement : ${context?.schoolName || schoolName || 'Agenda'}.`;
       if (currentLang === 'es') return `La tarifa predeterminada para el estudiante es de 125 USD por sesión. Puede variar según las condiciones de la escuela y la decisión del Director; confirma el precio final y el número de sesiones con el Director de tu escuela. Es una tarifa por sesión, no una cuota mensual.\\nEscuela: ${context?.schoolName || schoolName || 'Agenda'}.`;
       if (currentLang === 'it') return `La tariffa predefinita per lo studente è di 125 USD per lezione. Può variare in base alle condizioni della scuola e alla decisione del Direttore; conferma quindi il prezzo finale e il numero di lezioni con il Direttore della tua scuola. È una tariffa per lezione, non un costo mensile.\\nScuola: ${context?.schoolName || schoolName || 'Agenda'}.`;
-      return `The default student rate is USD 125 per session. The Director may adjust it according to the school’s circumstances, so confirm the final rate and number of sessions with your school Director. This is a per-session rate, per session rather than as a recurring monthly amount.\\nSchool: ${context?.schoolName || schoolName || 'Agenda'}.`;
+      return `The default student rate is USD 125 per session. The Director may adjust it according to the school’s circumstances, so confirm the final rate and number of sessions with your school Director. This is charged per session.\\nSchool: ${context?.schoolName || schoolName || 'Agenda'}.`;
     }
 
     const registrationQuestion = ['register', 'registration', 'sign up', 'create account', 'inscrire', 'inscription', 'créer un compte', 'm’inscrire', 'registrar', 'registro', 'registración', 'inscripción', 'crear cuenta', 'registrarme', 'registrazione', 'registrarmi', 'creare account', 'crea un account', 'تسجيل', 'سجل', 'التسجيل', 'إنشاء حساب', 'انشاء حساب'].some((keyword) => q.includes(keyword));
