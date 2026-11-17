@@ -92,6 +92,7 @@ function fakeEnvironment() {
           username: account.username,
           school_name: school.name,
           activated: account.activated,
+          paid: account.paid,
           expires_at: account.expires_at,
           license_active: school.license_active ?? 1,
           license_expires_at: school.license_expires_at || null,
