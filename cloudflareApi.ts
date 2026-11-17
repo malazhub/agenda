@@ -637,36 +637,47 @@ export async function generateAIContent(
   });
 }
 
-export interface OwnerDirector {id:string;username:string;fullName:string;email:string;phone:string;createdAt:string;activated:boolean;paid:boolean;expiresAt:string|null;schoolId:string;schoolName:string;licenseActive:boolean;paymentMethod:'suyool'|'whatsapp'|'phone'|'email'|'bank'|'unset';paymentValue:string;studentCount:number;educatorCount:number;directorLink:string;}
+export type DirectorPaymentMethod = 'suyool'|'whatsapp'|'phone'|'email'|'bank'|'unset';
+export interface OwnerDirector {
+  id:string; username:string; fullName:string; email:string; phone:string;
+  createdAt:string; activated:boolean; paid:boolean; expiresAt:string|null;
+  schoolId:string; schoolName:string; licenseActive:boolean;
+  paymentMethod:DirectorPaymentMethod; paymentValue:string;
+  setupPending:boolean; studentCount:number; educatorCount:number; directorLink:string;
+}
 export interface CreateOwnerDirectorInput {
-  username: string;
-  password: string;
-  fullName: string;
-  email: string;
-  phone: string;
-  schoolName: string;
-  paymentReceived: true;
+  username:string; fullName:string; email:string; phone:string;
+  schoolName:string; paymentReceived:true;
 }
 export interface CreatedOwnerDirector {
-  id: string;
-  username: string;
-  fullName: string;
-  email: string;
-  phone: string;
-  schoolId: string;
-  schoolName: string;
-  licenseActive: boolean;
-  paid: boolean;
-  expiresInYears: number;
-  directorLink: string;
+  id:string; username:string; fullName:string; email:string; phone:string;
+  schoolId:string; schoolName:string; licenseActive:boolean; paid:boolean;
+  setupPending:boolean; expiresInYears:number; directorLink:string;
 }
-export function createOwnerDirector(token: string, input: CreateOwnerDirectorInput): Promise<{ director: CreatedOwnerDirector }> {
-  return request('/api/owner/directors', {
-    method: 'POST',
-    headers: authHeaders(token),
-    body: JSON.stringify(input),
-  });
+export function createOwnerDirector(token:string,input:CreateOwnerDirectorInput):Promise<{director:CreatedOwnerDirector;setupLink:string}> {
+  return request('/api/owner/directors',{method:'POST',headers:authHeaders(token),body:JSON.stringify(input)});
 }
-export function getOwnerDirectors(token:string):Promise<{directors:OwnerDirector[]}>{return request('/api/owner/directors',{headers:authHeaders(token)});}
-export function updateOwnerDirector(token:string,id:string,update:{paymentMethod?:OwnerDirector['paymentMethod'];paymentValue?:string;renewLicense?:boolean;licenseActive?:boolean}):Promise<{updated:boolean}>{return request('/api/owner/directors/'+encodeURIComponent(id),{method:'PATCH',headers:authHeaders(token),body:JSON.stringify(update)});}
-export function getSchoolPayment(schoolId:string):Promise<{paymentMethod:OwnerDirector['paymentMethod'];paymentValue:string}>{return request('/api/school-payment?'+new URLSearchParams({schoolId}).toString());}
+export function getOwnerDirectors(token:string):Promise<{directors:OwnerDirector[]}> {
+  return request('/api/owner/directors',{headers:authHeaders(token)});
+}
+export function updateOwnerDirector(token:string,id:string,update:{renewLicense?:boolean;licenseActive?:boolean}):Promise<{updated:boolean}> {
+  return request('/api/owner/directors/'+encodeURIComponent(id),{method:'PATCH',headers:authHeaders(token),body:JSON.stringify(update)});
+}
+export function deleteOwnerDirector(token:string,id:string):Promise<{deleted:boolean}> {
+  return request('/api/owner/directors/'+encodeURIComponent(id),{method:'DELETE',headers:authHeaders(token)});
+}
+export function issueDirectorSetupLink(token:string,id:string):Promise<{setupLink:string}> {
+  return request('/api/owner/directors/'+encodeURIComponent(id)+'/setup-link',{method:'POST',headers:authHeaders(token)});
+}
+export function claimDirectorSetup(token:string,password:string):Promise<{account:CloudflareAccount;token:string}> {
+  return request('/api/director/claim',{method:'POST',body:JSON.stringify({token,password})});
+}
+export function getDirectorPayment(token:string):Promise<{paymentMethod:DirectorPaymentMethod;paymentValue:string}> {
+  return request('/api/director/payment',{headers:authHeaders(token)});
+}
+export function updateDirectorPayment(token:string,paymentMethod:DirectorPaymentMethod,paymentValue:string):Promise<{paymentMethod:DirectorPaymentMethod;paymentValue:string}> {
+  return request('/api/director/payment',{method:'PUT',headers:authHeaders(token),body:JSON.stringify({paymentMethod,paymentValue})});
+}
+export function getSchoolPayment(schoolId:string):Promise<{paymentMethod:DirectorPaymentMethod;paymentValue:string}> {
+  return request('/api/school-payment?'+new URLSearchParams({schoolId}).toString());
+}
