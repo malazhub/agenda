@@ -683,7 +683,7 @@ export function updateOwnerDirector(token:string,id:string,update:{renewLicense?
 export function saveOwnerDirectorStatuses(token:string,updates:Array<{id:string;activated:boolean;paid:boolean}>):Promise<{updated:number;statuses:Array<{id:string;activated:boolean;paid:boolean}>}> {
   return request('/api/owner/directors/status',{method:'PATCH',headers:authHeaders(token),body:JSON.stringify({updates})});
 }
-export function resetOwnerDirectorPhonePassword(token:string,id:string):Promise<{reset:boolean;verified:boolean;username:string;phoneDigits:number;phoneLastTwo:string;activated:boolean;paid:boolean;message:string}> {
+export function resetOwnerDirectorPhonePassword(token:string,id:string):Promise<{reset:boolean;verified:boolean;username:string;phoneDigits:number;phoneLastTwo:string;activated:boolean;paid:boolean;licenceActive:boolean;accessReady:boolean;message:string}> {
   return request('/api/owner/directors/'+encodeURIComponent(id)+'/reset-phone-password',{method:'POST',headers:authHeaders(token)});
 }
 export function deleteOwnerDirector(token:string,id:string):Promise<{deleted:boolean}> {
