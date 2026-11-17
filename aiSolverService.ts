@@ -46,7 +46,7 @@ Return your response in clean JSON matching this format:
       }
       contents.push(prompt);
 
-      const response = await generateGeminiContent(contents);
+      const response = await generateGeminiContent(contents, { model: 'gemini-3.8-flash', thinkingLevel: 'low', maxOutputTokens: 2048 });
 
       const text = response.text || '';
       const jsonMatch = text.match(/\{[\s\S]*\}/);
