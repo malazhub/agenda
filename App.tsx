@@ -21,6 +21,7 @@ import { ArchiveSessionsModal } from './components/ArchiveSessionsModal';
 import { ExamPracticeModal } from './components/ExamPracticeModal';
 import { AIChatBot } from './components/AIChatBot';
 import { OwnerDashboard } from './components/OwnerDashboard';
+import { DirectorSetupPage } from './components/DirectorSetupPage';
 
 import { 
   CheckCircle2, 
@@ -62,6 +63,8 @@ export default function App() {
   const [ownerAccount, setOwnerAccount] = useState<CloudflareAccount | null>(null);
   const [ownerToken, setOwnerToken] = useState('');
   const [ownerSchoolMode, setOwnerSchoolMode] = useState(false);
+  const [directorSetupToken, setDirectorSetupToken] = useState(() => new URLSearchParams(window.location.search).get('directorSetup') || '');
+  const [directorAccessToken, setDirectorAccessToken] = useState('');
   const [schools, setSchools] = useState<SchoolRecord[]>([]);
   const [activeSchoolId, setActiveSchoolId] = useState(() => new URLSearchParams(window.location.search).get('schoolId') || 'default-agenda-school');
   const activeSchoolName = schools.find((school) => school.id === activeSchoolId)?.name || '';
@@ -295,7 +298,24 @@ const registerSignOutCleanup = useCallback(
 
       {/* Main Content: Courses Hub or Live Classroom */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8 flex-1 w-full">
-        {ownerAccount && ownerToken ? (
+        {directorSetupToken ? (
+          <DirectorSetupPage
+            token={directorSetupToken}
+            currentLang={currentLang}
+            onComplete={(account, token) => {
+              sessionStorage.setItem('agenda-director-token', token);
+              sessionStorage.setItem('agenda-session-token', token);
+              setDirectorAccessToken(token);
+              setSessionToken(token);
+              setRegisteredAccount(account);
+              setDirectorSetupToken('');
+              const nextUrl = new URL(window.location.href);
+              nextUrl.searchParams.delete('directorSetup');
+              window.history.replaceState({}, '', nextUrl.toString());
+              showToast(currentLang === 'ar' ? 'تم تفعيل حساب المدير.' : 'Director account activated.');
+            }}
+          />
+        ) : ownerAccount && ownerToken ? (
           ownerSchoolMode ? (
             <CoursesHub
               currentLang={currentLang}
@@ -361,6 +381,7 @@ const registerSignOutCleanup = useCallback(
             onOwnerLogin={(account, token) => { sessionStorage.setItem('agenda-owner-token', token); sessionStorage.removeItem('agenda-session-token'); setSessionToken(''); setOwnerAccount(account); setOwnerToken(token); setRegisteredAccount(null); }}
             schoolId={registeredAccount?.schoolId || activeSchoolId}
             sessionToken={sessionToken}
+            directorAccessToken={directorAccessToken}
             onSchoolBrandChange={(schoolId, schoolName) => {
               setActiveSchoolId(schoolId);
               const nextUrl = new URL(window.location.href);
