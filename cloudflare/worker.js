@@ -2638,6 +2638,15 @@ async function generateGeminiResponse(request, env) {
   }
   const model = payload?.model === "gemini-3.8-flash" ? payload.model : "gemini-3.8-flash";
 
+  const requestedThinkingLevel = payload?.generationConfig?.thinkingConfig?.thinkingLevel;
+  const thinkingLevel = ["low", "medium", "high"].includes(requestedThinkingLevel)
+    ? requestedThinkingLevel
+    : null;
+  const generationConfig = {
+    maxOutputTokens: 2048,
+    ...(thinkingLevel ? { thinkingConfig: { thinkingLevel } } : {}),
+  };
+
   let upstream;
   try {
     upstream = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
@@ -2646,13 +2655,16 @@ async function generateGeminiResponse(request, env) {
         "Content-Type": "application/json",
         "x-goog-api-key": env.GEMINI_API_KEY
       },
-      body: JSON.stringify({
-        contents,
-        generationConfig: { maxOutputTokens: 2048 }
-      })
+      body: JSON.stringify({ contents, generationConfig }),
+      signal: AbortSignal.timeout(25_000),
     });
-  } catch {
-    return json({ error: "Gemini could not be reached. Please try again." }, 502);
+  } catch (error) {
+    const timedOut = error?.name === "TimeoutError" || error?.name === "AbortError";
+    return json({
+      error: timedOut
+        ? "Gemini took too long to respond. Please try again."
+        : "Gemini could not be reached. Please try again.",
+    }, timedOut ? 504 : 502);
   }
 
   const result = await upstream.json().catch(() => null);
