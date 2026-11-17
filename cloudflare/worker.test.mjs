@@ -690,8 +690,9 @@ test('Owner creates a one-year Director school with phone initial password; Dire
     method: 'POST', body: { username: 'new.director', password: '+961 70 123 456' },
   });
   assert.equal(directorLogin.status, 200);
-  assert.equal((await directorLogin.json()).account.role, 'director');
-  assert.equal((await directorLogin.clone().json()).account.mustChangePassword, true);
+  const directorLoginResult = await directorLogin.json();
+  assert.equal(directorLoginResult.account.role, 'director');
+  assert.equal(directorLoginResult.account.mustChangePassword, true);
   for (let attempt = 0; attempt < 6; attempt += 1) {
     const wrongPassword = await send(env, '/api/auth/login', {
       method: 'POST', body: { username: 'new.director', password: 'incorrect' },
