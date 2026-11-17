@@ -142,6 +142,21 @@ export const AIChatBot: React.FC<AIChatBotProps> = ({ currentLang, schoolId, sch
   const getSavedResponse = (query: string, context = schoolContext): string | null => {
     const q = query.toLowerCase();
 
+    // Quick replies are useful for a single, narrow intent. For a question
+    // combining multiple workflows, let Gemini compose one complete answer
+    // instead of returning only the first matching canned response.
+    const matchesAny = (terms: string[]) => terms.some((term) => q.includes(term));
+    const intentMatches = [
+      matchesAny(['register', 'registration', 'sign up', 'create account', 'inscription', 'registrar', 'registrazione', 'تسجيل', 'التسجيل']),
+      matchesAny(['password', 'username', 'sign in', 'sign-in', 'login', 'log in', 'mot de passe', 'contraseña', 'nome utente', 'كلمة المرور']),
+      matchesAny(['live class', 'live classes', 'live session', 'broadcast', 'join class', 'join the class', 'classroom', 'en direct', 'en vivo', 'diretta', 'صف مباشر', 'الصف المباشر']),
+      matchesAny(['saved lesson', 'saved lessons', 'learning resources', 'recording', 'archive', 'lesson', 'leçon', 'lección', 'lezione', 'دروس محفوظة']),
+      matchesAny(['price', 'pricing', 'rate', 'cost', 'fee', 'payment', 'tarif', 'prix', 'precio', 'prezzo', 'شهري', 'سعر', 'دولار']),
+      matchesAny(['privacy', 'data isolation', 'separate schools', 'separate school', 'another school', 'school tenant', 'tenant isolation', 'خصوصية', 'بيانات المدارس']),
+    ].filter(Boolean).length;
+
+    if (intentMatches > 1) return null;
+
     const applicationOverviewQuestion = [
       'what is agenda', 'about agenda', 'agenda application', 'agenda app', 'about the app',
       'about this platform', 'what is this app', 'what is this platform', 'what is this application',
