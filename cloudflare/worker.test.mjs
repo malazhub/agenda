@@ -154,9 +154,11 @@ function fakeEnvironment() {
 
     async all() {
       if (this.sql.includes("FROM accounts a") && this.sql.includes("INNER JOIN schools s ON s.director_id = a.id")) {
+        const requestedIds = this.sql.includes('a.id IN (') ? new Set(this.values) : null;
         const results = [...accounts.values()]
           .filter((account) => {
             const school = schools.get(account.school_id);
+            if (requestedIds && !requestedIds.has(account.id)) return false;
             return account.role === 'director' && school?.director_id === account.id && !platformOwners.has(account.id);
           })
           .map((account) => {
