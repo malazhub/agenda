@@ -520,7 +520,7 @@ Original user question (understand it directly; answer only in the selected lang
         // Skip a second Gemini call just to translate the generated answer.
         reply = response.text?.trim() || '';
       } catch (e) {
-        console.warn('Gemini chat error:', e);
+        console.warn('Gemini chat error (diagnostic):', e instanceof Error ? e.message : String(e));
       }
     }
 
