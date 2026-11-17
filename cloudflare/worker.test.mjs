@@ -666,7 +666,7 @@ test('Owner creates a one-year Director school and Director sets their own usern
     token: ownerToken,
     body: { activated: false, paid: false },
   });
-  assert.equal(disabledAndUnpaid.status, 200);
+  assert.equal(disabledAndUnpaid.status, 200, JSON.stringify(await disabledAndUnpaid.clone().json()));
   const updatedRows = await send(env, '/api/owner/directors', { token: ownerToken });
   const updatedDirector = (await updatedRows.json()).directors.find((item) => item.id === director.id);
   assert.equal(updatedDirector.activated, false);
