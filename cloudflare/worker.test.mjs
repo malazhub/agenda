@@ -322,7 +322,10 @@ test('Workers AI endpoint converts chat content and returns model text', async (
   assert.equal(capturedModel, '@cf/qwen/qwen3.8-27b');
   assert.deepEqual(capturedInput.messages, [{
     role: 'user',
-    content: 'Explain how to plan a study day.Keep the answer concise.'
+    content: [
+      { type: 'text', text: 'Explain how to plan a study day.' },
+      { type: 'text', text: 'Keep the answer concise.' }
+    ]
   }]);
   assert.equal(capturedInput.max_tokens, 384);
   assert.equal(capturedInput.reasoning_effort, 'low');
