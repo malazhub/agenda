@@ -68,7 +68,7 @@ jobs:
                 { role: "system", parts: [{ text: "أجب باللغة العربية فقط وبأسلوب طبيعي." }] },
                 { role: "user", parts: [{ text: "عرّف منصة Agenda باختصار." }] }
               ],
-              maxOutputTokens: 128
+              maxOutputTokens: 512
             }),
             signal: AbortSignal.timeout(55000)
           });
