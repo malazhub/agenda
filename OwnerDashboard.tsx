@@ -117,10 +117,10 @@ export const OwnerDashboard: React.FC<{ currentLang:Language; token:string; onSi
 
     <section className="rounded-2xl border bg-white overflow-hidden">
       <div className="p-4 flex flex-wrap justify-between items-center gap-3"><h2 className="font-black">{t.directors}</h2><div className="flex gap-2"><button onClick={()=>setShowCreate(v=>!v)} className="rounded-lg bg-indigo-700 px-3 py-2 text-xs font-bold text-white">{t.add}</button><button onClick={()=>void refresh()} aria-label="Refresh"><RefreshCw size={17}/></button></div></div>
-      {loading ? <p className="p-4">{t.loading}</p> : rows.length===0 ? <p className="p-4">{t.empty}</p> : <div className="overflow-x-auto">
+      {loading ? <p className="p-4">{t.loading}</p> : <div className="overflow-x-auto">
         <table className="w-full text-sm min-w-[1450px]">
           <thead className="bg-slate-50"><tr>{[t.school,t.director,t.phone,t.email,t.students,t.educators,t.joined,t.expiry,t.account,t.paymentState,t.schoolLink,t.paymentLink,t.actions].map(x=><th key={x} className="p-3 text-start whitespace-nowrap">{x}</th>)}</tr></thead>
-          <tbody>{rows.map(row=>{
+          <tbody>{rows.length===0 ? <tr><td colSpan={13} className="p-4 text-center text-slate-500">{t.empty}</td></tr> : rows.map(row=>{
             const link=destination(row);
             const contactLabel=row.paymentMethod==='whatsapp'?'WhatsApp':row.paymentMethod==='phone'?t.phone:row.paymentMethod==='email'?t.email:row.paymentMethod==='bank'?'Bank':row.paymentMethod==='suyool'?'Suyool':'—';
             return <tr key={row.id} className="border-t align-top">
