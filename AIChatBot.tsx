@@ -514,7 +514,7 @@ Platform architecture and navigation:
 - Explain the current school's prices, educators, grades and sessions using the supplied school configuration. Do not expose private account data, passwords, or other schools' information.
 Original user question (understand it directly; answer only in the selected language): "${selectedLanguageQuestion}"`
             }
-          ], { thinkingLevel: 'low', model: 'gemini-3.6-flash', maxOutputTokens: 1024 });
+          ], { thinkingLevel: 'low', model: 'gemini-2.5-flash', maxOutputTokens: 1024 });
 
         // The system prompt already requires the selected output language.
         // Skip a second Gemini call just to translate the generated answer.
