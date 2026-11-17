@@ -51,6 +51,16 @@ function fakeEnvironment() {
     }
 
     async first() {
+      if (this.sql.includes("FROM accounts a") &&
+          this.sql.includes("NOT EXISTS (SELECT 1 FROM platform_owners p") &&
+          this.sql.includes("WHERE a.id = ?")) {
+        const account = accounts.get(this.values[0]);
+        const school = account ? schools.get(account.school_id) : null;
+        if (!account || account.role !== 'director' ||
+            !school || school.director_id !== account.id ||
+            platformOwners.has(account.id)) return null;
+        return { id: account.id, school_id: account.school_id };
+      }
       if (this.sql.includes('FROM director_setup_tokens')) {
         const record = setupTokens.get(this.values[0]);
         if (!record || record.used_at) return null;
