@@ -115,7 +115,17 @@ export const AIChatBot: React.FC<AIChatBotProps> = ({ currentLang, schoolId, sch
 
   // Deterministic answers use the selected school's live configuration.
   const getSavedResponse = (query: string, context = schoolContext): string | null => {
-    const q = query.toLowerCase();
+    const q = query.toLowerCase().trim();
+
+    // Lightweight greetings should be instant and should not spend a Gemini
+    // request. Detailed questions continue through the Gemini integration.
+    if (/^(hi|hello|hey|how are you|how's it going|good morning|good afternoon|good evening)[!.? ]*$/.test(q)) {
+      if (currentLang === 'ar') return 'مرحباً! أنا بخير، شكراً لسؤالك. كيف يمكنني مساعدتك اليوم؟';
+      if (currentLang === 'fr') return 'Bonjour ! Je vais bien, merci. Comment puis-je vous aider aujourd’hui ?';
+      if (currentLang === 'es') return '¡Hola! Estoy bien, gracias. ¿Cómo puedo ayudarte hoy?';
+      if (currentLang === 'it') return 'Ciao! Sto bene, grazie. Come posso aiutarti oggi?';
+      return 'Hello! I’m doing well, thank you. How can I help you with Agenda today?';
+    }
 
     // Quick replies are useful for a single, narrow intent. For a question
     // combining multiple workflows, let Gemini compose one complete answer
@@ -314,15 +324,14 @@ export const AIChatBot: React.FC<AIChatBotProps> = ({ currentLang, schoolId, sch
     }
     setMessages(prev => [...prev, userMsg]);
 
-    // Load the current school's authoritative configuration.
-    let currentSchoolContext = schoolContext;
+    // Never make chat wait for a school-context refresh. Use the latest
+    // cached context immediately, then refresh it in the background for the
+    // next message. The initial context loader already runs when the chat mounts.
+    const currentSchoolContext = schoolContext;
     if (schoolId) {
-      try {
-        currentSchoolContext = await getSchoolPublicContext(schoolId);
-        setSchoolContext(currentSchoolContext);
-      } catch {
-        // Retain the most recently loaded school context if the API is temporarily unavailable.
-      }
+      void getSchoolPublicContext(schoolId)
+        .then((context) => setSchoolContext(context))
+        .catch((error) => console.warn('Background school AI context refresh failed.', error));
     }
     const savedAnswer = getSavedResponse(selectedLanguageQuestion, currentSchoolContext) ||
       (selectedLanguageQuestion !== text ? getSavedResponse(text, currentSchoolContext) : null);
@@ -394,19 +403,20 @@ User question (translated to the selected language): "${selectedLanguageQuestion
       }
     }
 
-    // Fallback if API key is missing or the network is unavailable.
+    // Do not disguise an upstream/API failure as an AI answer. Restore the
+    // question so the user can retry, and show a clear localized service error.
     if (!reply) {
-      await new Promise(r => setTimeout(r, 250));
+      setInputText(text);
       if (currentLang === 'ar') {
-        reply = `يمكنني مساعدتك بشأن مدرسة ${currentSchoolContext?.schoolName || schoolName || 'Agenda'}: التسجيل، الدخول، الصفوف المباشرة، الموارد التعليمية والأسعار الشهرية. اكتب سؤالك بتفصيل أكبر لأرشدك خطوة بخطوة.`;
+        reply = 'تعذر الاتصال بخدمة الذكاء الاصطناعي حالياً. احتفظنا بسؤالك في خانة الكتابة؛ يرجى المحاولة مجدداً بعد قليل.';
       } else if (currentLang === 'fr') {
-        reply = `Je peux vous aider pour l’établissement ${currentSchoolContext?.schoolName || schoolName || 'Agenda'} : inscription, connexion, cours en direct, ressources pédagogiques et tarifs mensuels. Précisez votre question pour obtenir des étapes détaillées.`;
+        reply = 'Le service IA est momentanément inaccessible. Votre question a été conservée dans le champ de saisie ; veuillez réessayer dans un instant.';
       } else if (currentLang === 'es') {
-        reply = `Puedo ayudarte con la escuela ${currentSchoolContext?.schoolName || schoolName || 'Agenda'}: registro, inicio de sesión, clases en directo, recursos educativos y tarifas mensuales. Especifica tu pregunta para recibir instrucciones paso a paso.`;
+        reply = 'No se pudo conectar con el servicio de IA. Tu pregunta se ha conservado en el campo de texto; inténtalo de nuevo en unos instantes.';
       } else if (currentLang === 'it') {
-        reply = `Posso aiutarti con la scuola ${currentSchoolContext?.schoolName || schoolName || 'Agenda'}: registrazione, accesso, lezioni dal vivo, risorse didattiche e tariffe mensili. Specifica la domanda per ricevere istruzioni dettagliate.`;
+        reply = 'Non è stato possibile raggiungere il servizio IA. La domanda è rimasta nel campo di testo; riprova tra poco.';
       } else {
-        reply = `I can help with ${currentSchoolContext?.schoolName || schoolName || 'Agenda'}: registration, sign-in, live classes, learning resources, and monthly prices. Please add a little detail so I can guide you step by step.`;
+        reply = 'I could not reach the AI service just now. Your question has been kept in the input field; please try again shortly.';
       }
     }
 
