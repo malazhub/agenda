@@ -268,6 +268,7 @@ function fakeEnvironment() {
       ALLOWED_ORIGINS: 'https://malazhub.github.io',
       STREAM_VIDEO_API_KEY: 'test-stream-video-key',
       STREAM_VIDEO_API_SECRET: 'test-stream-video-secret-with-sufficient-length',
+      AI: { run: async () => ({ response: 'Workers AI test response' }) },
     },
     accounts,
     schools,
@@ -296,44 +297,65 @@ async function send(env, path, { method = 'GET', body, token, origin } = {}) {
   return worker.fetch(request, env);
 }
 
-test('Gemini endpoint normalizes flat text and image parts to REST Content format', async () => {
+test('Workers AI endpoint converts chat content and returns model text', async () => {
   const { env } = fakeEnvironment();
-  env.GEMINI_API_KEY = 'test-gemini-key';
-  const previousFetch = globalThis.fetch;
-  let captured;
-  try {
-    globalThis.fetch = async (url, init) => {
-      assert.ok(String(url).endsWith("/models/gemini-3.8-flash:generateContent"));
-      captured = JSON.parse(init.body);
-      assert.equal(new Headers(init.headers).get('x-goog-api-key'), 'test-gemini-key');
-      return new Response(JSON.stringify({
-        candidates: [{ content: { parts: [{ text: 'Gemini test response' }] } }]
-      }), { status: 200, headers: { 'content-type': 'application/json' } });
-    };
+  let capturedModel;
+  let capturedInput;
+  env.AI.run = async (model, input) => {
+    capturedModel = model;
+    capturedInput = input;
+    return { choices: [{ message: { content: 'Qwen test response' } }] };
+  };
 
-    const response = await send(env, '/api/ai/generate', {
-      method: 'POST',
-      body: {
-        model: 'gemini-3.8-flash',
-        contents: [
-          { text: 'Explain how to plan a study day.' },
-          'Keep the answer concise.'
-        ]
-      }
-    });
-    assert.equal(response.status, 200);
-    assert.deepEqual(await response.json(), { text: 'Gemini test response' });
-    assert.deepEqual(captured.contents, [{
-      role: 'user',
-      parts: [
+  const response = await send(env, '/api/ai/generate', {
+    method: 'POST',
+    body: {
+      contents: [
         { text: 'Explain how to plan a study day.' },
-        { text: 'Keep the answer concise.' }
-      ]
-    }]);
-  } finally {
-    globalThis.fetch = previousFetch;
-  }
+        'Keep the answer concise.'
+      ],
+      maxOutputTokens: 384
+    }
+  });
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), { text: 'Qwen test response' });
+  assert.equal(capturedModel, '@cf/qwen/qwen3.8-27b');
+  assert.deepEqual(capturedInput.messages, [{
+    role: 'user',
+    content: 'Explain how to plan a study day.Keep the answer concise.'
+  }]);
+  assert.equal(capturedInput.max_tokens, 384);
+  assert.equal(capturedInput.reasoning_effort, 'low');
 });
+
+test('Workers AI endpoint converts inline images to Qwen image_url parts', async () => {
+  const { env } = fakeEnvironment();
+  let capturedInput;
+  env.AI.run = async (_model, input) => {
+    capturedInput = input;
+    return { response: 'Image received.' };
+  };
+
+  const response = await send(env, '/api/ai/generate', {
+    method: 'POST',
+    body: {
+      contents: [
+        { inlineData: { mimeType: 'image/png', data: 'aGVsbG8=' } },
+        'Describe this image.'
+      ]
+    }
+  });
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), { text: 'Image received.' });
+  assert.deepEqual(capturedInput.messages, [{
+    role: 'user',
+    content: [
+      { type: 'image_url', image_url: { url: 'data:image/png;base64,aGVsbG8=' } },
+      { type: 'text', text: 'Describe this image.' }
+    ]
+  }]);
+});
+
 test('health and CORS preflight are served', async () => {
   const { env } = fakeEnvironment();
   const health = await send(env, '/api/health');
