@@ -2669,35 +2669,56 @@ async function generateGeminiResponse(request, env) {
     ...(thinkingLevel ? { thinkingConfig: { thinkingLevel } } : {}),
   };
 
+  const fallbackModel = model === "gemini-3.6-flash" ? "gemini-3.8-flash" : "gemini-3.6-flash";
   let upstream;
-  try {
-    upstream = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-goog-api-key": env.GEMINI_API_KEY
-      },
-      body: JSON.stringify({ contents, generationConfig }),
-      signal: AbortSignal.timeout(45_000),
+  let result;
+  let activeModel = model;
+  let lastErrorMessage = "";
+  for (const candidateModel of [model, fallbackModel]) {
+    activeModel = candidateModel;
+    try {
+      upstream = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${candidateModel}:generateContent`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-goog-api-key": env.GEMINI_API_KEY
+        },
+        body: JSON.stringify({ contents, generationConfig }),
+        signal: AbortSignal.timeout(18_000),
+      });
+    } catch (error) {
+      const timedOut = error?.name === "TimeoutError" || error?.name === "AbortError";
+      return json({
+        error: timedOut
+          ? "Gemini took too long to respond. Please try again."
+          : "Gemini could not be reached. Please try again.",
+      }, timedOut ? 504 : 502);
+    }
+
+    result = await upstream.json().catch(() => null);
+    if (upstream.ok || upstream.status !== 503 || candidateModel === fallbackModel) break;
+    console.warn("Gemini model temporarily unavailable; trying fallback model.", {
+      failedModel: candidateModel,
+      fallbackModel,
+      upstreamStatus: upstream.status,
     });
-  } catch (error) {
-    const timedOut = error?.name === "TimeoutError" || error?.name === "AbortError";
-    return json({
-      error: timedOut
-        ? "Gemini took too long to respond. Please try again."
-        : "Gemini could not be reached. Please try again.",
-    }, timedOut ? 504 : 502);
   }
 
-  const result = await upstream.json().catch(() => null);
   if (!upstream.ok) {
-    // Log only non-secret diagnostics; never log the API key or request content.
-    console.error("Gemini API request failed.", { model, upstreamStatus: upstream.status });
+    // Log safe Google diagnostics only; never log the API key or prompt.
+    lastErrorMessage = typeof result?.error?.message === "string"
+      ? result.error.message.slice(0, 240)
+      : "";
+    console.error("Gemini API request failed.", {
+      model: activeModel,
+      upstreamStatus: upstream.status,
+      upstreamMessage: lastErrorMessage,
+    });
     const status = upstream.status === 429 ? 429 : 502;
     return json({
       error: status === 429
         ? "Gemini is temporarily rate-limited. Please try again shortly."
-        : `Gemini request failed (Google API HTTP ${upstream.status}). Check the server-side key, model access, and request format.`,
+        : `Gemini request failed (Google API HTTP ${upstream.status})${lastErrorMessage ? `: ${lastErrorMessage}` : ""}. Check Google AI Studio service availability and model access.`,
     }, status);
   }
   const text = (result?.candidates?.[0]?.content?.parts || [])
