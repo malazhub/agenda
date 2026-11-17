@@ -71,21 +71,43 @@ jobs:
             console.log(`Owner API ${method} preflight passed for ${origin}`);
           }
 
-          const response = await fetch(endpoint, {
+          const readResponse = await fetch(endpoint, {
             headers: { Origin: origin, Authorization: "Bearer invalid-smoke-test-token" }
           });
-          if (response.headers.get("access-control-allow-origin") !== origin) {
-            console.error("Owner API response did not include the expected CORS origin:", {
-              status: response.status,
-              allowedOrigin: response.headers.get("access-control-allow-origin")
+          if (readResponse.headers.get("access-control-allow-origin") !== origin ||
+              readResponse.status !== 401) {
+            console.error("Owner API GET request failed its browser-origin/authentication check:", {
+              status: readResponse.status,
+              allowedOrigin: readResponse.headers.get("access-control-allow-origin")
             });
             process.exit(1);
           }
-          if (response.status !== 401) {
-            console.error("Owner API auth smoke test returned an unexpected status:", response.status);
+          console.log("Owner API actual GET request passed (401 for invalid test token, visible to browser origin).");
+
+          const createResponse = await fetch(endpoint, {
+            method: "POST",
+            headers: {
+              Origin: origin,
+              Authorization: "Bearer invalid-smoke-test-token",
+              "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+              fullName: "Diagnostics only",
+              email: "diagnostics@example.invalid",
+              phone: "0000000000",
+              schoolName: "Diagnostics only",
+              paymentReceived: true
+            })
+          });
+          if (createResponse.headers.get("access-control-allow-origin") !== origin ||
+              createResponse.status !== 401) {
+            console.error("Owner API actual POST request failed its browser-origin/authentication check:", {
+              status: createResponse.status,
+              allowedOrigin: createResponse.headers.get("access-control-allow-origin")
+            });
             process.exit(1);
           }
-          console.log("Owner API authenticated route is reachable and returns 401 for an invalid test token.");
+          console.log("Owner API actual POST request passed (401 before any create action, visible to browser origin).");
           NODE
 
       - name: Verify live Cloudflare Workers AI response
