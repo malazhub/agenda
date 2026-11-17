@@ -44,7 +44,7 @@ jobs:
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-              model: "gemini-3.6-flash",
+              model: "gemini-2.5-flash",
               contents: [{ text: "Reply with exactly: AGENDA_AI_OK" }],
               generationConfig: { maxOutputTokens: 64 }
             }),
