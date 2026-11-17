@@ -3,6 +3,7 @@ import { Language } from '../types';
 import { translations } from '../translations';
 import { UserPlus, X, CheckCircle2, CreditCard, ArrowLeft, ArrowRight, Eye, EyeOff } from 'lucide-react';
 import {
+  getSchoolPayment,
   getRegistrationGrades,
   getRegistrationEducators,
   loginAccount,
@@ -45,6 +46,7 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
   const [isLogin, setIsLogin] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [schoolPayment, setSchoolPayment] = useState({paymentMethod:'suyool',paymentValue:'https://payments.suyool.com/qr/p585_malazjanbeih'});
 
     // All registered educators are loaded from the Cloudflare database.
   const [educatorsList, setEducatorsList] = useState<RegistrationEducator[]>([]);
@@ -144,6 +146,8 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
     setError(null);
     onClose();
   };
+
+  useEffect(() => { if (!isOpen || !showPayment) return; getSchoolPayment(schoolId).then(setSchoolPayment).catch(() => {}); }, [isOpen, showPayment, schoolId]);
 
   if (!isOpen) return null;
 
@@ -281,7 +285,7 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
               <p className="text-sm font-semibold text-slate-700">{t.paymentDescription}</p>
             </div>
             <a
-              href="https://payments.suyool.com/qr/p585_malazjanbeih"
+              href={schoolPayment.paymentMethod === 'whatsapp' ? 'https://wa.me/' + schoolPayment.paymentValue.replace(/\\D/g, '') : schoolPayment.paymentMethod === 'phone' ? 'tel:' + schoolPayment.paymentValue : schoolPayment.paymentMethod === 'email' ? 'mailto:' + schoolPayment.paymentValue : schoolPayment.paymentValue}
               target="_blank"
               rel="noopener noreferrer"
               className="flex w-full items-center justify-center rounded-xl bg-indigo-700 px-5 py-3 text-sm font-black text-white transition hover:bg-indigo-800"
