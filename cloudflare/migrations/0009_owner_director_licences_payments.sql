@@ -28,3 +28,11 @@ SET license_expires_at = (
 WHERE director_id IS NOT NULL;
 
 CREATE INDEX IF NOT EXISTS platform_owners_account_idx ON platform_owners(account_id);
+
+-- Keep the existing platform-owner payment link only on the original default school.
+-- Other Director schools must be assigned their own destination by the Owner.
+UPDATE schools
+SET payment_method = 'suyool',
+    payment_value = 'https://payments.suyool.com/qr/p585_malazjanbeih'
+WHERE id = 'default-agenda-school'
+  AND payment_method IS NULL;
