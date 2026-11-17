@@ -846,7 +846,6 @@ async function createOwnerDirector(request, env) {
   const owner = await requireOwner(request, env);
   if (!owner) return json({ error: "Owner access required." }, 401);
   const body = await requestJson(request);
-  const username = typeof body?.username === "string" ? body.username.trim().toLowerCase() : "";
   const fullName = typeof body?.fullName === "string" ? body.fullName.trim() : "";
   const email = typeof body?.email === "string" ? body.email.trim().toLowerCase() : "";
   const phone = typeof body?.phone === "string" ? body.phone.trim() : "";
@@ -855,19 +854,14 @@ async function createOwnerDirector(request, env) {
   if (body?.paymentReceived !== true) {
     return json({ error: "Confirm that the one-time USD 150 school licence payment has been received before creating this Director." }, 400);
   }
-  if (!/^[a-z0-9._-]{3,32}$/.test(username)) {
-    return json({ error: "Use a 3–32 character username with letters, numbers, dot, underscore or hyphen." }, 400);
-  }
   if (fullName.length < 2 || fullName.length > 120 ||
       !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ||
       phone.length > 40 ||
       schoolName.length < 2 || schoolName.length > 160) {
     return json({ error: "Enter a valid Director name, email, phone number and school name." }, 400);
   }
-  const duplicate = await env.DB.prepare("SELECT id FROM accounts WHERE username = ? COLLATE NOCASE").bind(username).first();
-  if (duplicate) return json({ error: "That username is already in use." }, 409);
-
   const accountId = randomId();
+  const username = `pending-${randomId().replace(/-/g, "").slice(0, 20)}`;
   const schoolId = `school-${randomId()}`;
   const setupToken = createSetupToken();
   const setupTokenHash = await hashSetupToken(setupToken);
@@ -919,7 +913,9 @@ async function issueOwnerDirectorSetupLink(request, env, directorId) {
 async function claimDirectorSetup(request, env) {
   const body = await requestJson(request);
   const token = typeof body?.token === "string" ? body.token.trim() : "";
+  const username = typeof body?.username === "string" ? body.username.trim().toLowerCase() : "";
   const password = typeof body?.password === "string" ? body.password : "";
+  if (!/^[a-z0-9._-]{3,32}$/.test(username)) return json({ error: "Choose a username with 3–32 letters, numbers, dots, underscores or hyphens." }, 400);
   if (!/^[A-Za-z0-9_-]{40,50}$/.test(token)) return json({ error: "This setup link is invalid or has expired." }, 400);
   if (password.length < 12 || password.length > MAX_PASSWORD_LENGTH) {
     return json({ error: "Choose a password with at least 12 characters." }, 400);
@@ -933,12 +929,14 @@ async function claimDirectorSetup(request, env) {
        AND t.expires_at > datetime('now') AND a.role = 'director'`
   ).bind(tokenHash).first();
   if (!setup) return json({ error: "This setup link is invalid, has expired, or has already been used." }, 400);
+  const duplicate = await env.DB.prepare("SELECT id FROM accounts WHERE username = ? COLLATE NOCASE AND id != ?").bind(username, setup.id).first();
+  if (duplicate) return json({ error: "That username is already in use. Choose another." }, 409);
   const consumed = await env.DB.prepare(
     "UPDATE director_setup_tokens SET used_at = datetime('now') WHERE token_hash = ? AND used_at IS NULL AND expires_at > datetime('now')"
   ).bind(tokenHash).run();
   if (!consumed.meta?.changes) return json({ error: "This setup link has already been used." }, 409);
-  await env.DB.prepare("UPDATE accounts SET password_hash = ? WHERE id = ? AND role = 'director'")
-    .bind(await hashPassword(password), setup.id).run();
+  await env.DB.prepare("UPDATE accounts SET username = ?, password_hash = ? WHERE id = ? AND role = 'director'")
+    .bind(username, await hashPassword(password), setup.id).run();
   const account = await env.DB.prepare("SELECT * FROM accounts WHERE id = ?").bind(setup.id).first();
   const authToken = await signToken(
     { sub: setup.id, role: "director", username: setup.username, exp: Math.floor(Date.now() / 1000) + SESSION_TTL_SECONDS },
