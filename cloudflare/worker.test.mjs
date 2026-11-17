@@ -260,7 +260,7 @@ function fakeEnvironment() {
         account.password_hash = password_hash;
         return { meta: { changes: 1 } };
       }
-      if (this.sql.startsWith('UPDATE accounts SET') && this.sql.includes('WHERE id = ?') && this.sql.includes("role = 'director'")) {
+      if (this.sql.startsWith('UPDATE accounts SET') && this.sql.includes('WHERE id = ?') && !this.sql.includes('username = ?')) {
         const id = this.values[this.values.length - 1];
         const account = accounts.get(id);
         if (!account || account.role !== 'director') return { meta: { changes: 0 } };
