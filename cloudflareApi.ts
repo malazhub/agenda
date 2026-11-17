@@ -1,7 +1,7 @@
 export interface CloudflareAccount {
   id: string;
   username: string;
-  role: 'student' | 'educator' | 'director';
+  role: 'student' | 'educator' | 'director' | 'owner';
   schoolId: string;
   fullName: string;
   email: string;
@@ -633,3 +633,8 @@ export async function generateAIContent(
     }),
   });
 }
+
+export interface OwnerDirector {id:string;username:string;fullName:string;email:string;phone:string;createdAt:string;activated:boolean;paid:boolean;expiresAt:string|null;schoolId:string;schoolName:string;licenseActive:boolean;paymentMethod:'suyool'|'whatsapp'|'phone'|'email'|'bank';paymentValue:string;studentCount:number;educatorCount:number;directorLink:string;}
+export function getOwnerDirectors(token:string):Promise<{directors:OwnerDirector[]}>{return request('/api/owner/directors',{headers:authHeaders(token)});}
+export function updateOwnerDirector(token:string,id:string,update:{paymentMethod?:OwnerDirector['paymentMethod'];paymentValue?:string;renewLicense?:boolean;licenseActive?:boolean}):Promise<{updated:boolean}>{return request('/api/owner/directors/'+encodeURIComponent(id),{method:'PATCH',headers:authHeaders(token),body:JSON.stringify(update)});}
+export function getSchoolPayment(schoolId:string):Promise<{paymentMethod:OwnerDirector['paymentMethod'];paymentValue:string}>{return request('/api/school-payment?'+new URLSearchParams({schoolId}).toString());}
