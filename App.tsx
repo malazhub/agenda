@@ -127,7 +127,10 @@ const registerSignOutCleanup = useCallback(
     const storedOwnerToken = sessionStorage.getItem('agenda-owner-token');
     if (storedOwnerToken) { setOwnerToken(storedOwnerToken); void getCurrentAccount(storedOwnerToken).then(({account}) => setOwnerAccount(account)).catch(() => { sessionStorage.removeItem('agenda-owner-token'); setOwnerToken(''); }); }
     const storedToken = sessionStorage.getItem('agenda-session-token');
+    const storedDirectorToken = sessionStorage.getItem('agenda-director-token');
+    if (storedDirectorToken) setDirectorAccessToken(storedDirectorToken);
     if (storedToken) setSessionToken(storedToken);
+    else if (storedDirectorToken) setSessionToken(storedDirectorToken);
   }, []);
 
   useEffect(() => {
@@ -138,6 +141,12 @@ const registerSignOutCleanup = useCallback(
         const { account } = await getCurrentAccount(sessionToken);
         if (!active) return;
         if (account.role === 'owner') { setOwnerAccount(account); setOwnerToken(sessionToken); return; }
+        if (account.role === 'director') {
+          sessionStorage.setItem('agenda-director-token', sessionToken);
+          setDirectorAccessToken(sessionToken);
+          setRegisteredAccount(account);
+          return;
+        }
         setRegisteredAccount(account);
         setUserProfile((previous) => ({
           ...previous,
@@ -211,6 +220,15 @@ const registerSignOutCleanup = useCallback(
   };
 
   const handleRegisterSuccess = (account: CloudflareAccount, token: string) => {
+    if (account.role === 'director') {
+      sessionStorage.setItem('agenda-director-token', token);
+      sessionStorage.setItem('agenda-session-token', token);
+      setSessionToken(token);
+      setDirectorAccessToken(token);
+      setRegisteredAccount(account);
+      showToast(`${account.fullName}: ${currentLang === 'ar' ? 'تم تسجيل دخول المدير.' : 'Director signed in successfully.'}`);
+      return;
+    }
     const role = account.role === 'educator' ? 'teacher' : 'student';
     sessionStorage.setItem('agenda-session-token', token);
     setSessionToken(token);
