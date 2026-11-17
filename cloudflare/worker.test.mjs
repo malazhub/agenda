@@ -18,6 +18,7 @@ function hashPassword(password) {
 
 function fakeEnvironment() {
   const accounts = new Map();
+  const platformOwners = new Set();
   const schools = new Map([['default-agenda-school', { id: 'default-agenda-school', name: 'Agenda', director_id: 'director-account-0000000000000000' }]]);
   const pricing = new Map();
   const attempts = [];
@@ -49,6 +50,18 @@ function fakeEnvironment() {
     }
 
     async first() {
+      if (this.sql.includes('FROM platform_owners')) {
+        const accountId = this.values[0];
+        const account = accounts.get(accountId);
+        const school = account ? schools.get(account.school_id) : null;
+        if (!platformOwners.has(accountId)) return null;
+        if (this.sql.includes('INNER JOIN accounts')) {
+          return account?.role === 'director' && school?.director_id === accountId
+            ? { account_id: accountId }
+            : null;
+        }
+        return { account_id: accountId };
+      }
       if (this.sql.includes('FROM schools WHERE id = ?')) {
         const school = schools.get(this.values[0]);
         return school ? { id: school.id, name: school.name } : null;
@@ -271,6 +284,7 @@ function fakeEnvironment() {
       AI: { run: async () => ({ response: 'Workers AI test response' }) },
     },
     accounts,
+    platformOwners,
     schools,
     sessions,
     pricing,
@@ -542,6 +556,54 @@ test('Director login reads persisted role tables and saves status updates', asyn
 
   const denied = await send(env, '/api/director/accounts');
   assert.equal(denied.status, 401);
+});
+
+test('Platform Owner can manage only the school owned by their Director account', async () => {
+  const { env, platformOwners } = fakeEnvironment();
+  platformOwners.add('director-account-0000000000000000');
+
+  const login = await send(env, '/api/auth/login', {
+    method: 'POST',
+    body: { username: 'director', password: 'DirectorPassword#2026' },
+  });
+  assert.equal(login.status, 200);
+  const { account, token } = await login.json();
+  assert.equal(account.role, 'owner');
+
+  const profile = await send(env, '/api/director/profile', { token });
+  assert.equal(profile.status, 200);
+  assert.deepEqual(await profile.json(), {
+    profile: {
+      schoolId: 'default-agenda-school',
+      schoolName: 'Agenda',
+      username: 'director',
+    },
+  });
+
+  const dashboard = await send(env, '/api/director/accounts', { token });
+  assert.equal(dashboard.status, 200);
+
+  // Owner identity remains Owner for platform-level routes.
+  const ownerDashboard = await send(env, '/api/owner/directors', { token });
+  assert.equal(ownerDashboard.status, 200);
+});
+
+test('A platform Owner without a Director-owned school cannot use Director endpoints', async () => {
+  const { env, accounts, platformOwners } = fakeEnvironment();
+  const educator = accounts.get('00000000-0000-4000-8000-000000000001');
+  educator.password_hash = hashPassword('PlatformOwnerPassword#2026');
+  platformOwners.add(educator.id);
+
+  const login = await send(env, '/api/auth/login', {
+    method: 'POST',
+    body: { username: 'assigned.educator', password: 'PlatformOwnerPassword#2026' },
+  });
+  assert.equal(login.status, 200);
+  const { account, token } = await login.json();
+  assert.equal(account.role, 'owner');
+
+  const profile = await send(env, '/api/director/profile', { token });
+  assert.equal(profile.status, 401);
 });
 
 test('Director can save a live session and the grade catalog returns its playback URL', async () => {
