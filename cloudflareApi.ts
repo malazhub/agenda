@@ -660,7 +660,7 @@ export interface OwnerDirector {
   createdAt:string; activated:boolean; paid:boolean; expiresAt:string|null;
   schoolId:string; schoolName:string; licenseActive:boolean;
   paymentMethod:DirectorPaymentMethod; paymentValue:string;
-  setupPending:boolean; studentCount:number; educatorCount:number; directorLink:string;
+  setupPending:boolean; phonePasswordEnabled:boolean; studentCount:number; educatorCount:number; directorLink:string;
 }
 export interface CreateOwnerDirectorInput {
   fullName:string; email:string; phone:string;
@@ -683,7 +683,7 @@ export function updateOwnerDirector(token:string,id:string,update:{renewLicense?
 export function saveOwnerDirectorStatuses(token:string,updates:Array<{id:string;activated:boolean;paid:boolean}>):Promise<{updated:number;statuses:Array<{id:string;activated:boolean;paid:boolean}>}> {
   return request('/api/owner/directors/status',{method:'PATCH',headers:authHeaders(token),body:JSON.stringify({updates})});
 }
-export function resetOwnerDirectorPhonePassword(token:string,id:string):Promise<{reset:boolean;message:string}> {
+export function resetOwnerDirectorPhonePassword(token:string,id:string):Promise<{reset:boolean;verified:boolean;username:string;phoneDigits:number;phoneLastTwo:string;activated:boolean;paid:boolean;message:string}> {
   return request('/api/owner/directors/'+encodeURIComponent(id)+'/reset-phone-password',{method:'POST',headers:authHeaders(token)});
 }
 export function deleteOwnerDirector(token:string,id:string):Promise<{deleted:boolean}> {
