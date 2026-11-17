@@ -86,7 +86,16 @@ function fakeEnvironment() {
       if (this.sql.includes('schools.director_id = accounts.id') || this.sql.includes('schools.director_id = a.id')) {
         const account = accounts.get(this.values[0]);
         const school = account ? schools.get(account.school_id) : null;
-        return school?.director_id === account?.id ? { school_id: school.id, id: school.id, username: account.username, school_name: school.name } : null;
+        return school?.director_id === account?.id ? {
+          school_id: school.id,
+          id: school.id,
+          username: account.username,
+          school_name: school.name,
+          activated: account.activated,
+          expires_at: account.expires_at,
+          license_active: school.license_active ?? 1,
+          license_expires_at: school.license_expires_at || null,
+        } : null;
       }
       if (this.sql.includes('SELECT id FROM accounts WHERE username')) {
         const account = [...accounts.values()].find((item) => item.username.toLowerCase() === this.values[0].toLowerCase());
@@ -687,6 +696,8 @@ test('Owner creates a one-year Director school and Director sets their own usern
     body: { username: 'new.director', password: 'x' },
   });
   assert.equal(blockedDirectorLogin.status, 401);
+  const blockedExistingSession = await send(env, '/api/director/profile', { token: directorToken });
+  assert.equal(blockedExistingSession.status, 401);
 
   const restored = await send(env, `/api/owner/directors/${director.id}`, {
     method: 'PATCH',
