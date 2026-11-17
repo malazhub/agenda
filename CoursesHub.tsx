@@ -267,6 +267,7 @@ const updateAccount = async (
     paid?: boolean;
     renew?: boolean;
     password?: string;
+    username?: string;
     registeredSessionId?: string;
     educatorId?: string;
   }
@@ -354,6 +355,30 @@ const updateAccount = async (
     } catch (err) {
       setDirectorDataError(currentLang === 'ar' ? 'تعذر حذف الحساب.' : currentLang === 'fr' ? 'Impossible de supprimer le compte.' : currentLang === 'es' ? 'No se pudo eliminar la cuenta.' : currentLang === 'it' ? 'Impossibile eliminare l’account.' : err instanceof Error ? err.message : 'Failed to delete account from Cloudflare.');
     }
+  };
+
+  const editAccountUsername = (account: DirectorRow) => {
+    const nextUsername = window.prompt(
+      currentLang === 'ar' ? 'اسم المستخدم الجديد' :
+      currentLang === 'fr' ? 'Nouveau nom d’utilisateur' :
+      currentLang === 'es' ? 'Nuevo nombre de usuario' :
+      currentLang === 'it' ? 'Nuovo nome utente' : 'New username',
+      account.username
+    );
+    if (nextUsername === null) return;
+    const username = nextUsername.trim();
+    if (!/^[a-zA-Z0-9_.-]{3,40}$/.test(username)) {
+      setDirectorDataError(
+        currentLang === 'ar' ? 'يجب أن يتكون اسم المستخدم من 3 إلى 40 حرفاً أو رقماً أو . _ -' :
+        currentLang === 'fr' ? 'Le nom d’utilisateur doit contenir 3 à 40 caractères (lettres, chiffres, . _ -).' :
+        currentLang === 'es' ? 'El nombre de usuario debe tener entre 3 y 40 caracteres (letras, números, . _ -).' :
+        currentLang === 'it' ? 'Il nome utente deve contenere da 3 a 40 caratteri (lettere, numeri, . _ -).' :
+        'Username must be 3–40 characters using letters, numbers, dot, underscore or hyphen.'
+      );
+      return;
+    }
+    if (username === account.username) return;
+    void updateAccount(account, { username });
   };
 
   const resetAccountPassword = (account: DirectorRow) => {
@@ -477,7 +502,12 @@ const updateAccount = async (
 </select>
                 </td>
               )}
-              <td className="px-3 py-3 text-slate-700">{row.username}</td>
+              <td className="px-3 py-3 text-slate-700">
+                <span>{row.username}</span>
+                <button type="button" onClick={() => editAccountUsername(row)} className="ms-2 text-indigo-700 underline cursor-pointer">
+                  {currentLang === 'ar' ? 'تعديل' : currentLang === 'fr' ? 'Modifier' : currentLang === 'es' ? 'Editar' : currentLang === 'it' ? 'Modifica' : 'Edit'}
+                </button>
+              </td>
               <td className="px-3 py-3 text-slate-700">
                 <span aria-label={t.passwordNotStored}>••••••••</span>
                 <button type="button" onClick={() => resetAccountPassword(row)} className="ms-2 text-indigo-700 underline cursor-pointer">{t.resetPassword}</button>
