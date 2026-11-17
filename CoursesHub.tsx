@@ -751,14 +751,14 @@ const updateAccount = async (
           </p>
           <p className="mt-1">
             {currentLang === 'ar'
-              ? 'في أول تسجيل دخول، استخدم رقم الهاتف الذي أدخله المالك لهذا الحساب ككلمة المرور. أدخله تماماً كما تم تسجيله، بما في ذلك رمز البلد والمسافات. بعد الدخول، يمكنك تغييره من لوحة المدير.'
+              ? 'اسم المستخدم هو الاسم الذي اخترته عبر رابط الإعداد الخاص. كلمة المرور الأولية هي رقم الهاتف الذي سجّله المالك لحسابك. أدخل رقم الهاتف هذا في خانة كلمة المرور، مع رمز البلد. بعد تسجيل الدخول يمكنك تغييره من لوحة المدير.'
               : currentLang === 'fr'
-                ? 'Lors de votre première connexion, utilisez comme mot de passe le numéro de téléphone que le propriétaire a enregistré pour votre compte. Saisissez-le exactement comme indiqué, avec l’indicatif du pays et les espaces. Vous pourrez le modifier depuis votre tableau de bord après connexion.'
+                ? 'Utilisez le nom d’utilisateur choisi via votre lien privé. Votre mot de passe initial est le numéro de téléphone enregistré par le propriétaire pour votre compte. Saisissez ce numéro dans le champ Mot de passe, avec l’indicatif du pays. Vous pourrez le modifier depuis votre tableau de bord après connexion.'
                 : currentLang === 'es'
-                  ? 'En el primer inicio de sesión, usa como contraseña el número de teléfono que el propietario registró para tu cuenta. Escríbelo exactamente como se guardó, incluido el código de país y los espacios. Después podrás cambiarlo desde tu panel de Director.'
+                  ? 'Usa el nombre de usuario que elegiste mediante tu enlace privado. Tu contraseña inicial es el número de teléfono que el propietario registró para tu cuenta. Escribe ese número en el campo Contraseña, incluido el prefijo del país. Después podrás cambiarla desde tu panel de Director.'
                   : currentLang === 'it'
-                    ? 'Al primo accesso, usa come password il numero di telefono che il proprietario ha registrato per il tuo account. Inseriscilo esattamente come salvato, incluso il prefisso internazionale e gli spazi. Dopo l’accesso potrai modificarlo dalla dashboard del Direttore.'
-                    : 'For your first sign-in, use the phone number the Owner entered for your account as your password. Enter it exactly as recorded, including the country code and spaces. After signing in, you can change it from your Director dashboard.'}
+                    ? 'Usa il nome utente scelto tramite il tuo link privato. La password iniziale è il numero di telefono registrato dal proprietario per il tuo account. Inserisci quel numero nel campo Password, incluso il prefisso internazionale. Dopo l’accesso potrai cambiarla dalla dashboard del Direttore.'
+                    : 'Use the username you chose through your private setup link. Your INITIAL PASSWORD is the phone number the Owner entered and saved for your Director account. Enter that phone number in the Password field, including the country code. After you sign in, you can change it from your Director dashboard.'}
           </p>
         </div>
         <form
