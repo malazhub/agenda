@@ -303,7 +303,7 @@ test('Gemini endpoint normalizes flat text and image parts to REST Content forma
   let captured;
   try {
     globalThis.fetch = async (url, init) => {
-      assert.match(String(url), /models\\/gemini-3\\.8-flash:generateContent$/);
+      assert.ok(String(url).endsWith("/models/gemini-3.8-flash:generateContent"));
       captured = JSON.parse(init.body);
       assert.equal(new Headers(init.headers).get('x-goog-api-key'), 'test-gemini-key');
       return new Response(JSON.stringify({
