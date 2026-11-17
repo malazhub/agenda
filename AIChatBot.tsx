@@ -47,9 +47,32 @@ const AGENDA_ASSISTANT_KNOWLEDGE = [
   'Payments are not processed or verified by this AI chat. Where the registration screen offers Suyool, users should follow its payment instructions. The Director confirms payment status in the Director Dashboard. Never ask users to share card details or passwords.',
   'For account, activation, payment-status, or class-assignment help, users should contact their own school Director through the school\'s provided contact channel. Never invent an email address or phone number.',
   'Each Director has an isolated school space. Student and educator accounts, assignments, classrooms, and saved lesson materials belong to that school and must not be disclosed to another school.',
-  'The application supports Arabic, English, French, Spanish, and Italian. All user-visible answers must follow the currently selected app language.',
-  'For questions outside Agenda operations, use the AI model for educational, general-knowledge, reasoning, and study questions. Understand the original question directly and reply in the selected app language.'
+  'The application supports Arabic, English, French, Spanish, and Italian. Answer in the language of the user's latest message unless they explicitly request another response language.',
+  'For questions outside Agenda operations, use the AI model for educational, general-knowledge, reasoning, and study questions. Understand the original question directly and answer naturally in the language requested by the user.'
 ].join('\\n');
+
+
+/**
+ * Prefer the language of the user's latest message. Explicit language requests
+ * take priority; the interface language is only the fallback for ambiguous text.
+ */
+function detectChatLanguage(text: string, fallback: Language): Language {
+  const q = text.toLowerCase();
+
+  if (/\b(in arabic|arabic please|answer in arabic|reply in arabic)\b|بالعربية|بالعربي|باللغة العربية|أجب بالعربية|اعد بالعربي|أعد بالعربية/u.test(q)) return 'ar';
+  if (/\b(in french|french please|answer in french|reply in french|en français)\b|بالفرنسية|باللغة الفرنسية/u.test(q)) return 'fr';
+  if (/\b(in spanish|spanish please|answer in spanish|reply in spanish|en español)\b|بالإسبانية|باللغة الإسبانية/u.test(q)) return 'es';
+  if (/\b(in italian|italian please|answer in italian|reply in italian|in italiano)\b|بالإيطالية|باللغة الإيطالية/u.test(q)) return 'it';
+  if (/\b(in english|english please|answer in english|reply in english)\b|بالإنجليزية|باللغة الإنجليزية/u.test(q)) return 'en';
+
+  if (/[\u0600-\u06FF]/u.test(text)) return 'ar';
+  if (/[¿¡ñáéíóúü]/i.test(text) || /\b(hola|gracias|por favor|cómo|qué|dónde|puedes|quiero|necesito|buenos días|buenas tardes)\b/u.test(q)) return 'es';
+  if (/[àâçéèêëîïôûùüÿœ]/i.test(text) || /\b(bonjour|merci|s'il vous plaît|comment|pourquoi|où|avec|je voudrais|pouvez-vous|salut)\b/u.test(q)) return 'fr';
+  if (/[ìòù]/i.test(text) || /\b(ciao|grazie|per favore|perché|come|vorrei|puoi|buongiorno|buonasera)\b/u.test(q)) return 'it';
+  if (/\b(hello|hi|hey|how|what|why|where|when|please|thanks|thank you|could|would|can you|tell me|explain|about)\b/u.test(q)) return 'en';
+
+  return fallback;
+}
 
 export const AIChatBot: React.FC<AIChatBotProps> = ({ currentLang, schoolId, schoolName }) => {
   const [isOpen, setIsOpen] = useState(false);
@@ -83,7 +106,7 @@ export const AIChatBot: React.FC<AIChatBotProps> = ({ currentLang, schoolId, sch
     send: currentLang === 'ar' ? 'إرسال السؤال' : currentLang === 'fr' ? 'Envoyer la question' : currentLang === 'es' ? 'Enviar pregunta' : currentLang === 'it' ? 'Invia domanda' : 'Send question',
     input: currentLang === 'ar' ? 'اكتب سؤالك' : currentLang === 'fr' ? 'Saisissez votre question' : currentLang === 'es' ? 'Escribe tu pregunta' : currentLang === 'it' ? 'Scrivi la tua domanda' : 'Enter your question',
     thinking: currentLang === 'ar' ? 'المساعد يكتب...' : currentLang === 'fr' ? 'L’assistant rédige...' : currentLang === 'es' ? 'El asistente está escribiendo...' : currentLang === 'it' ? 'L’assistente sta scrivendo...' : 'Assistant is typing...',
-    responseLanguage: currentLang === 'ar' ? 'ستكون الإجابات باللغة المحددة' : currentLang === 'fr' ? 'Les réponses suivent la langue sélectionnée' : currentLang === 'es' ? 'Las respuestas estarán en el idioma seleccionado' : currentLang === 'it' ? 'Le risposte saranno nella lingua selezionata' : 'Replies follow your selected language',
+    responseLanguage: currentLang === 'ar' ? 'سيجيب المساعد بلغة رسالتك' : currentLang === 'fr' ? 'Les réponses suivent la langue de votre message' : currentLang === 'es' ? 'Las respuestas siguen el idioma de tu mensaje' : currentLang === 'it' ? 'Le risposte seguono la lingua del tuo messaggio' : 'Replies follow your message language',
   };
 
   // Keep the conversation consistent when the visitor changes the app language.
@@ -120,16 +143,16 @@ export const AIChatBot: React.FC<AIChatBotProps> = ({ currentLang, schoolId, sch
   }, [messages, isOpen]);
 
   // Deterministic answers use the selected school's live configuration.
-  const getSavedResponse = (query: string, context = schoolContext, allowComposite = true): string | null => {
+  const getSavedResponse = (query: string, context = schoolContext, allowComposite = true, responseLang: Language = currentLang): string | null => {
     const q = query.toLowerCase().trim();
 
     // Lightweight greetings should be instant and should not spend a the AI model
     // request. Detailed questions continue through the the AI model integration.
-    if (/^(hi|hello|hey|how are you|how's it going|good morning|good afternoon|good evening)[!.? ]*$/.test(q)) {
-      if (currentLang === 'ar') return 'مرحباً! أنا بخير، شكراً لسؤالك. كيف يمكنني مساعدتك اليوم؟';
-      if (currentLang === 'fr') return 'Bonjour ! Je vais bien, merci. Comment puis-je vous aider aujourd’hui ?';
-      if (currentLang === 'es') return '¡Hola! Estoy bien, gracias. ¿Cómo puedo ayudarte hoy?';
-      if (currentLang === 'it') return 'Ciao! Sto bene, grazie. Come posso aiutarti oggi?';
+    if (/^(hi|hello|hey|how are you|how's it going|good morning|good afternoon|good evening|مرحبا|مرحباً|أهلاً|اهلا|كيف حالك|كيفك|السلام عليكم|bonjour|salut|comment ça va|hola|¿cómo estás\??|buenos días|ciao|come stai|buongiorno)[!.?؟ ]*$/iu.test(q)) {
+      if (responseLang === 'ar') return 'مرحباً! أنا بخير، شكراً لسؤالك. كيف يمكنني مساعدتك اليوم؟';
+      if (responseLang === 'fr') return 'Bonjour ! Je vais bien, merci. Comment puis-je vous aider aujourd’hui ?';
+      if (responseLang === 'es') return '¡Hola! Estoy bien, gracias. ¿Cómo puedo ayudarte hoy?';
+      if (responseLang === 'it') return 'Ciao! Sto bene, grazie. Come posso aiutarti oggi?';
       return 'Hello! I’m doing well, thank you. How can I help you with Agenda today?';
     }
 
@@ -155,7 +178,7 @@ export const AIChatBot: React.FC<AIChatBotProps> = ({ currentLang, schoolId, sch
     const matchedTopics = quickTopics.filter((topic) => matchesAny(topic.terms));
     if (allowComposite && matchedTopics.length > 1) {
       const preparedAnswers = matchedTopics
-        .map((topic) => getSavedResponse(topic.seed, context, false))
+        .map((topic) => getSavedResponse(topic.seed, context, false, responseLang))
         .filter((answer): answer is string => Boolean(answer));
       if (preparedAnswers.length) return [...new Set(preparedAnswers)].join('\\n\\n');
     }
@@ -169,10 +192,10 @@ export const AIChatBot: React.FC<AIChatBotProps> = ({ currentLang, schoolId, sch
       'سعر المدرسة', 'ثمن المدرسة', 'شراء مدرسة', 'شراء اسم المدرسة', 'امتلاك مدرسة', 'نسخة مستقلة'
     ].some((keyword) => q.includes(keyword));
     if (schoolPurchaseQuestion) {
-      if (currentLang === 'ar') return 'تكلفة إنشاء مدرسة مستقلة على Agenda هي 150 دولاراً أمريكياً مرة واحدة. يُستخدم المبلغ لشراء/إنشاء هوية المدرسة واسمها ومساحتها المستقلة على المنصة، ويصبح المشتري مدير تلك المدرسة. هذا المبلغ منفصل عن رسوم الطالب لكل حصة. لا تتم معالجة الدفع من خلال هذه المحادثة؛ تواصل مع إدارة Agenda لإتمام الطلب.';
-      if (currentLang === 'fr') return 'La création/l’achat d’un espace scolaire indépendant sur Agenda coûte 150 USD une seule fois. Ce montant sert à obtenir l’identité et le nom de l’établissement ainsi que son espace séparé sur la plateforme ; l’acheteur devient le Directeur de cette école. Ce coût est distinct du tarif par séance des élèves. Le chat ne traite pas les paiements : contactez l’administration d’Agenda pour effectuer la demande.';
-      if (currentLang === 'es') return 'La compra/creación de una escuela independiente en Agenda cuesta 150 USD una sola vez. Este importe sirve para adquirir la identidad y el nombre de la escuela y su espacio separado en la plataforma; el comprador se convierte en Director de esa escuela. Este coste es distinto de la tarifa por sesión del estudiante. El chat no procesa pagos: contacta con la administración de Agenda para solicitarla.';
-      if (currentLang === 'it') return 'L’acquisto/la creazione di uno spazio scolastico indipendente su Agenda costa 150 USD una sola volta. L’importo serve per ottenere l’identità e il nome della scuola e il suo spazio separato sulla piattaforma; l’acquirente diventa il Direttore di quella scuola. Questo costo è distinto dalla tariffa per lezione dello studente. La chat non gestisce pagamenti: contatta l’amministrazione di Agenda per fare richiesta.';
+      if (responseLang === 'ar') return 'تكلفة إنشاء مدرسة مستقلة على Agenda هي 150 دولاراً أمريكياً مرة واحدة. يُستخدم المبلغ لشراء/إنشاء هوية المدرسة واسمها ومساحتها المستقلة على المنصة، ويصبح المشتري مدير تلك المدرسة. هذا المبلغ منفصل عن رسوم الطالب لكل حصة. لا تتم معالجة الدفع من خلال هذه المحادثة؛ تواصل مع إدارة Agenda لإتمام الطلب.';
+      if (responseLang === 'fr') return 'La création/l’achat d’un espace scolaire indépendant sur Agenda coûte 150 USD une seule fois. Ce montant sert à obtenir l’identité et le nom de l’établissement ainsi que son espace séparé sur la plateforme ; l’acheteur devient le Directeur de cette école. Ce coût est distinct du tarif par séance des élèves. Le chat ne traite pas les paiements : contactez l’administration d’Agenda pour effectuer la demande.';
+      if (responseLang === 'es') return 'La compra/creación de una escuela independiente en Agenda cuesta 150 USD una sola vez. Este importe sirve para adquirir la identidad y el nombre de la escuela y su espacio separado en la plataforma; el comprador se convierte en Director de esa escuela. Este coste es distinto de la tarifa por sesión del estudiante. El chat no procesa pagos: contacta con la administración de Agenda para solicitarla.';
+      if (responseLang === 'it') return 'L’acquisto/la creazione di uno spazio scolastico indipendente su Agenda costa 150 USD una sola volta. L’importo serve per ottenere l’identità e il nome della scuola e il suo spazio separato sulla piattaforma; l’acquirente diventa il Direttore di quella scuola. Questo costo è distinto dalla tariffa per lezione dello studente. La chat non gestisce pagamenti: contatta l’amministrazione di Agenda per fare richiesta.';
       return 'A separate Agenda school setup costs USD 150 as a one-time purchase. This purchases/creates the school identity and name plus its own independent space on the platform; the purchaser becomes that school’s Director. This is separate from the student rate per session. The chat does not take payments, so contact Agenda administration to arrange the school setup.';
     }
 
@@ -207,7 +230,7 @@ export const AIChatBot: React.FC<AIChatBotProps> = ({ currentLang, schoolId, sch
     ].some((keyword) => q.includes(keyword));
 
     if (applicationOverviewQuestion) {
-      if (currentLang === 'ar') return [
+      if (responseLang === 'ar') return [
         'نبذة عن Agenda:',
         'Agenda منصة تعليمية وإدارية للمدارس. تتيح للطلاب الوصول إلى الصفوف المباشرة والدروس والموارد التعليمية المحفوظة، وللمعلمين تقديم الحصص وإدارة موادهم، وللمدير إدارة المدرسة ومراقبة الصفوف.',
         'تغيير اسم المدرسة: سجّل الدخول من بطاقة «دخول المدير» في الشاشة الرئيسية، ثم افتح «لوحة المدير» ← «الحسابات». غيّر حقل «اسم المدرسة» واضغط «حفظ». سيظهر الاسم الجديد في رأس المنصة وفي هوية رابط المدرسة.',
@@ -215,7 +238,7 @@ export const AIChatBot: React.FC<AIChatBotProps> = ({ currentLang, schoolId, sch
         'نسختك الخاصة: يمكن لأي مستخدم الحصول على نسخة مستقلة من Agenda مقابل 150 دولاراً أمريكياً. يصبح صاحب النسخة مديرها، ويمكنه إدارة مدرسته واسمها ومعلميها وطلابها وحصصها ودروسها المحفوظة وأسعارها الشهرية، ومراقبة الحصص وتقديمها. وتبقى مدرسته وبياناتها مستقلة عن مدارس المديرين الآخرين.',
         'لطلب نسخة مستقلة، تواصل مع إدارة Agenda؛ هذه المحادثة لا تعالج المدفوعات.'
       ].join('\n\n');
-      if (currentLang === 'fr') return [
+      if (responseLang === 'fr') return [
         'Présentation d’Agenda :',
         'Agenda est une plateforme éducative et de gestion scolaire. Les élèves y accèdent aux cours en direct et aux ressources enregistrées, les éducateurs donnent leurs cours et gèrent leurs supports, et le Directeur administre son établissement et surveille les classes.',
         'Renommer votre établissement : connectez-vous avec la carte « Connexion Directeur » sur l’écran principal, puis ouvrez « Tableau de bord » → « Comptes ». Modifiez le champ « Nom de l’établissement » et cliquez sur « Enregistrer ». Le nouvel intitulé apparaît dans l’en-tête de la plateforme et l’identité du lien de l’établissement.',
@@ -223,7 +246,7 @@ export const AIChatBot: React.FC<AIChatBotProps> = ({ currentLang, schoolId, sch
         'Votre propre copie : tout utilisateur peut obtenir une copie indépendante d’Agenda au prix de 150 USD. L’acheteur en devient le Directeur et peut gérer son établissement, son nom, ses éducateurs, ses élèves, ses cours, ses leçons enregistrées et ses tarifs mensuels, ainsi que surveiller et animer les cours. Son établissement et ses données restent séparés de ceux des autres Directeurs.',
         'Pour demander votre copie indépendante, contactez l’administration d’Agenda ; cette conversation ne traite pas les paiements.'
       ].join('\n\n');
-      if (currentLang === 'es') return [
+      if (responseLang === 'es') return [
         'Presentación de Agenda:',
         'Agenda es una plataforma educativa y de gestión escolar. Los estudiantes acceden a clases en directo y recursos guardados; los educadores imparten clases y gestionan sus materiales; y el Director administra su escuela y supervisa las aulas.',
         'Cambiar el nombre de la escuela: inicia sesión desde la tarjeta «Acceso del Director» en la pantalla principal y abre «Panel del Director» → «Cuentas». Cambia el campo «Nombre de la escuela» y pulsa «Guardar». El nuevo nombre aparecerá en el encabezado de la plataforma y en la identidad del enlace escolar.',
@@ -231,7 +254,7 @@ export const AIChatBot: React.FC<AIChatBotProps> = ({ currentLang, schoolId, sch
         'Tu propia copia: cualquier usuario puede obtener una copia independiente de Agenda por 150 USD. El comprador se convierte en el Director de esa copia y puede gestionar su escuela, el nombre, los educadores, los estudiantes, las clases, las lecciones guardadas y las tarifas mensuales, además de supervisar e impartir las clases. Su escuela y sus datos permanecen separados de los de otros Directores.',
         'Para solicitar tu copia independiente, contacta con la administración de Agenda; este chat no procesa pagos.'
       ].join('\n\n');
-      if (currentLang === 'it') return [
+      if (responseLang === 'it') return [
         'Presentazione di Agenda:',
         'Agenda è una piattaforma educativa e di gestione scolastica. Gli studenti accedono alle lezioni in diretta e alle risorse salvate; gli educatori tengono le lezioni e gestiscono i propri materiali; il Direttore amministra la scuola e monitora le classi.',
         'Rinominare la scuola: accedi dalla scheda «Accesso Direttore» nella schermata principale, quindi apri «Dashboard del Direttore» → «Account». Modifica il campo «Nome della scuola» e premi «Salva». Il nuovo nome apparirà nell’intestazione della piattaforma e nell’identità del link della scuola.',
@@ -259,46 +282,46 @@ export const AIChatBot: React.FC<AIChatBotProps> = ({ currentLang, schoolId, sch
       (['price', 'pricing', 'rate', 'cost', 'fee', 'fees', 'how much', 'tarif', 'prix', 'precio', 'prezzo', 'سعر', 'أسعار', 'بكم'].some((keyword) => q.includes(keyword)) &&
        !['school price', 'price of a school', 'buy a school', 'school setup', 'school name price', 'سعر المدرسة', 'شراء مدرسة'].some((keyword) => q.includes(keyword)));
     if (studentSessionRateQuestion) {
-      if (currentLang === 'ar') return `السعر الافتراضي للطالب هو 125 دولاراً أمريكياً لكل حصة. يمكن أن يختلف السعر بحسب ظروف المدرسة وقرار مديرها؛ لذلك يُرجى تأكيد السعر النهائي وعدد الحصص مع مدير مدرستك. هذه رسوم لكل حصة وليست رسوماً شهرية.\\nالمدرسة الحالية: ${context?.schoolName || schoolName || 'Agenda'}.`;
-      if (currentLang === 'fr') return `Le tarif étudiant par défaut est de 125 USD par séance. Le montant peut varier selon les conditions de l’établissement et la décision du Directeur ; veuillez donc confirmer le tarif final et le nombre de séances auprès de votre Directeur. Il s’agit d’un tarif par séance, et non d’un abonnement mensuel.\\nÉtablissement : ${context?.schoolName || schoolName || 'Agenda'}.`;
-      if (currentLang === 'es') return `La tarifa predeterminada para el estudiante es de 125 USD por sesión. Puede variar según las condiciones de la escuela y la decisión del Director; confirma el precio final y el número de sesiones con el Director de tu escuela. Es una tarifa por sesión, no una cuota mensual.\\nEscuela: ${context?.schoolName || schoolName || 'Agenda'}.`;
-      if (currentLang === 'it') return `La tariffa predefinita per lo studente è di 125 USD per lezione. Può variare in base alle condizioni della scuola e alla decisione del Direttore; conferma quindi il prezzo finale e il numero di lezioni con il Direttore della tua scuola. È una tariffa per lezione, non un costo mensile.\\nScuola: ${context?.schoolName || schoolName || 'Agenda'}.`;
+      if (responseLang === 'ar') return `السعر الافتراضي للطالب هو 125 دولاراً أمريكياً لكل حصة. يمكن أن يختلف السعر بحسب ظروف المدرسة وقرار مديرها؛ لذلك يُرجى تأكيد السعر النهائي وعدد الحصص مع مدير مدرستك. هذه رسوم لكل حصة وليست رسوماً شهرية.\\nالمدرسة الحالية: ${context?.schoolName || schoolName || 'Agenda'}.`;
+      if (responseLang === 'fr') return `Le tarif étudiant par défaut est de 125 USD par séance. Le montant peut varier selon les conditions de l’établissement et la décision du Directeur ; veuillez donc confirmer le tarif final et le nombre de séances auprès de votre Directeur. Il s’agit d’un tarif par séance, et non d’un abonnement mensuel.\\nÉtablissement : ${context?.schoolName || schoolName || 'Agenda'}.`;
+      if (responseLang === 'es') return `La tarifa predeterminada para el estudiante es de 125 USD por sesión. Puede variar según las condiciones de la escuela y la decisión del Director; confirma el precio final y el número de sesiones con el Director de tu escuela. Es una tarifa por sesión, no una cuota mensual.\\nEscuela: ${context?.schoolName || schoolName || 'Agenda'}.`;
+      if (responseLang === 'it') return `La tariffa predefinita per lo studente è di 125 USD per lezione. Può variare in base alle condizioni della scuola e alla decisione del Direttore; conferma quindi il prezzo finale e il numero di lezioni con il Direttore della tua scuola. È una tariffa per lezione, non un costo mensile.\\nScuola: ${context?.schoolName || schoolName || 'Agenda'}.`;
       return `The default student rate is USD 125 per session. The Director may adjust it according to the school’s circumstances, so confirm the final rate and number of sessions with your school Director. This is charged per session.\\nSchool: ${context?.schoolName || schoolName || 'Agenda'}.`;
     }
 
     const registrationQuestion = ['register', 'registration', 'sign up', 'create account', 'inscrire', 'inscription', 'créer un compte', 'm’inscrire', 'registrar', 'registro', 'registración', 'inscripción', 'crear cuenta', 'registrarme', 'registrazione', 'registrarmi', 'creare account', 'crea un account', 'تسجيل', 'سجل', 'التسجيل', 'إنشاء حساب', 'انشاء حساب'].some((keyword) => q.includes(keyword));
     if (registrationQuestion) {
-      if (currentLang === 'ar') return 'للتسجيل: افتح رابط المدرسة الصحيح، اختر طالباً أو معلماً، أدخل الاسم والبريد الإلكتروني واسم المستخدم وكلمة المرور، ثم اختر الصف والأستاذ/الحصة المتاحة. بعد التسجيل ينتظر الحساب موافقة المدير وتفعيله.';
-      if (currentLang === 'fr') return "Pour vous inscrire : ouvrez le lien de votre établissement, choisissez Élève ou Éducateur, saisissez vos coordonnées, créez un nom d’utilisateur et un mot de passe, puis choisissez la classe et l’éducateur disponibles. Le Directeur doit ensuite activer le compte.";
-      if (currentLang === 'es') return 'Para registrarte: abre el enlace de tu escuela, elige Estudiante o Educador, introduce tus datos, crea un usuario y una contraseña y selecciona el curso y educador disponibles. El Director debe activar la cuenta después del registro.';
-      if (currentLang === 'it') return "Per registrarti: apri il link della tua scuola, scegli Studente o Educatore, inserisci i tuoi dati, crea nome utente e password e seleziona la classe e l'educatore disponibili. Il Direttore dovrà attivare l'account dopo la registrazione.";
+      if (responseLang === 'ar') return 'للتسجيل: افتح رابط المدرسة الصحيح، اختر طالباً أو معلماً، أدخل الاسم والبريد الإلكتروني واسم المستخدم وكلمة المرور، ثم اختر الصف والأستاذ/الحصة المتاحة. بعد التسجيل ينتظر الحساب موافقة المدير وتفعيله.';
+      if (responseLang === 'fr') return "Pour vous inscrire : ouvrez le lien de votre établissement, choisissez Élève ou Éducateur, saisissez vos coordonnées, créez un nom d’utilisateur et un mot de passe, puis choisissez la classe et l’éducateur disponibles. Le Directeur doit ensuite activer le compte.";
+      if (responseLang === 'es') return 'Para registrarte: abre el enlace de tu escuela, elige Estudiante o Educador, introduce tus datos, crea un usuario y una contraseña y selecciona el curso y educador disponibles. El Director debe activar la cuenta después del registro.';
+      if (responseLang === 'it') return "Per registrarti: apri il link della tua scuola, scegli Studente o Educatore, inserisci i tuoi dati, crea nome utente e password e seleziona la classe e l'educatore disponibili. Il Direttore dovrà attivare l'account dopo la registrazione.";
       return 'To register: open your school-specific link, choose Student or Educator, enter your details, create a username and password, and select an available grade and educator/session. The Director must activate the account after registration.';
     }
 
     const signInQuestion = ['password', 'username', 'sign in', 'sign-in', 'login', 'log in', 'mot de passe', 'identifiant', 'connexion', 'se connecter', 'contraseña', 'usuario', 'iniciar sesión', 'iniciar sesion', 'acceso', 'accedi', 'accesso', 'nome utente', 'effettua il login', 'كلمة المرور', 'اسم المستخدم', 'دخول', 'تسجيل الدخول', 'نسيت كلمة المرور', 'نسيت كلمة السر'].some((keyword) => q.includes(keyword));
     if (signInQuestion) {
-      if (currentLang === 'ar') return 'لتسجيل الدخول، استخدم اسم المستخدم وكلمة المرور اللذين أنشأتهما عند التسجيل. إذا نسيت كلمة المرور، تواصل مع مدير مدرستك ليعيد تعيينها. لا تشارك كلمة المرور مع أي شخص.';
-      if (currentLang === 'fr') return "Pour vous connecter, utilisez le nom d’utilisateur et le mot de passe créés lors de l’inscription. En cas d’oubli, contactez le Directeur de votre établissement pour réinitialiser le mot de passe. Ne partagez jamais votre mot de passe.";
-      if (currentLang === 'es') return 'Para iniciar sesión, utiliza el nombre de usuario y la contraseña que creaste al registrarte. Si los olvidas, contacta con el Director de tu escuela para restablecer la contraseña. No compartas tu contraseña.';
-      if (currentLang === 'it') return "Per accedere, usa il nome utente e la password creati durante la registrazione. Se li dimentichi, contatta il Direttore della tua scuola per reimpostare la password. Non condividere la password.";
+      if (responseLang === 'ar') return 'لتسجيل الدخول، استخدم اسم المستخدم وكلمة المرور اللذين أنشأتهما عند التسجيل. إذا نسيت كلمة المرور، تواصل مع مدير مدرستك ليعيد تعيينها. لا تشارك كلمة المرور مع أي شخص.';
+      if (responseLang === 'fr') return "Pour vous connecter, utilisez le nom d’utilisateur et le mot de passe créés lors de l’inscription. En cas d’oubli, contactez le Directeur de votre établissement pour réinitialiser le mot de passe. Ne partagez jamais votre mot de passe.";
+      if (responseLang === 'es') return 'Para iniciar sesión, utiliza el nombre de usuario y la contraseña que creaste al registrarte. Si los olvidas, contacta con el Director de tu escuela para restablecer la contraseña. No compartas tu contraseña.';
+      if (responseLang === 'it') return "Per accedere, usa il nome utente e la password creati durante la registrazione. Se li dimentichi, contatta il Direttore della tua scuola per reimpostare la password. Non condividere la password.";
       return 'Sign in with the username and password you created during registration. If you forget them, contact your school Director to reset the password. Never share your password.';
     }
 
     const lessonQuestion = ['saved lesson', 'saved lessons', 'recording', 'lesson', 'archive', 'ressource', 'ressources', 'leçon', 'lecon', 'cours enregistré', 'cours enregistrés', 'leçons enregistrées', 'clase guardada', 'clases guardadas', 'lección', 'lecciones guardadas', 'recursos guardados', 'lezione', 'lezioni salvate', 'lezioni registrate', 'risorse salvate', 'registrazione', 'دروس محفوظة', 'الدروس المحفوظة', 'درس', 'أرشيف', 'استرجاع الدروس'].some((keyword) => q.includes(keyword));
     if (lessonQuestion) {
-      if (currentLang === 'ar') return 'لاسترجاع الدروس المحفوظة، سجّل الدخول وافتح غرفة الصف ثم اختر «الموارد التعليمية». اختر الأستاذ لعرض خانات الدروس والملفات التي نشرها. يمكن للمدرس تعديل موارده الخاصة فقط.';
-      if (currentLang === 'fr') return "Pour retrouver les leçons enregistrées, connectez-vous, ouvrez la salle de classe puis choisissez « Ressources pédagogiques ». Sélectionnez l’éducateur pour consulter les leçons et fichiers publiés. Chaque éducateur ne peut modifier que ses propres ressources.";
-      if (currentLang === 'es') return 'Para recuperar lecciones guardadas, inicia sesión, abre el aula y selecciona «Recursos educativos». Elige al educador para ver las lecciones y archivos publicados. Cada educador solo puede modificar sus propios recursos.';
-      if (currentLang === 'it') return "Per recuperare le lezioni salvate, accedi, apri l'aula e seleziona «Risorse didattiche». Scegli l'educatore per vedere lezioni e file pubblicati. Ogni educatore può modificare solo le proprie risorse.";
+      if (responseLang === 'ar') return 'لاسترجاع الدروس المحفوظة، سجّل الدخول وافتح غرفة الصف ثم اختر «الموارد التعليمية». اختر الأستاذ لعرض خانات الدروس والملفات التي نشرها. يمكن للمدرس تعديل موارده الخاصة فقط.';
+      if (responseLang === 'fr') return "Pour retrouver les leçons enregistrées, connectez-vous, ouvrez la salle de classe puis choisissez « Ressources pédagogiques ». Sélectionnez l’éducateur pour consulter les leçons et fichiers publiés. Chaque éducateur ne peut modifier que ses propres ressources.";
+      if (responseLang === 'es') return 'Para recuperar lecciones guardadas, inicia sesión, abre el aula y selecciona «Recursos educativos». Elige al educador para ver las lecciones y archivos publicados. Cada educador solo puede modificar sus propios recursos.';
+      if (responseLang === 'it') return "Per recuperare le lezioni salvate, accedi, apri l'aula e seleziona «Risorse didattiche». Scegli l'educatore per vedere lezioni e file pubblicati. Ogni educatore può modificare solo le proprie risorse.";
       return 'To retrieve saved lessons, sign in, open the classroom, and select Learning Resources. Choose the educator to view published lesson slots and files. Each educator can edit only their own resources.';
     }
 
     const liveQuestion = ['live', 'broadcast', 'join class', 'join the class', 'classroom', 'direct', 'en direct', 'cours en direct', 'salle de diffusion', 'rejoindre le cours', 'en vivo', 'aula en vivo', 'clase en directo', 'unirse a la clase', 'diretta', 'lezione dal vivo', 'sala trasmissione', 'partecipa alla lezione', 'بث', 'مباشر', 'صف مباشر', 'الصف المباشر', 'غرفة الصف', 'غرفة البث', 'الانضمام للحصة'].some((keyword) => q.includes(keyword));
     if (liveQuestion) {
-      if (currentLang === 'ar') return 'للدخول إلى الصف المباشر، سجّل الدخول بالحساب المفعّل والمسدد والمسجل في حصة الأستاذ نفسها. افتح «البث المباشر» واختر صفك. يبدأ الأستاذ البث أولاً، ويمكن للمدير مراقبة أي صف من لوحة التحكم ← إدارة الحصص.';
-      if (currentLang === 'fr') return "Pour rejoindre un cours en direct, connectez-vous avec un compte activé, payé et inscrit à la même séance que l’éducateur. Ouvrez « Diffusion en direct » et choisissez votre classe. L’éducateur démarre la diffusion. Le Directeur peut surveiller toute classe depuis Tableau de bord → Gestion des cours.";
-      if (currentLang === 'es') return 'Para entrar en una clase en directo, inicia sesión con una cuenta activada, pagada y asignada a la misma sesión del educador. Abre «Emisión en directo» y elige tu curso. El educador inicia la emisión. El Director puede supervisar cualquier clase desde Panel → Gestionar sesiones.';
-      if (currentLang === 'it') return "Per entrare in una lezione dal vivo, accedi con un account attivato, pagato e assegnato alla stessa sessione dell'educatore. Apri «Diretta» e scegli la tua classe. L'educatore avvia la trasmissione. Il Direttore può monitorare qualsiasi classe da Pannello → Gestione lezioni.";
+      if (responseLang === 'ar') return 'للدخول إلى الصف المباشر، سجّل الدخول بالحساب المفعّل والمسدد والمسجل في حصة الأستاذ نفسها. افتح «البث المباشر» واختر صفك. يبدأ الأستاذ البث أولاً، ويمكن للمدير مراقبة أي صف من لوحة التحكم ← إدارة الحصص.';
+      if (responseLang === 'fr') return "Pour rejoindre un cours en direct, connectez-vous avec un compte activé, payé et inscrit à la même séance que l’éducateur. Ouvrez « Diffusion en direct » et choisissez votre classe. L’éducateur démarre la diffusion. Le Directeur peut surveiller toute classe depuis Tableau de bord → Gestion des cours.";
+      if (responseLang === 'es') return 'Para entrar en una clase en directo, inicia sesión con una cuenta activada, pagada y asignada a la misma sesión del educador. Abre «Emisión en directo» y elige tu curso. El educador inicia la emisión. El Director puede supervisar cualquier clase desde Panel → Gestionar sesiones.';
+      if (responseLang === 'it') return "Per entrare in una lezione dal vivo, accedi con un account attivato, pagato e assegnato alla stessa sessione dell'educatore. Apri «Diretta» e scegli la tua classe. L'educatore avvia la trasmissione. Il Direttore può monitorare qualsiasi classe da Pannello → Gestione lezioni.";
       return 'To join a live class, sign in with an activated, paid account assigned to the same educator session. Open Broadcast Room and choose your grade. The educator starts the broadcast. The Director can monitor any class from Dashboard → Manage Sessions.';
     }
 
@@ -312,10 +335,10 @@ export const AIChatBot: React.FC<AIChatBotProps> = ({ currentLang, schoolId, sch
       'شاشة الطالب', 'شاشة الأستاذ', 'شاشة المعلم', 'دور الطالب', 'دور المعلم', 'التنقل بين الشاشات', 'كيف أستخدم أجندة'
     ].some((keyword) => q.includes(keyword));
     if (schoolNavigationQuestion) {
-      if (currentLang === 'ar') return 'توجد ثلاث واجهات حسب نوع الحساب: الطالب، والأستاذ، والمدير. الطالب يسجّل الدخول ثم يفتح الصف أو غرفة البث المخصصة له، ويمكنه الانتقال إلى «الموارد التعليمية» لمشاهدة الدروس المحفوظة. الأستاذ يسجّل الدخول بحساب Educator ويفتح صفه المخصص لبدء البث وحفظ محاضراته. المدير يختار «دخول المدير» ثم يستخدم «لوحة المدير» لإدارة الحسابات والحصص ومراقبة الصفوف. استخدم حساب الدور الصحيح؛ صلاحيات كل واجهة تختلف.';
-      if (currentLang === 'fr') return 'Agenda propose trois espaces selon le type de compte : Élève, Éducateur et Directeur. L’élève se connecte puis ouvre sa classe ou sa salle de diffusion attribuée ; « Ressources pédagogiques » permet de consulter les cours enregistrés. L’éducateur se connecte avec son compte Educator, ouvre sa propre classe, démarre la diffusion et enregistre ses leçons. Le Directeur choisit « Connexion Directeur », puis utilise le tableau de bord pour gérer les comptes, les cours et surveiller les classes. Utilisez le compte correspondant à votre rôle.';
-      if (currentLang === 'es') return 'Agenda tiene tres espacios según el tipo de cuenta: Estudiante, Educador y Director. El estudiante inicia sesión y abre su aula o sala de emisión asignada; en «Recursos educativos» consulta las lecciones guardadas. El educador entra con su cuenta Educator, abre su propia aula, inicia la emisión y guarda sus lecciones. El Director selecciona «Acceso del Director» y usa el panel para gestionar cuentas, sesiones y supervisar las aulas. Utiliza la cuenta del rol que te corresponde.';
-      if (currentLang === 'it') return 'Agenda offre tre aree in base al tipo di account: Studente, Educatore e Direttore. Lo studente accede e apre la propria aula o sala trasmissione assegnata; in «Risorse didattiche» consulta le lezioni salvate. L’educatore accede con il proprio account Educator, apre la sua aula, avvia la diretta e salva le lezioni. Il Direttore seleziona «Accesso Direttore» e usa il pannello per gestire account, sessioni e monitorare le aule. Usa l’account corrispondente al tuo ruolo.';
+      if (responseLang === 'ar') return 'توجد ثلاث واجهات حسب نوع الحساب: الطالب، والأستاذ، والمدير. الطالب يسجّل الدخول ثم يفتح الصف أو غرفة البث المخصصة له، ويمكنه الانتقال إلى «الموارد التعليمية» لمشاهدة الدروس المحفوظة. الأستاذ يسجّل الدخول بحساب Educator ويفتح صفه المخصص لبدء البث وحفظ محاضراته. المدير يختار «دخول المدير» ثم يستخدم «لوحة المدير» لإدارة الحسابات والحصص ومراقبة الصفوف. استخدم حساب الدور الصحيح؛ صلاحيات كل واجهة تختلف.';
+      if (responseLang === 'fr') return 'Agenda propose trois espaces selon le type de compte : Élève, Éducateur et Directeur. L’élève se connecte puis ouvre sa classe ou sa salle de diffusion attribuée ; « Ressources pédagogiques » permet de consulter les cours enregistrés. L’éducateur se connecte avec son compte Educator, ouvre sa propre classe, démarre la diffusion et enregistre ses leçons. Le Directeur choisit « Connexion Directeur », puis utilise le tableau de bord pour gérer les comptes, les cours et surveiller les classes. Utilisez le compte correspondant à votre rôle.';
+      if (responseLang === 'es') return 'Agenda tiene tres espacios según el tipo de cuenta: Estudiante, Educador y Director. El estudiante inicia sesión y abre su aula o sala de emisión asignada; en «Recursos educativos» consulta las lecciones guardadas. El educador entra con su cuenta Educator, abre su propia aula, inicia la emisión y guarda sus lecciones. El Director selecciona «Acceso del Director» y usa el panel para gestionar cuentas, sesiones y supervisar las aulas. Utiliza la cuenta del rol que te corresponde.';
+      if (responseLang === 'it') return 'Agenda offre tre aree in base al tipo di account: Studente, Educatore e Direttore. Lo studente accede e apre la propria aula o sala trasmissione assegnata; in «Risorse didattiche» consulta le lezioni salvate. L’educatore accede con il proprio account Educator, apre la sua aula, avvia la diretta e salva le lezioni. Il Direttore seleziona «Accesso Direttore» e usa il pannello per gestire account, sessioni e monitorare le aule. Usa l’account corrispondente al tuo ruolo.';
       return 'Agenda has three role-based areas: Student, Educator, and Director. Students sign in and open their assigned classroom or Broadcast Room; Learning Resources is where they view saved lectures. Educators sign in with an Educator account, open their own assigned classroom, start the broadcast, and save lectures. Directors choose Director Login and use the dashboard to manage accounts, sessions, and classroom monitoring. Use the account that matches your role.';
     }
 
@@ -327,10 +350,10 @@ export const AIChatBot: React.FC<AIChatBotProps> = ({ currentLang, schoolId, sch
       'الأستاذ المسؤول', 'لمن يتبع الطالب', 'تغيير صف الطالب'
     ].some((keyword) => q.includes(keyword));
     if (assignmentQuestion) {
-      if (currentLang === 'ar') return 'كل طالب مرتبط بأستاذ وصف محدد، ويختار الطالب الأستاذ/الحصة المتاحة أثناء التسجيل. يستطيع المدير تغيير تعيين الطالب لاحقاً من «لوحة المدير» ← «الحسابات» عبر قائمة الأستاذ، كما يمكنه تعديل تعيين جلسة الأستاذ. بعد التغيير، يدخل الطالب إلى الصف المرتبط بالتعيين الجديد.';
-      if (currentLang === 'fr') return 'Chaque élève est lié à un éducateur et à une classe précise. L’élève choisit l’éducateur/la séance disponible lors de l’inscription. Le Directeur peut modifier cette affectation ensuite dans « Tableau de bord » → « Comptes », à l’aide de la liste des éducateurs, et modifier également la séance attribuée à un éducateur. L’élève rejoint ensuite la classe correspondant à la nouvelle affectation.';
-      if (currentLang === 'es') return 'Cada estudiante está vinculado a un educador y a un aula concreta. Durante el registro, el estudiante elige el educador o la sesión disponible. El Director puede cambiar esa asignación después desde «Panel del Director» → «Cuentas», usando la lista de educadores, y también puede cambiar la sesión asignada a un educador. El estudiante entrará en el aula de la nueva asignación.';
-      if (currentLang === 'it') return 'Ogni studente è collegato a un educatore e a una classe specifica. Durante la registrazione, lo studente sceglie l’educatore o la lezione disponibile. Il Direttore può modificare l’assegnazione da «Dashboard del Direttore» → «Account», usando l’elenco degli educatori, e può anche cambiare la lezione assegnata a un educatore. Lo studente accederà quindi alla classe della nuova assegnazione.';
+      if (responseLang === 'ar') return 'كل طالب مرتبط بأستاذ وصف محدد، ويختار الطالب الأستاذ/الحصة المتاحة أثناء التسجيل. يستطيع المدير تغيير تعيين الطالب لاحقاً من «لوحة المدير» ← «الحسابات» عبر قائمة الأستاذ، كما يمكنه تعديل تعيين جلسة الأستاذ. بعد التغيير، يدخل الطالب إلى الصف المرتبط بالتعيين الجديد.';
+      if (responseLang === 'fr') return 'Chaque élève est lié à un éducateur et à une classe précise. L’élève choisit l’éducateur/la séance disponible lors de l’inscription. Le Directeur peut modifier cette affectation ensuite dans « Tableau de bord » → « Comptes », à l’aide de la liste des éducateurs, et modifier également la séance attribuée à un éducateur. L’élève rejoint ensuite la classe correspondant à la nouvelle affectation.';
+      if (responseLang === 'es') return 'Cada estudiante está vinculado a un educador y a un aula concreta. Durante el registro, el estudiante elige el educador o la sesión disponible. El Director puede cambiar esa asignación después desde «Panel del Director» → «Cuentas», usando la lista de educadores, y también puede cambiar la sesión asignada a un educador. El estudiante entrará en el aula de la nueva asignación.';
+      if (responseLang === 'it') return 'Ogni studente è collegato a un educatore e a una classe specifica. Durante la registrazione, lo studente sceglie l’educatore o la lezione disponibile. Il Direttore può modificare l’assegnazione da «Dashboard del Direttore» → «Account», usando l’elenco degli educatori, e può anche cambiare la lezione assegnata a un educatore. Lo studente accederà quindi alla classe della nuova assegnazione.';
       return 'Each student is linked to one assigned educator and classroom. During registration, the student chooses an available educator/session. The Director can later change that assignment in Director Dashboard → Accounts using the educator selector, and can also change an educator’s assigned session. The student then accesses the classroom linked to the new assignment.';
     }
 
@@ -343,10 +366,10 @@ export const AIChatBot: React.FC<AIChatBotProps> = ({ currentLang, schoolId, sch
       'تغيير كلمة المرور', 'إعادة تعيين كلمة المرور', 'تفعيل الحساب', 'تجديد الحساب', 'حالة الدفع'
     ].some((keyword) => q.includes(keyword));
     if (directorManagementQuestion) {
-      if (currentLang === 'ar') return 'من «دخول المدير» ثم «لوحة المدير» ← «الحسابات»، يستطيع المدير مراجعة الطلاب والأساتذة، تفعيل الحسابات أو إيقافها، تحديث حالة الدفع، تجديد صلاحية الحساب، تغيير اسم مستخدم الطالب أو الأستاذ، وإعادة تعيين كلمة المرور. كما يستطيع تغيير تعيين الطالب للأستاذ. ويستطيع المدير تعديل اسم المستخدم وكلمة المرور الخاصين به من إعدادات ملف المدير. لا يمكن للمساعد رؤية كلمات المرور الحالية أو طلبها منك.';
-      if (currentLang === 'fr') return 'Depuis « Connexion Directeur » → « Tableau de bord » → « Comptes », le Directeur peut consulter les élèves et les éducateurs, activer ou désactiver les comptes, mettre à jour le statut de paiement, renouveler la validité, modifier le nom d’utilisateur d’un élève ou d’un éducateur, réinitialiser son mot de passe et modifier son affectation. Le Directeur modifie son propre identifiant et mot de passe dans les paramètres de son profil. L’assistant ne voit pas les mots de passe existants et ne vous les demandera jamais.';
-      if (currentLang === 'es') return 'Desde «Acceso del Director» → «Panel del Director» → «Cuentas», el Director puede revisar estudiantes y educadores, activar o desactivar cuentas, actualizar el estado de pago, renovar la vigencia, cambiar el nombre de usuario de un estudiante o educador, restablecer su contraseña y modificar su asignación. El Director cambia su propio usuario y contraseña en la configuración de su perfil. El asistente no puede ver las contraseñas actuales y nunca te las pedirá.';
-      if (currentLang === 'it') return 'Da «Accesso Direttore» → «Dashboard del Direttore» → «Account», il Direttore può consultare studenti ed educatori, attivare o disattivare gli account, aggiornare lo stato di pagamento, rinnovare la validità, modificare il nome utente di uno studente o educatore, reimpostare la password e cambiare l’assegnazione. Il Direttore modifica il proprio nome utente e la propria password nelle impostazioni del profilo. L’assistente non può vedere le password esistenti e non te le chiederà mai.';
+      if (responseLang === 'ar') return 'من «دخول المدير» ثم «لوحة المدير» ← «الحسابات»، يستطيع المدير مراجعة الطلاب والأساتذة، تفعيل الحسابات أو إيقافها، تحديث حالة الدفع، تجديد صلاحية الحساب، تغيير اسم مستخدم الطالب أو الأستاذ، وإعادة تعيين كلمة المرور. كما يستطيع تغيير تعيين الطالب للأستاذ. ويستطيع المدير تعديل اسم المستخدم وكلمة المرور الخاصين به من إعدادات ملف المدير. لا يمكن للمساعد رؤية كلمات المرور الحالية أو طلبها منك.';
+      if (responseLang === 'fr') return 'Depuis « Connexion Directeur » → « Tableau de bord » → « Comptes », le Directeur peut consulter les élèves et les éducateurs, activer ou désactiver les comptes, mettre à jour le statut de paiement, renouveler la validité, modifier le nom d’utilisateur d’un élève ou d’un éducateur, réinitialiser son mot de passe et modifier son affectation. Le Directeur modifie son propre identifiant et mot de passe dans les paramètres de son profil. L’assistant ne voit pas les mots de passe existants et ne vous les demandera jamais.';
+      if (responseLang === 'es') return 'Desde «Acceso del Director» → «Panel del Director» → «Cuentas», el Director puede revisar estudiantes y educadores, activar o desactivar cuentas, actualizar el estado de pago, renovar la vigencia, cambiar el nombre de usuario de un estudiante o educador, restablecer su contraseña y modificar su asignación. El Director cambia su propio usuario y contraseña en la configuración de su perfil. El asistente no puede ver las contraseñas actuales y nunca te las pedirá.';
+      if (responseLang === 'it') return 'Da «Accesso Direttore» → «Dashboard del Direttore» → «Account», il Direttore può consultare studenti ed educatori, attivare o disattivare gli account, aggiornare lo stato di pagamento, rinnovare la validità, modificare il nome utente di uno studente o educatore, reimpostare la password e cambiare l’assegnazione. Il Direttore modifica il proprio nome utente e la propria password nelle impostazioni del profilo. L’assistente non può vedere le password esistenti e non te le chiederà mai.';
       return 'From Director Login → Director Dashboard → Accounts, the Director can review students and educators, activate or deactivate accounts, update payment status, renew account validity, change a student’s or educator’s username, reset their password, and change student assignments. The Director can update their own username and password in Director profile settings. The assistant cannot see existing passwords and will never ask you to share one.';
     }
 
@@ -358,10 +381,10 @@ export const AIChatBot: React.FC<AIChatBotProps> = ({ currentLang, schoolId, sch
       'عدد الطلاب', 'عدد التلاميذ', 'كم طالب', 'خمسة طلاب', '5 طلاب', 'عدد الأساتذة'
     ].some((keyword) => q.includes(keyword));
     if (classSizeQuestion) {
-      if (currentLang === 'ar') return 'يمكن للمدرسة إنشاء أعداد غير محدودة من حسابات الطلاب والأساتذة؛ لا يوجد حد إجمالي ثابت لعدد الحسابات. متوسط التخطيط المعتاد هو نحو خمسة طلاب في الصف الواحد، لكنه متوسط إرشادي وليس سقفاً عاماً ثابتاً. يحدد المدير تنظيم الصفوف وفق ظروف المدرسة.';
-      if (currentLang === 'fr') return 'L’établissement peut créer un nombre illimité de comptes élèves et éducateurs ; il n’existe pas de plafond global fixe pour les comptes. La moyenne habituelle visée est d’environ cinq élèves par classe, à titre indicatif et non comme une limite absolue. Le Directeur organise les classes selon les besoins de l’établissement.';
-      if (currentLang === 'es') return 'La escuela puede crear un número ilimitado de cuentas de estudiantes y educadores; no existe un límite global fijo de cuentas. La referencia habitual es un promedio de unos cinco estudiantes por clase, no un máximo absoluto. El Director organiza las clases según las necesidades de la escuela.';
-      if (currentLang === 'it') return 'La scuola può creare un numero illimitato di account per studenti ed educatori; non esiste un limite complessivo fisso agli account. Il riferimento medio è di circa cinque studenti per classe, come indicazione e non come limite assoluto. Il Direttore organizza le classi secondo le esigenze della scuola.';
+      if (responseLang === 'ar') return 'يمكن للمدرسة إنشاء أعداد غير محدودة من حسابات الطلاب والأساتذة؛ لا يوجد حد إجمالي ثابت لعدد الحسابات. متوسط التخطيط المعتاد هو نحو خمسة طلاب في الصف الواحد، لكنه متوسط إرشادي وليس سقفاً عاماً ثابتاً. يحدد المدير تنظيم الصفوف وفق ظروف المدرسة.';
+      if (responseLang === 'fr') return 'L’établissement peut créer un nombre illimité de comptes élèves et éducateurs ; il n’existe pas de plafond global fixe pour les comptes. La moyenne habituelle visée est d’environ cinq élèves par classe, à titre indicatif et non comme une limite absolue. Le Directeur organise les classes selon les besoins de l’établissement.';
+      if (responseLang === 'es') return 'La escuela puede crear un número ilimitado de cuentas de estudiantes y educadores; no existe un límite global fijo de cuentas. La referencia habitual es un promedio de unos cinco estudiantes por clase, no un máximo absoluto. El Director organiza las clases según las necesidades de la escuela.';
+      if (responseLang === 'it') return 'La scuola può creare un numero illimitato di account per studenti ed educatori; non esiste un limite complessivo fisso agli account. Il riferimento medio è di circa cinque studenti per classe, come indicazione e non come limite assoluto. Il Direttore organizza le classi secondo le esigenze della scuola.';
       return 'A school can create an unlimited number of student and educator accounts; there is no fixed overall account limit. The usual planning average is about five students per class, as a guideline rather than a universal hard cap. The Director organizes classes according to the school’s needs.';
     }
 
@@ -373,19 +396,19 @@ export const AIChatBot: React.FC<AIChatBotProps> = ({ currentLang, schoolId, sch
       'التواصل مع الأستاذ', 'التحدث مع الطلاب', 'كاميرا وميكروفون'
     ].some((keyword) => q.includes(keyword));
     if (conferenceQuestion) {
-      if (currentLang === 'ar') return 'غرفة الصف المباشر هي قاعة مؤتمر فيديو تجمع الأستاذ والطلاب المسجلين في صفه نفسه. يمكن للمشاركين الانضمام إلى البث المباشر واستخدام الكاميرا والميكروفون، كما تتوفر محادثة صفية لإرسال الرسائل والمرفقات المدعومة. يبدأ الأستاذ البث، وينضم الطلاب بعد تسجيل الدخول وتفعيل حساباتهم وتسديدها وتعيينهم إلى الصف الصحيح. يستطيع المدير دخول صفوف مدرسته لمراقبتها.';
-      if (currentLang === 'fr') return 'La salle de classe en direct est une salle de visioconférence réunissant l’éducateur et les élèves inscrits à sa classe. Les participants peuvent rejoindre la diffusion, utiliser la caméra et le microphone, et communiquer par le chat de classe avec les pièces jointes prises en charge. L’éducateur démarre la diffusion ; les élèves rejoignent après connexion, activation, confirmation du paiement et affectation à la bonne classe. Le Directeur peut entrer dans les classes de son établissement pour les surveiller.';
-      if (currentLang === 'es') return 'El aula en directo es una sala de videoconferencia que reúne al educador y a los estudiantes inscritos en su clase. Los participantes pueden unirse a la emisión, utilizar la cámara y el micrófono y comunicarse mediante el chat del aula con archivos adjuntos compatibles. El educador inicia la emisión; los estudiantes se unen después de iniciar sesión, activar la cuenta, confirmar el pago y estar asignados al aula correcta. El Director puede entrar en las clases de su escuela para supervisarlas.';
-      if (currentLang === 'it') return 'L’aula in diretta è una sala di videoconferenza che riunisce l’educatore e gli studenti iscritti alla sua classe. I partecipanti possono entrare nella diretta, usare videocamera e microfono e comunicare tramite la chat della classe con allegati supportati. L’educatore avvia la trasmissione; gli studenti accedono dopo il login, l’attivazione, la conferma del pagamento e l’assegnazione alla classe corretta. Il Direttore può entrare nelle classi della propria scuola per monitorarle.';
+      if (responseLang === 'ar') return 'غرفة الصف المباشر هي قاعة مؤتمر فيديو تجمع الأستاذ والطلاب المسجلين في صفه نفسه. يمكن للمشاركين الانضمام إلى البث المباشر واستخدام الكاميرا والميكروفون، كما تتوفر محادثة صفية لإرسال الرسائل والمرفقات المدعومة. يبدأ الأستاذ البث، وينضم الطلاب بعد تسجيل الدخول وتفعيل حساباتهم وتسديدها وتعيينهم إلى الصف الصحيح. يستطيع المدير دخول صفوف مدرسته لمراقبتها.';
+      if (responseLang === 'fr') return 'La salle de classe en direct est une salle de visioconférence réunissant l’éducateur et les élèves inscrits à sa classe. Les participants peuvent rejoindre la diffusion, utiliser la caméra et le microphone, et communiquer par le chat de classe avec les pièces jointes prises en charge. L’éducateur démarre la diffusion ; les élèves rejoignent après connexion, activation, confirmation du paiement et affectation à la bonne classe. Le Directeur peut entrer dans les classes de son établissement pour les surveiller.';
+      if (responseLang === 'es') return 'El aula en directo es una sala de videoconferencia que reúne al educador y a los estudiantes inscritos en su clase. Los participantes pueden unirse a la emisión, utilizar la cámara y el micrófono y comunicarse mediante el chat del aula con archivos adjuntos compatibles. El educador inicia la emisión; los estudiantes se unen después de iniciar sesión, activar la cuenta, confirmar el pago y estar asignados al aula correcta. El Director puede entrar en las clases de su escuela para supervisarlas.';
+      if (responseLang === 'it') return 'L’aula in diretta è una sala di videoconferenza che riunisce l’educatore e gli studenti iscritti alla sua classe. I partecipanti possono entrare nella diretta, usare videocamera e microfono e comunicare tramite la chat della classe con allegati supportati. L’educatore avvia la trasmissione; gli studenti accedono dopo il login, l’attivazione, la conferma del pagamento e l’assegnazione alla classe corretta. Il Direttore può entrare nelle classi della propria scuola per monitorarle.';
       return 'The live classroom is a video-conference room for an educator and the students registered in that educator’s class. Participants can join the live session, use camera and microphone controls, and communicate through classroom chat with supported attachments. The educator starts the broadcast; students join after signing in, account activation, payment confirmation, and assignment to the correct class. The Director can enter any class in their own school to monitor it.';
     }
 
     const architectureQuestion = ['separate school', 'another school', 'school data', 'data isolation', 'tenant', 'privacy', 'confidentiality', 'écoles séparées', 'autre établissement', 'confidentialité', 'escuelas separadas', 'otra escuela', 'privacidad', 'scuole separate', 'altra scuola', 'riservatezza', 'مدارس منفصلة', 'مدرسة أخرى', 'خصوصية البيانات', 'عزل البيانات'].some((keyword) => q.includes(keyword));
     if (architectureQuestion) {
-      if (currentLang === 'ar') return 'تعمل المنصة بنظام مدارس مستقلة: لكل مدير مدرسة خاصة به ومعرّف مدرسة مستقل، وطلاب ومدرسون وحصص وموارد تعليمية وأسعار منفصلة. لا يستطيع مدير الوصول إلى حسابات أو ملفات مدرسة أخرى. استخدم رابط المدرسة الخاص بها لتسجيل الطلاب والمدرسين.';
-      if (currentLang === 'fr') return "La plateforme fonctionne avec des établissements séparés : chaque Directeur possède son propre établissement et identifiant, ses élèves, éducateurs, cours, ressources et tarifs. Un Directeur ne peut pas accéder aux comptes ni aux fichiers d’un autre établissement. Utilisez le lien propre à votre établissement pour les inscriptions.";
-      if (currentLang === 'es') return 'La plataforma utiliza escuelas independientes: cada Director tiene su propia escuela e identificador, estudiantes, educadores, clases, recursos y tarifas. Un Director no puede acceder a las cuentas ni archivos de otra escuela. Utiliza el enlace específico de tu escuela para registrarte.';
-      if (currentLang === 'it') return "La piattaforma utilizza scuole separate: ogni Direttore ha la propria scuola e il proprio identificativo, studenti, educatori, lezioni, risorse e tariffe. Un Direttore non può accedere agli account o ai file di un'altra scuola. Usa il link specifico della tua scuola per registrarti.";
+      if (responseLang === 'ar') return 'تعمل المنصة بنظام مدارس مستقلة: لكل مدير مدرسة خاصة به ومعرّف مدرسة مستقل، وطلاب ومدرسون وحصص وموارد تعليمية وأسعار منفصلة. لا يستطيع مدير الوصول إلى حسابات أو ملفات مدرسة أخرى. استخدم رابط المدرسة الخاص بها لتسجيل الطلاب والمدرسين.';
+      if (responseLang === 'fr') return "La plateforme fonctionne avec des établissements séparés : chaque Directeur possède son propre établissement et identifiant, ses élèves, éducateurs, cours, ressources et tarifs. Un Directeur ne peut pas accéder aux comptes ni aux fichiers d’un autre établissement. Utilisez le lien propre à votre établissement pour les inscriptions.";
+      if (responseLang === 'es') return 'La plataforma utiliza escuelas independientes: cada Director tiene su propia escuela e identificador, estudiantes, educadores, clases, recursos y tarifas. Un Director no puede acceder a las cuentas ni archivos de otra escuela. Utiliza el enlace específico de tu escuela para registrarte.';
+      if (responseLang === 'it') return "La piattaforma utilizza scuole separate: ogni Direttore ha la propria scuola e il proprio identificativo, studenti, educatori, lezioni, risorse e tariffe. Un Direttore non può accedere agli account o ai file di un'altra scuola. Usa il link specifico della tua scuola per registrarti.";
       return 'Agenda uses separate school spaces: every Director has an independently identified school, its own students, educators, classes, saved learning resources, and pricing. A Director cannot access another school’s accounts or files. Use your school-specific link when registering.';
     }
 
@@ -396,10 +419,10 @@ export const AIChatBot: React.FC<AIChatBotProps> = ({ currentLang, schoolId, sch
       'كيف أدفع', 'كيف ادفع', 'طريقة الدفع', 'طرق الدفع', 'الدفع', 'تسديد', 'ادفع'
     ].some((keyword) => q.includes(keyword));
     if (paymentQuestion) {
-      if (currentLang === 'ar') return 'للدفع، افتح قسم «الدفع» في خطوات التسجيل واتبع رابط Suyool وتعليماته. لا يعالج هذا المساعد المدفوعات ولا يؤكدها؛ يؤكد مدير المدرسة حالة الدفع من لوحة المدير. لا ترسل بيانات البطاقة أو كلمات المرور في المحادثة.';
-      if (currentLang === 'fr') return 'Pour payer, ouvrez la section « Paiement » pendant l’inscription et suivez le lien et les instructions de Suyool. Cet assistant ne traite ni ne vérifie les paiements ; le Directeur confirme le statut depuis son tableau de bord. Ne partagez jamais vos données de carte ou mots de passe dans le chat.';
-      if (currentLang === 'es') return 'Para pagar, abre la sección «Pago» durante el registro y sigue el enlace y las instrucciones de Suyool. Este asistente no procesa ni verifica pagos; el Director confirma el estado desde su panel. No compartas datos de tarjeta ni contraseñas en el chat.';
-      if (currentLang === 'it') return 'Per pagare, apri la sezione «Pagamento» durante la registrazione e segui il link e le istruzioni di Suyool. Questo assistente non elabora né verifica i pagamenti; il Direttore conferma lo stato dal proprio pannello. Non condividere dati della carta o password nella chat.';
+      if (responseLang === 'ar') return 'للدفع، افتح قسم «الدفع» في خطوات التسجيل واتبع رابط Suyool وتعليماته. لا يعالج هذا المساعد المدفوعات ولا يؤكدها؛ يؤكد مدير المدرسة حالة الدفع من لوحة المدير. لا ترسل بيانات البطاقة أو كلمات المرور في المحادثة.';
+      if (responseLang === 'fr') return 'Pour payer, ouvrez la section « Paiement » pendant l’inscription et suivez le lien et les instructions de Suyool. Cet assistant ne traite ni ne vérifie les paiements ; le Directeur confirme le statut depuis son tableau de bord. Ne partagez jamais vos données de carte ou mots de passe dans le chat.';
+      if (responseLang === 'es') return 'Para pagar, abre la sección «Pago» durante el registro y sigue el enlace y las instrucciones de Suyool. Este asistente no procesa ni verifica pagos; el Director confirma el estado desde su panel. No compartas datos de tarjeta ni contraseñas en el chat.';
+      if (responseLang === 'it') return 'Per pagare, apri la sezione «Pagamento» durante la registrazione e segui il link e le istruzioni di Suyool. Questo assistente non elabora né verifica i pagamenti; il Direttore conferma lo stato dal proprio pannello. Non condividere dati della carta o password nella chat.';
       return 'To pay, open the Payment section during registration and follow the Suyool link and instructions. This assistant does not process or verify payments; your school Director confirms payment status in the Director Dashboard. Never share card details or passwords in chat.';
     }
 
@@ -410,10 +433,10 @@ export const AIChatBot: React.FC<AIChatBotProps> = ({ currentLang, schoolId, sch
       'numero di telefono', 'اتصل', 'تواصل', 'التواصل', 'رقم الهاتف', 'رقم التواصل', 'البريد الإلكتروني'
     ].some((keyword) => q.includes(keyword));
     if (contactQuestion) {
-      if (currentLang === 'ar') return 'للمساعدة المتعلقة بحسابك أو التفعيل أو الصفوف أو الرسوم، تواصل مع مدير مدرستك عبر بيانات الاتصال التي زودتك بها المدرسة. لا يعرض هذا المساعد أرقاماً أو عناوين اتصال خاصة غير متاحة للعامة. وللاستفسارات العامة عن منصة Agenda، استخدم قناة التواصل الرسمية التي حصلت منها على رابط المنصة.';
-      if (currentLang === 'fr') return 'Pour toute aide concernant votre compte, son activation, les cours ou les frais, contactez le Directeur de votre établissement avec les coordonnées fournies par l’école. Cet assistant ne divulgue pas de numéros ou adresses privés. Pour les demandes générales sur Agenda, utilisez le canal officiel par lequel vous avez reçu le lien de la plateforme.';
-      if (currentLang === 'es') return 'Para obtener ayuda con tu cuenta, activación, clases o tarifas, contacta con el Director de tu escuela mediante los datos de contacto que te proporcionó el centro. Este asistente no inventa ni divulga números o direcciones privadas. Para consultas generales sobre Agenda, utiliza el canal oficial por el que recibiste el enlace de la plataforma.';
-      if (currentLang === 'it') return 'Per assistenza con account, attivazione, lezioni o tariffe, contatta il Direttore della tua scuola tramite i recapiti forniti dall’istituto. Questo assistente non inventa né divulga numeri o indirizzi privati. Per richieste generali su Agenda, usa il canale ufficiale tramite cui hai ricevuto il link della piattaforma.';
+      if (responseLang === 'ar') return 'للمساعدة المتعلقة بحسابك أو التفعيل أو الصفوف أو الرسوم، تواصل مع مدير مدرستك عبر بيانات الاتصال التي زودتك بها المدرسة. لا يعرض هذا المساعد أرقاماً أو عناوين اتصال خاصة غير متاحة للعامة. وللاستفسارات العامة عن منصة Agenda، استخدم قناة التواصل الرسمية التي حصلت منها على رابط المنصة.';
+      if (responseLang === 'fr') return 'Pour toute aide concernant votre compte, son activation, les cours ou les frais, contactez le Directeur de votre établissement avec les coordonnées fournies par l’école. Cet assistant ne divulgue pas de numéros ou adresses privés. Pour les demandes générales sur Agenda, utilisez le canal officiel par lequel vous avez reçu le lien de la plateforme.';
+      if (responseLang === 'es') return 'Para obtener ayuda con tu cuenta, activación, clases o tarifas, contacta con el Director de tu escuela mediante los datos de contacto que te proporcionó el centro. Este asistente no inventa ni divulga números o direcciones privadas. Para consultas generales sobre Agenda, utiliza el canal oficial por el que recibiste el enlace de la plataforma.';
+      if (responseLang === 'it') return 'Per assistenza con account, attivazione, lezioni o tariffe, contatta il Direttore della tua scuola tramite i recapiti forniti dall’istituto. Questo assistente non inventa né divulga numeri o indirizzi privati. Per richieste generali su Agenda, usa il canale ufficiale tramite cui hai ricevuto il link della piattaforma.';
       return 'For help with your account, activation, classes, or school fees, contact your school Director using the contact details your school provided. This assistant does not invent or disclose private phone numbers or email addresses. For general Agenda platform enquiries, use the official contact channel through which you received your platform link.';
     }
 
@@ -434,6 +457,7 @@ export const AIChatBot: React.FC<AIChatBotProps> = ({ currentLang, schoolId, sch
     // understand the source language and answer in the selected app language;
     // a separate translation request added latency and could block the chat.
     const selectedLanguageQuestion = text;
+    const responseLanguage = detectChatLanguage(selectedLanguageQuestion, currentLang);
 
     const userMessageId = `user_${Date.now()}`;
     const userMsg: ChatMessage = {
@@ -459,7 +483,7 @@ export const AIChatBot: React.FC<AIChatBotProps> = ({ currentLang, schoolId, sch
     }
     // Return the prepared, localized Agenda help for common operational questions.
     // More complex, mixed-topic and educational questions continue to the AI model.
-    const savedAnswer = getSavedResponse(selectedLanguageQuestion, currentSchoolContext);
+    const savedAnswer = getSavedResponse(selectedLanguageQuestion, currentSchoolContext, true, responseLanguage);
     if (savedAnswer) {
       if (activeLanguageRef.current !== currentLang) {
         setIsTyping(false);
@@ -479,28 +503,27 @@ export const AIChatBot: React.FC<AIChatBotProps> = ({ currentLang, schoolId, sch
     let reply = '';
     {
       try {
-        const response = await generateAIContent([
-            {
-              text: `You are the AI academic assistant for Agenda (منصة الأجندة اللبنانية).
+        const systemPrompt = \`You are the AI academic assistant for Agenda (منصة الأجندة اللبنانية).
+
+HIGHEST-PRIORITY LANGUAGE RULES:
+- The application supports Arabic, English, French, Spanish, and Italian.
+- Detect the language of the user's latest message and answer in that same language by default.
+- If the user explicitly asks for a response language (for example, "Please repeat in Arabic"), follow that request even when it differs from the language of the question or the interface.
+- For Arabic, write fluent, natural Arabic in Arabic script. For French, Spanish, and Italian, use fluent natural language with correct spelling and accents.
+- Never claim that Agenda supports English only. Never refuse a language from the five supported languages.
+- Do not let older assistant messages or earlier language choices override the latest user's request.
+- Use the interface language (\${languageNames[currentLang]}) only when the latest message is too short or ambiguous to identify a language.
+
 CANONICAL AGENDA KNOWLEDGE (always available; do not rely on previous chat messages to remember these facts):
-${AGENDA_ASSISTANT_KNOWLEDGE}
-RECENT CONVERSATION (use only to understand follow-up references; canonical knowledge and current school data take precedence):
-${recentConversation || '(No previous chat messages.)'}
+\${AGENDA_ASSISTANT_KNOWLEDGE}
+RECENT CONVERSATION (use only to understand follow-up references; the latest user message determines the answer language):
+\${recentConversation || '(No previous chat messages.)'}
 Platform constraints:
 - Use the selected school's live configuration for its name, educators, and sessions. The default student rate is USD 125 per session and may be adjusted by the Director; users should confirm the current rate with their Director.
 - Do not claim a fixed platform-wide price or timetable. Do not invent payment methods, schedules, account credentials, or school records.
 - Explain academic concepts, official Lebanese curriculum, homework, camera exercise submissions, and classroom navigation.
-REQUIRED OUTPUT LANGUAGE: ${languageNames[currentLang]}.
-MANDATORY LANGUAGE POLICY:
-- The user's question may be written in any supported language. Understand it directly and answer in ${languageNames[currentLang]}.
-- Answer in ${languageNames[currentLang]} only, using natural, fluent, complete sentences.
-- Do not answer in the source language of the original question.
-- Do not mix English with the selected language. Translate explanations, headings, lists, UI navigation names, examples, and ordinary text.
-- Keep only proper names, school names, usernames, URLs, code, and standard technical product terms unchanged where translation would be incorrect.
-- Do not quote or restate the question in a different language.
-- Before sending, check that every sentence is in ${languageNames[currentLang]} and rewrite any sentence that is not.
 Authoritative school configuration (use current values, never invent a rate):
-${JSON.stringify(currentSchoolContext ? { schoolName: currentSchoolContext.schoolName, sessions: currentSchoolContext.sessions, educators: currentSchoolContext.educators, guidance: currentSchoolContext.guidance } : { schoolName: schoolName || 'Agenda', sessions: [], educators: [] })}
+\${JSON.stringify(currentSchoolContext ? { schoolName: currentSchoolContext.schoolName, sessions: currentSchoolContext.sessions, educators: currentSchoolContext.educators, guidance: currentSchoolContext.guidance } : { schoolName: schoolName || 'Agenda', sessions: [], educators: [] })}
 Platform architecture and navigation:
 - Each Director owns one separate school tenant. Students, educators, classes, saved educator lessons, and grade-specific student rates per session are isolated by that school's owner and school ID.
 - The correct school is selected by its dedicated share link. There is no public school dropdown.
@@ -512,12 +535,15 @@ Platform architecture and navigation:
 - A separate Agenda school setup costs USD 150 one time to purchase/create the school identity/name and its independent school space. The purchaser becomes its Director. Keep this one-time setup cost distinct from the student rate per session.
 - To rename a school, the Director signs in from the Director Login card on the main screen, opens Director Dashboard > Accounts, edits the School name field, and saves. The new name updates the platform branding.
 - Explain the current school's prices, educators, grades and sessions using the supplied school configuration. Do not expose private account data, passwords, or other schools' information.
-Original user question (understand it directly; answer only in the selected language): "${selectedLanguageQuestion}"`
-            }
-          ], { maxOutputTokens: 1024 });
+\`;
+
+        const response = await generateAIContent([
+          { role: 'system', parts: [{ text: systemPrompt }] },
+          { role: 'user', parts: [{ text: selectedLanguageQuestion }] },
+        ], { maxOutputTokens: 1024 });
 
         // The system prompt already requires the selected output language.
-        // Skip a second the AI model call just to translate the generated answer.
+        // The model answers directly in the requested language; no translation pass is needed.
         reply = response.text?.trim() || '';
       } catch (e) {
         console.warn('AI chat error (diagnostic):', e instanceof Error ? e.message : String(e));
