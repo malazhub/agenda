@@ -89,7 +89,7 @@ function fakeEnvironment() {
       if (this.sql.includes('SELECT * FROM accounts WHERE username')) {
         return [...accounts.values()].find((item) => item.username.toLowerCase() === this.values[0].toLowerCase()) || null;
       }
-      if (this.sql.includes('FROM accounts') && this.sql.includes('WHERE id = ?')) {
+      if (this.sql.includes('FROM accounts') && (this.sql.includes('WHERE id = ?') || this.sql.includes('WHERE a.id = ?'))) {
         const account = accounts.get(this.values[0]) || null;
         if (!account) return null;
         const schoolId = this.values.slice(1).find((value) => schools.has(value));
