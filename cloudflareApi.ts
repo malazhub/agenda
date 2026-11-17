@@ -190,15 +190,31 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     typeof FormData !== 'undefined' &&
     init?.body instanceof FormData;
 
-  const response = await fetch(`${API_BASE_URL}${path}`, {
-    ...init,
-    headers: {
-      ...(init?.body && !isFormData
-        ? { 'Content-Type': 'application/json' }
-        : {}),
-      ...init?.headers,
-    },
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE_URL}${path}`, {
+      ...init,
+      headers: {
+        ...(init?.body && !isFormData
+          ? { 'Content-Type': 'application/json' }
+          : {}),
+        ...init?.headers,
+      },
+    });
+  } catch (error) {
+    const origin = typeof window !== 'undefined' ? window.location.origin : 'unknown browser origin';
+    const detail = error instanceof Error ? error.message : String(error);
+    const diagnostic =
+      `Could not reach Agenda API at ${API_BASE_URL}${path} from ${origin}. ` +
+      `The browser received no HTTP response (network, DNS, browser blocking, or CORS). ` +
+      `Browser detail: ${detail}`;
+    console.error('Agenda API network request failed', {
+      apiUrl: `${API_BASE_URL}${path}`,
+      origin,
+      detail,
+    });
+    throw new Error(diagnostic);
+  }
 
   const body = await response.json().catch(() => null);
 
