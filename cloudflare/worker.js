@@ -756,8 +756,8 @@ async function ownerDirectors(request, env) {
     expiresAt: row.license_expires_at || row.expires_at,
     schoolId: row.school_id, schoolName: row.school_name,
     licenseActive: Boolean(row.license_active),
-    paymentMethod: row.payment_method || "suyool",
-    paymentValue: row.payment_value || "https://payments.suyool.com/qr/p585_malazjanbeih",
+    paymentMethod: row.payment_method || "unset",
+    paymentValue: row.payment_value || "",
     studentCount: Number(row.student_count || 0),
     educatorCount: Number(row.educator_count || 0),
     directorLink: `https://malazhub.github.io/agenda/?schoolId=${encodeURIComponent(row.school_id)}`,
@@ -811,8 +811,8 @@ async function publicSchoolPayment(url, env) {
   const school = await env.DB.prepare("SELECT payment_method, payment_value FROM schools WHERE id = ?").bind(schoolId).first();
   if (!school) return json({ error: "School not found." }, 404);
   return json({
-    paymentMethod: school.payment_method || "suyool",
-    paymentValue: school.payment_value || "https://payments.suyool.com/qr/p585_malazjanbeih",
+    paymentMethod: school.payment_method || "unset",
+    paymentValue: school.payment_value || "",
   });
 }
 
