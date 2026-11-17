@@ -166,9 +166,13 @@ function fakeEnvironment() {
         if ([...accounts.values()].some((item) => item.username.toLowerCase() === username.toLowerCase())) {
           throw new Error('UNIQUE constraint failed: accounts.username');
         }
+        const isDirectorCreation = this.sql.includes("datetime('now', '+1 year')");
         accounts.set(id, {
           id, username, password_hash, role, school_id, full_name, email, phone, school_or_subject, grade_id, registered_session_id,
-          created_at: '2026-11-03 10:00:00', expires_at: '2026-12-03 10:00:00', activated: 0, paid: 0,
+          created_at: '2026-11-03 10:00:00',
+          expires_at: isDirectorCreation ? '2027-11-17 10:00:00' : '2026-12-03 10:00:00',
+          activated: isDirectorCreation ? 1 : 0,
+          paid: isDirectorCreation ? 1 : 0,
         });
         return { meta: { changes: 1 } };
       }
@@ -187,6 +191,11 @@ function fakeEnvironment() {
       }
       if (this.sql.startsWith('INSERT INTO school_grade_pricing')) {
         pricing.set(`${this.values[0]}:${this.values[1]}`, { school_id: this.values[0], grade_id: this.values[1], monthly_rate_usd: this.values[2] });
+        return { meta: { changes: 1 } };
+      }
+      if (this.sql.startsWith('INSERT INTO schools')) {
+        const [id, name, director_id] = this.values;
+        schools.set(id, { id, name, director_id, license_expires_at: '2027-11-17 10:00:00', license_active: 1 });
         return { meta: { changes: 1 } };
       }
       if (this.sql.startsWith('UPDATE schools SET name')) {
@@ -500,6 +509,84 @@ test('grade registration loads available grades and grants grade-scoped live acc
 
   const wrongGrade = await send(env, '/api/sessions?gradeId=eb7&live=true&sessionId=test-registration-session', { token });
   assert.equal(wrongGrade.status, 403);
+});
+
+test('Owner creates a paid one-year Director school and receives its login link', async () => {
+  const { env, platformOwners } = fakeEnvironment();
+  platformOwners.add('director-account-0000000000000000');
+
+  const ownerLogin = await send(env, '/api/auth/login', {
+    method: 'POST',
+    body: { username: 'director', password: 'DirectorPassword#2026' },
+  });
+  assert.equal(ownerLogin.status, 200);
+  const { token: ownerToken, account: ownerAccount } = await ownerLogin.json();
+  assert.equal(ownerAccount.role, 'owner');
+
+  const missingPaymentConfirmation = await send(env, '/api/owner/directors', {
+    method: 'POST',
+    token: ownerToken,
+    body: {
+      username: 'new.director',
+      password: 'TemporaryDirectorPassword#2026',
+      fullName: 'New Director',
+      email: 'new.director@example.com',
+      schoolName: 'New Learning School',
+      paymentReceived: false,
+    },
+  });
+  assert.equal(missingPaymentConfirmation.status, 400);
+
+  const created = await send(env, '/api/owner/directors', {
+    method: 'POST',
+    token: ownerToken,
+    body: {
+      username: 'new.director',
+      password: 'TemporaryDirectorPassword#2026',
+      fullName: 'New Director',
+      email: 'new.director@example.com',
+      phone: '+961 70 123 456',
+      schoolName: 'New Learning School',
+      paymentReceived: true,
+    },
+  });
+  assert.equal(created.status, 201);
+  const { director } = await created.json();
+  assert.equal(director.username, 'new.director');
+  assert.equal(director.schoolName, 'New Learning School');
+  assert.equal(director.licenseActive, true);
+  assert.equal(director.paid, true);
+  assert.match(director.directorLink, /agenda\.malazhub-agenda\.workers\.dev/);
+  assert.equal(env.DB ? true : false, true);
+
+  const newLogin = await send(env, '/api/auth/login', {
+    method: 'POST',
+    body: { username: 'new.director', password: 'TemporaryDirectorPassword#2026' },
+  });
+  assert.equal(newLogin.status, 200);
+  const { token: directorToken, account } = await newLogin.json();
+  assert.equal(account.role, 'director');
+  assert.equal(account.schoolId, director.schoolId);
+
+  const profile = await send(env, '/api/director/profile', { token: directorToken });
+  assert.equal(profile.status, 200);
+  assert.equal((await profile.json()).profile.schoolName, 'New Learning School');
+});
+
+test('Only the platform Owner can create Director schools', async () => {
+  const { env } = fakeEnvironment();
+  const response = await send(env, '/api/owner/directors', {
+    method: 'POST',
+    body: {
+      username: 'blocked.director',
+      password: 'TemporaryDirectorPassword#2026',
+      fullName: 'Blocked Director',
+      email: 'blocked@example.com',
+      schoolName: 'Blocked School',
+      paymentReceived: true,
+    },
+  });
+  assert.equal(response.status, 401);
 });
 
 test('Director login reads persisted role tables and saves status updates', async () => {
