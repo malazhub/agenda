@@ -39,6 +39,9 @@ interface CoursesHubProps {
   sessionToken: string;
   onSchoolBrandChange: (schoolId: string, schoolName: string) => void;
   onOwnerLogin?: (account: CloudflareAccount, token: string) => void;
+  ownerSchoolToken?: string;
+  onBackToOwner?: () => void;
+  onOwnerTokenRefresh?: (token: string) => void;
   onRegisterSignOutCleanup?: (
     cleanup: (() => Promise<void>) | null
   ) => void;
@@ -57,6 +60,9 @@ export const CoursesHub: React.FC<CoursesHubProps> = ({
   onEnterLiveClassroom,
   onRegisterSignOutCleanup,
   onOwnerLogin,
+  ownerSchoolToken,
+  onBackToOwner,
+  onOwnerTokenRefresh,
 }) => {
   const t = translations[currentLang];
 
@@ -91,6 +97,12 @@ export const CoursesHub: React.FC<CoursesHubProps> = ({
       setDirectorScreen('login');
     }
   }, [directorLoginRequest]);
+
+  useEffect(() => {
+    if (!ownerSchoolToken) return;
+    setDirectorToken(ownerSchoolToken);
+    setDirectorScreen('dashboard');
+  }, [ownerSchoolToken]);
 
   useEffect(() => {
     if (!directorToken) {
@@ -161,6 +173,13 @@ export const CoursesHub: React.FC<CoursesHubProps> = ({
   };
 
   const returnToMain = () => {
+    if (ownerSchoolToken) {
+      setStudentRows([]);
+      setEducatorRows([]);
+      setActiveGradeForSessions(null);
+      onBackToOwner?.();
+      return;
+    }
     sessionStorage.removeItem('agenda-director-token');
     setDirectorToken('');
     setStudentRows([]);
@@ -222,6 +241,7 @@ export const CoursesHub: React.FC<CoursesHubProps> = ({
       });
       sessionStorage.setItem('agenda-director-token', token);
       setDirectorToken(token);
+      if (ownerSchoolToken) onOwnerTokenRefresh?.(token);
       setDirectorSchoolId(profile.schoolId);
       setDirectorSchoolName(profile.schoolName);
       setDirectorUsername(profile.username);
@@ -746,7 +766,9 @@ const updateAccount = async (
             onClick={returnToMain}
             className="text-slate-600 hover:text-slate-800 text-xs font-bold cursor-pointer"
           >
-            {t.backToMain}
+            {ownerSchoolToken
+              ? currentLang === 'ar' ? 'العودة إلى مركز تحكم المالك' : currentLang === 'fr' ? 'Retour au centre du propriétaire' : currentLang === 'es' ? 'Volver al centro del propietario' : currentLang === 'it' ? 'Torna al centro proprietario' : 'Back to Owner Control Center'
+              : t.backToMain}
           </button>
         </div>
 
