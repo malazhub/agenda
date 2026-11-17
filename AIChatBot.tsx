@@ -34,7 +34,7 @@ const isQuestionAlreadyInLanguage = (value: string, language: Language): boolean
   if (language === 'ar') return /[\u0600-\u06FF]/.test(normalized);
 
   const strongPhrases: Record<Exclude<Language, 'ar'>, string[]> = {
-    en: ['what is', 'how do i', 'how can i', 'please explain', 'give me', 'tell me', 'my school', 'own copy', 'rename', 'overview', 'navigate', 'platform', 'application'],
+    en: ['hello', 'hi', 'hey', 'how are you', 'how is it going', 'good morning', 'good afternoon', 'good evening', 'thank you', 'thanks', 'what is up', 'who are you', 'what is', 'how do i', 'how can i', 'how do', 'how does', 'how can', 'can you', 'could you', 'would you', 'please help', 'help me', 'i need', 'i want', 'please explain', 'give me', 'tell me', 'my school', 'own copy', 'rename', 'overview', 'navigate', 'platform', 'application'],
     fr: ['présentation', 'présentez', 'expliquez', 'explique-moi', 'donnez-moi', 'comment', 'mon école', 'ma propre', 'renommer', 'établissement', 'naviguer', 'plateforme', 'obtenir', 'copie'],
     es: ['presentación', 'preséntame', 'explícame', 'dame', 'cómo', 'mi escuela', 'mi propia', 'cambiar', 'navegar', 'plataforma', 'obtener', 'copia'],
     it: ['presentazione', 'spiegami', 'fammi', 'vorrei', 'come', 'la mia scuola', 'la mia copia', 'cambiare', 'rinominare', 'navigare', 'piattaforma', 'ottenere', 'copia'],
@@ -43,7 +43,7 @@ const isQuestionAlreadyInLanguage = (value: string, language: Language): boolean
   if (phraseList.some((phrase) => normalized.includes(phrase))) return true;
 
   const languageWords: Record<Exclude<Language, 'ar'>, string[]> = {
-    en: ['the', 'and', 'what', 'how', 'please', 'my', 'your', 'school', 'explain', 'about', 'with', 'for', 'can', 'could', 'would', 'want', 'get', 'change', 'name', 'copy'],
+    en: ['the', 'and', 'what', 'how', 'please', 'my', 'your', 'you', 'are', 'is', 'am', 'was', 'were', 'do', 'does', 'did', 'have', 'has', 'will', 'should', 'school', 'explain', 'about', 'with', 'for', 'can', 'could', 'would', 'want', 'need', 'get', 'change', 'name', 'copy', 'hello', 'hi', 'hey', 'thanks', 'thank', 'good', 'morning', 'afternoon', 'evening'],
     fr: ['le', 'la', 'les', 'des', 'une', 'un', 'et', 'pour', 'avec', 'comment', 'mon', 'ma', 'mes', 'école', 'changer', 'nom', 'propre', 'copie', 'plateforme', 'obtenir'],
     es: ['el', 'la', 'los', 'las', 'una', 'un', 'y', 'para', 'con', 'cómo', 'mi', 'mis', 'escuela', 'cambiar', 'nombre', 'propia', 'copia', 'plataforma', 'obtener', 'quiero'],
     it: ['il', 'lo', 'la', 'gli', 'le', 'una', 'un', 'e', 'per', 'con', 'come', 'mia', 'mio', 'scuola', 'cambiare', 'nome', 'propria', 'copia', 'piattaforma', 'ottenere', 'vorrei'],
@@ -337,7 +337,7 @@ Return ONLY the translation: no explanation, no answer, no quotes, and no langua
 Preserve proper names, school names, usernames, numbers, prices, grade identifiers, and technical product names exactly.
 If the question is already in ${languageNames[currentLang]}, return it unchanged.
 Question: ${JSON.stringify(text)}`,
-        }]);
+        }], { thinkingLevel: 'low' });
         selectedLanguageQuestion = translation.text?.trim().replace(/^["']|["']$/g, '') || '';
       } catch (translationError) {
         console.warn('Unable to translate the submitted AI question.', translationError);
@@ -449,23 +449,11 @@ Platform architecture and navigation:
 - Explain the current school's prices, educators, grades and sessions using the supplied school configuration. Do not expose private account data, passwords, or other schools' information.
 User question (translated to the selected language): "${selectedLanguageQuestion}"`
             }
-          ]);
+          ], { thinkingLevel: 'low' });
 
+        // The system prompt already requires the selected output language.
+        // Skip a second Gemini call just to translate the generated answer.
         reply = response.text?.trim() || '';
-        if (reply) {
-          // Run a final translation pass so even an imperfectly compliant model
-          // cannot leave the assistant response in a different language.
-          const localizedResponse = await generateGeminiContent([{
-              text: `Translate the complete assistant response below into ${languageNames[currentLang]}.
-Return ONLY the translated response, preserving every factual detail, number, price, list item, warning, and paragraph.
-Do not summarize, omit, add facts, or answer the user separately.
-Keep only proper names, school names, usernames, URLs, code, and standard technical product terms unchanged where necessary.
-If it is already fully in ${languageNames[currentLang]}, return it unchanged.
-Response to translate:
-${JSON.stringify(reply)}`,
-            }]);
-          reply = localizedResponse.text?.trim() || reply;
-        }
       } catch (e) {
         console.warn('Gemini chat error:', e);
       }
