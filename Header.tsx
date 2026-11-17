@@ -16,6 +16,8 @@ interface HeaderProps {
   schoolId?: string;
   onOpenArchiveSessions?: () => void;
   onSignOut?: () => void;
+  isOwner?: boolean;
+  onOpenOwner?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -27,6 +29,8 @@ export const Header: React.FC<HeaderProps> = ({
   schoolName,
   schoolId = 'default-agenda-school',
   onSignOut,
+  isOwner = false,
+  onOpenOwner,
 }) => {
   const t = translations[currentLang];
 
@@ -42,6 +46,7 @@ export const Header: React.FC<HeaderProps> = ({
                 <span className="max-w-40 truncate text-xs font-bold text-slate-800" title={signedInName}>
                   {signedInName}
                 </span>
+                {isOwner && <button type="button" onClick={onOpenOwner} className="rounded-lg bg-amber-100 px-2.5 py-1 text-xs font-black text-amber-900">{currentLang === 'ar' ? 'لوحة المالك' : currentLang === 'fr' ? 'Contrôle propriétaire' : currentLang === 'es' ? 'Panel del propietario' : currentLang === 'it' ? 'Pannello proprietario' : 'Owner Control'}</button>}
                 <button
                   type="button"
                   onClick={onSignOut}
