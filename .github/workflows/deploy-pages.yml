@@ -59,6 +59,25 @@ jobs:
             process.exit(1);
           }
           console.log("Cloudflare Workers AI live-response test passed:", body.text.trim().slice(0, 160));
+
+          const arabicResponse = await fetch(endpoint, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              contents: [
+                { role: "system", parts: [{ text: "أجب باللغة العربية فقط وبأسلوب طبيعي." }] },
+                { role: "user", parts: [{ text: "عرّف منصة Agenda باختصار." }] }
+              ],
+              maxOutputTokens: 128
+            }),
+            signal: AbortSignal.timeout(55000)
+          });
+          const arabicBody = await arabicResponse.json().catch(() => ({}));
+          if (!arabicResponse.ok || typeof arabicBody.text !== "string" || !/[\\u0600-\\u06FF]/u.test(arabicBody.text)) {
+            console.error(`Workers AI Arabic-language test failed: HTTP ${arabicResponse.status} — ${arabicBody.error || arabicBody.text || "No Arabic response returned"}`);
+            process.exit(1);
+          }
+          console.log("Cloudflare Workers AI Arabic-language test passed:", arabicBody.text.trim().slice(0, 160));
           NODE
 
   build:
