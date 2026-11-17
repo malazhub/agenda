@@ -666,13 +666,14 @@ test('Owner creates a one-year Director school and Director sets their own usern
     body: { updates: [{ id: director.id, activated: false, paid: false }] },
   });
   assert.equal(stagedStatuses.status, 200);
-  assert.deepEqual(await stagedStatuses.json(), { updated: 1 });
+  assert.deepEqual((await stagedStatuses.json()).statuses, [{ id: director.id, activated: false, paid: false }]);
   assert.equal(accounts.get(director.id).activated, 0);
   assert.equal(accounts.get(director.id).paid, 0);
   const blockedLogin = await send(env, '/api/auth/login', {
     method: 'POST', body: { username: 'new.director', password: 'x' },
   });
-  assert.equal(blockedLogin.status, 401);
+  assert.equal(blockedLogin.status, 403);
+  assert.match((await blockedLogin.json()).error, /Director account is inactive/i);
   const savedStatuses = await send(env, '/api/owner/directors/status', {
     method: 'PATCH', token: ownerToken,
     body: { updates: [{ id: director.id, activated: true, paid: true }] },
@@ -685,6 +686,11 @@ test('Owner creates a one-year Director school and Director sets their own usern
   });
   assert.equal(directorLogin.status, 200);
   assert.equal((await directorLogin.json()).account.role, 'director');
+  const wrongPassword = await send(env, '/api/auth/login', {
+    method: 'POST', body: { username: 'new.director', password: 'incorrect' },
+  });
+  assert.equal(wrongPassword.status, 401);
+  assert.deepEqual(await wrongPassword.json(), { error: 'Invalid username or password.' });
   const currentDirector = await send(env, '/api/auth/me', { token: directorToken });
   assert.equal(currentDirector.status, 200);
   assert.equal((await currentDirector.json()).account.role, 'director');
