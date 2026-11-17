@@ -1105,18 +1105,14 @@ async function saveOwnerDirectorStatuses(request, env) {
   if (ids.some((id) => !foundRows.has(id))) {
     return json({ error: "One or more Directors could not be found. No status changes were saved." }, 404);
   }
-  const statements = updates.flatMap((item) => {
+  const statements = (await Promise.all(updates.map(async (item) => {
     const savedAccount = foundRows.get(item.id);
     const phone = typeof savedAccount.phone === "string" ? savedAccount.phone.trim() : "";
     const keepPhoneAsInitialPassword = savedAccount.phone_password_disabled_at == null &&
       normalizePhoneCredential(phone).length >= 6;
-    const updateAccount = keepPhoneAsInitialPassword
-      ? env.DB.prepare("UPDATE accounts SET activated = ?, paid = ? WHERE id = ? AND role = 'director'")
-          .bind(item.activated ? 1 : 0, item.paid ? 1 : 0, item.id)
-      : env.DB.prepare("UPDATE accounts SET activated = ?, paid = ? WHERE id = ? AND role = 'director'")
-          .bind(item.activated ? 1 : 0, item.paid ? 1 : 0, item.id);
     return [
-      updateAccount,
+      env.DB.prepare("UPDATE accounts SET activated = ?, paid = ? WHERE id = ? AND role = 'director'")
+        .bind(item.activated ? 1 : 0, item.paid ? 1 : 0, item.id),
       // Keep the actual hash synchronized with the Owner-entered phone while
       // phone-login remains enabled. A stale hash must not leave first login broken.
       ...(keepPhoneAsInitialPassword ? [env.DB.prepare(
@@ -1125,7 +1121,7 @@ async function saveOwnerDirectorStatuses(request, env) {
       env.DB.prepare("DELETE FROM login_attempts WHERE username = (SELECT username FROM accounts WHERE id = ?)")
         .bind(item.id),
     ];
-  });
+  }))).flat();
   await env.DB.batch(statements);
   const savedRows = await env.DB.prepare(
     `SELECT a.id, a.activated, a.paid, a.phone, a.password_hash, a.phone_password_disabled_at
