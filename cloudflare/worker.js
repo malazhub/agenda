@@ -782,8 +782,79 @@ async function ownerDirectors(request, env) {
     paymentValue: row.payment_value || "",
     studentCount: Number(row.student_count || 0),
     educatorCount: Number(row.educator_count || 0),
-    directorLink: `https://malazhub.github.io/agenda/?schoolId=${encodeURIComponent(row.school_id)}`,
+    directorLink: `https://agenda.malazhub-agenda.workers.dev/?schoolId=${encodeURIComponent(row.school_id)}`,
   })) });
+}
+
+async function createOwnerDirector(request, env) {
+  const owner = await requireOwner(request, env);
+  if (!owner) return json({ error: "Owner access required." }, 401);
+
+  const body = await requestJson(request);
+  const username = typeof body?.username === "string" ? body.username.trim().toLowerCase() : "";
+  const password = typeof body?.password === "string" ? body.password : "";
+  const fullName = typeof body?.fullName === "string" ? body.fullName.trim() : "";
+  const email = typeof body?.email === "string" ? body.email.trim().toLowerCase() : "";
+  const phone = typeof body?.phone === "string" ? body.phone.trim() : "";
+  const schoolName = typeof body?.schoolName === "string" ? body.schoolName.trim() : "";
+
+  if (body?.paymentReceived !== true) {
+    return json({ error: "Confirm that the one-time USD 150 school licence payment has been received before creating this Director." }, 400);
+  }
+  if (!/^[a-z0-9._-]{3,32}$/.test(username)) {
+    return json({ error: "Use a 3–32 character username with letters, numbers, dot, underscore or hyphen." }, 400);
+  }
+  if (password.length < 12 || password.length > MAX_PASSWORD_LENGTH) {
+    return json({ error: "The temporary password must contain at least 12 characters and no more than 1,024 characters." }, 400);
+  }
+  if (fullName.length < 2 || fullName.length > 120 ||
+      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ||
+      phone.length > 40 ||
+      schoolName.length < 2 || schoolName.length > 160) {
+    return json({ error: "Enter a valid Director name, email, phone number and school name." }, 400);
+  }
+
+  const duplicate = await env.DB.prepare(
+    "SELECT id FROM accounts WHERE username = ? COLLATE NOCASE"
+  ).bind(username).first();
+  if (duplicate) return json({ error: "That username is already in use." }, 409);
+
+  const accountId = randomId();
+  const schoolId = `school-${randomId()}`;
+  const passwordHash = await hashPassword(password);
+  try {
+    await env.DB.batch([
+      env.DB.prepare(
+        "INSERT INTO accounts (id, username, password_hash, role, school_id, full_name, email, phone, school_or_subject, grade_id, registered_session_id, expires_at, activated, paid) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now', '+1 year'), 1, 1)"
+      ).bind(accountId, username, passwordHash, "director", schoolId, fullName, email, phone, "", "", null),
+      env.DB.prepare(
+        "INSERT INTO schools (id, name, director_id, license_expires_at, license_active) VALUES (?, ?, ?, datetime('now', '+1 year'), 1)"
+      ).bind(schoolId, schoolName, accountId),
+    ]);
+  } catch (error) {
+    const detail = error instanceof Error ? error.message.toLowerCase() : "";
+    if (detail.includes("unique")) {
+      return json({ error: "That username or school name is already in use." }, 409);
+    }
+    console.error("Unable to create Director school:", error);
+    return json({ error: "The Director and school could not be created. No account details were returned." }, 500);
+  }
+
+  return json({
+    director: {
+      id: accountId,
+      username,
+      fullName,
+      email,
+      phone,
+      schoolId,
+      schoolName,
+      licenseActive: true,
+      paid: true,
+      expiresInYears: 1,
+      directorLink: `https://agenda.malazhub-agenda.workers.dev/?schoolId=${encodeURIComponent(schoolId)}`,
+    },
+  }, 201);
 }
 
 async function updateOwnerDirector(request, env, directorId) {
@@ -2909,6 +2980,7 @@ async function handle(request, env) {
   if (request.method === "POST" && path === "/api/auth/login") return handleLogin(request, env);
   if (request.method === "GET" && path === "/api/auth/me") return getCurrentAccount(request, env);
   if (request.method === "GET" && path === "/api/owner/directors") return ownerDirectors(request, env);
+  if (request.method === "POST" && path === "/api/owner/directors") return createOwnerDirector(request, env);
   if (request.method === "GET" && path === "/api/school-payment") return publicSchoolPayment(url, env);
     const ownerDirectorMatch = path.match(new RegExp("^/api/owner/directors/([a-zA-Z0-9_-]{1,100})$", "i"));
   if (request.method === "PATCH" && ownerDirectorMatch) return updateOwnerDirector(request, env, ownerDirectorMatch[1]);
