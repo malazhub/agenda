@@ -47,7 +47,7 @@ const AGENDA_ASSISTANT_KNOWLEDGE = [
   'Payments are not processed or verified by this AI chat. Where the registration screen offers Suyool, users should follow its payment instructions. The Director confirms payment status in the Director Dashboard. Never ask users to share card details or passwords.',
   'For account, activation, payment-status, or class-assignment help, users should contact their own school Director through the school\'s provided contact channel. Never invent an email address or phone number.',
   'Each Director has an isolated school space. Student and educator accounts, assignments, classrooms, and saved lesson materials belong to that school and must not be disclosed to another school.',
-  'The application supports Arabic, English, French, Spanish, and Italian. Answer in the language of the user's latest message unless they explicitly request another response language.',
+  'The application supports Arabic, English, French, Spanish, and Italian. Answer in the language of the user\'s latest message unless they explicitly request another response language.',
   'For questions outside Agenda operations, use the AI model for educational, general-knowledge, reasoning, and study questions. Understand the original question directly and answer naturally in the language requested by the user.'
 ].join('\\n');
 
@@ -554,13 +554,13 @@ Platform architecture and navigation:
     // question so the user can retry, and show a clear localized service error.
     if (!reply) {
       setInputText(text);
-      if (currentLang === 'ar') {
+      if (responseLanguage === 'ar') {
         reply = 'تعذر الاتصال بخدمة الذكاء الاصطناعي حالياً. احتفظنا بسؤالك في خانة الكتابة؛ يرجى المحاولة مجدداً بعد قليل.';
-      } else if (currentLang === 'fr') {
+      } else if (responseLanguage === 'fr') {
         reply = 'Le service IA est momentanément inaccessible. Votre question a été conservée dans le champ de saisie ; veuillez réessayer dans un instant.';
-      } else if (currentLang === 'es') {
+      } else if (responseLanguage === 'es') {
         reply = 'No se pudo conectar con el servicio de IA. Tu pregunta se ha conservado en el campo de texto; inténtalo de nuevo en unos instantes.';
-      } else if (currentLang === 'it') {
+      } else if (responseLanguage === 'it') {
         reply = 'Non è stato possibile raggiungere il servizio IA. La domanda è rimasta nel campo di testo; riprova tra poco.';
       } else {
         reply = 'I could not reach the AI service just now. Your question has been kept in the input field; please try again shortly.';
