@@ -629,6 +629,11 @@ async function handleLogin(request, env) {
     account.phone &&
     password === account.phone
   );
+  // Enforce the 15-minute server-side throttle without exposing a distinct
+  // lockout response. The temporary phone credential remains a recovery path.
+  if (throttled && !phoneIsInitialPassword) {
+    return json({ error: "Invalid username or password." }, 401);
+  }
   const valid = account ? (phoneIsInitialPassword || await verifyPassword(password, account.password_hash)) : false;
   if (!account || !valid) {
     if (!throttled) {
