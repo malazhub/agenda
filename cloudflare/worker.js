@@ -618,13 +618,23 @@ async function handleLogin(request, env) {
     .bind(username)
     .first();
   const valid = account ? await verifyPassword(password, account.password_hash) : false;
-  const ownerRow = account ? await env.DB.prepare("SELECT account_id FROM platform_owners WHERE account_id = ?").bind(account.id).first() : null;
-  const isOwner = Boolean(ownerRow);
-  const expiryTime = account?.expires_at ? Date.parse(`${account.expires_at.replace(' ', 'T')}Z`) : null;
-  const expired = expiryTime !== null && (!Number.isFinite(expiryTime) || expiryTime <= Date.now());
-  if (!account || !valid || !account.activated || (!isOwner && expired)) {
+  if (!account || !valid) {
     await env.DB.prepare("INSERT INTO login_attempts (username, succeeded) VALUES (?, 0)").bind(username).run();
-    return json({ error: "Invalid username or password, or account is not activated or has expired." }, 401);
+    return json({ error: "Invalid username or password." }, 401);
+  }
+  const ownerRow = await env.DB.prepare("SELECT account_id FROM platform_owners WHERE account_id = ?").bind(account.id).first();
+  const isOwner = Boolean(ownerRow);
+  const expiryTime = account.expires_at ? Date.parse(`${account.expires_at.replace(' ', 'T')}Z`) : null;
+  const expired = expiryTime !== null && (!Number.isFinite(expiryTime) || expiryTime <= Date.now());
+  if (!account.activated) {
+    if (account.role === "director" && !isOwner) {
+      return json({ error: "Director account is inactive. In the Owner Control Center, enable Account and press Save all changes." }, 403);
+    }
+    await env.DB.prepare("INSERT INTO login_attempts (username, succeeded) VALUES (?, 0)").bind(username).run();
+    return json({ error: "This account is not activated. Contact the account administrator." }, 403);
+  }
+  if (!isOwner && expired) {
+    return json({ error: "This account has expired. Contact the platform Owner." }, 403);
   }
   if (account.role === "director" && !isOwner) {
     if (Number(account.paid ?? 0) !== 1) {
@@ -1018,7 +1028,24 @@ async function saveOwnerDirectorStatuses(request, env) {
       .bind(item.id),
   ]);
   await env.DB.batch(statements);
-  return json({ updated: updates.length });
+  const savedRows = await env.DB.prepare(
+    `SELECT a.id, a.activated, a.paid
+     FROM accounts a
+     INNER JOIN schools s ON s.director_id = a.id AND s.id = a.school_id
+     WHERE a.role = 'director' AND a.id IN (${placeholders})`
+  ).bind(...ids).all();
+  const statuses = (savedRows.results || []).map((row) => ({
+    id: row.id,
+    activated: Boolean(row.activated),
+    paid: Boolean(row.paid),
+  }));
+  if (statuses.length !== updates.length || updates.some((item) => {
+    const saved = statuses.find((row) => row.id === item.id);
+    return !saved || saved.activated !== item.activated || saved.paid !== item.paid;
+  })) {
+    return json({ error: "The Director status changes could not be verified in the database. Refresh the list and try again." }, 500);
+  }
+  return json({ updated: updates.length, statuses });
 }
 
 async function updateOwnerDirector(request, env, directorId) {
