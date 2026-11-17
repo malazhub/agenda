@@ -737,9 +737,13 @@ test('Owner creates a one-year Director school with phone initial password; Dire
   });
   assert.equal(phoneLoginAfterFailedAttempts.status, 200);
   const normalizedPhoneLogin = await send(env, '/api/auth/login', {
-    method: 'POST', body: { username: 'new.director', password: '+96170123456' },
+    method: 'POST', body: { username: 'new.director', password: '70 123 456' },
   });
   assert.equal(normalizedPhoneLogin.status, 200);
+  const trunkZeroPhoneLogin = await send(env, '/api/auth/login', {
+    method: 'POST', body: { username: 'new.director', password: '070123456' },
+  });
+  assert.equal(trunkZeroPhoneLogin.status, 200);
   const currentDirector = await send(env, '/api/auth/me', { token: directorToken });
   assert.equal(currentDirector.status, 200);
   assert.equal((await currentDirector.json()).account.role, 'director');
