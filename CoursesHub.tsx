@@ -83,6 +83,9 @@ export const CoursesHub: React.FC<CoursesHubProps> = ({
   const [directorSchoolId, setDirectorSchoolId] = useState('');
   const [directorSchoolName, setDirectorSchoolName] = useState('');
   const [directorUsername, setDirectorUsername] = useState('');
+  const [directorNewPassword, setDirectorNewPassword] = useState('');
+  const [directorConfirmPassword, setDirectorConfirmPassword] = useState('');
+  const [directorPasswordNeedsChange, setDirectorPasswordNeedsChange] = useState(false);
   const [directorPaymentMethod, setDirectorPaymentMethod] = useState<DirectorPaymentMethod>('unset');
   const [directorPaymentValue, setDirectorPaymentValue] = useState('');
   const [directorPaymentSaving, setDirectorPaymentSaving] = useState(false);
@@ -110,6 +113,10 @@ export const CoursesHub: React.FC<CoursesHubProps> = ({
     setDirectorToken(ownerSchoolToken);
     setDirectorScreen('dashboard');
   }, [ownerSchoolToken]);
+
+  useEffect(() => {
+    if (registeredAccount?.role === 'director') setDirectorPasswordNeedsChange(Boolean(registeredAccount.mustChangePassword));
+  }, [registeredAccount?.role, registeredAccount?.mustChangePassword]);
 
   useEffect(() => {
     if (!directorAccessToken) return;
@@ -261,6 +268,7 @@ export const CoursesHub: React.FC<CoursesHubProps> = ({
       }
       sessionStorage.setItem('agenda-director-token', token);
       sessionStorage.setItem('agenda-session-token', token);
+      setDirectorPasswordNeedsChange(Boolean(account.mustChangePassword));
       setDirectorToken(token);
       setDirectorScreen('dashboard');
       setDirectorForm({ username: '', password: '' });
@@ -274,6 +282,14 @@ export const CoursesHub: React.FC<CoursesHubProps> = ({
   const handleSchoolNameSave = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!directorToken || !directorSchoolName.trim()) return;
+    if (directorPasswordNeedsChange && !directorNewPassword) {
+      setDirectorDataError(currentLang === 'ar' ? 'اختر كلمة مرور جديدة قبل متابعة استخدام لوحة المدير.' : 'Please choose your own password before continuing.');
+      return;
+    }
+    if (directorNewPassword !== directorConfirmPassword) {
+      setDirectorDataError(currentLang === 'ar' ? 'كلمتا المرور غير متطابقتين.' : 'The new passwords do not match.');
+      return;
+    }
     setSchoolNameSaving(true);
     setDirectorDataError('');
     setDirectorMessage('');
@@ -281,6 +297,7 @@ export const CoursesHub: React.FC<CoursesHubProps> = ({
       const { profile, token } = await updateDirectorProfile(directorToken, {
         schoolName: directorSchoolName.trim(),
         username: directorUsername,
+        password: directorNewPassword || undefined,
       });
       sessionStorage.setItem('agenda-director-token', token);
       setDirectorToken(token);
@@ -288,6 +305,11 @@ export const CoursesHub: React.FC<CoursesHubProps> = ({
       setDirectorSchoolId(profile.schoolId);
       setDirectorSchoolName(profile.schoolName);
       setDirectorUsername(profile.username);
+      if (directorNewPassword) {
+        setDirectorPasswordNeedsChange(false);
+        setDirectorNewPassword('');
+        setDirectorConfirmPassword('');
+      }
       onSchoolBrandChange(profile.schoolId, profile.schoolName);
       setDirectorMessage(
         currentLang === 'ar' ? 'تم تحديث اسم المدرسة في المنصة.' :
@@ -844,9 +866,18 @@ const updateAccount = async (
                 placeholder={currentLang === 'ar' ? 'اسم مدرستك' : currentLang === 'fr' ? 'Nom de votre établissement' : currentLang === 'es' ? 'Nombre de tu escuela' : currentLang === 'it' ? 'Nome della tua scuola' : 'Your school name'}
               />
             </label>
+            <div className="w-full rounded-xl border border-amber-200 bg-amber-50 p-3 space-y-2">
+              <p className="text-xs text-amber-900">{currentLang === 'ar' ? 'كلمة المرور الأولية هي رقم الهاتف الذي قدمته للمالك. اختر كلمة مرورك الخاصة هنا لتغييرها.' : 'Your initial password is the phone number you gave the Owner. Choose your own password here to replace it.'}</p>
+              {directorPasswordNeedsChange && <p className="text-xs font-bold text-amber-900">{currentLang === 'ar' ? 'يجب تغيير كلمة المرور الأولية قبل متابعة استخدام لوحة المدير.' : 'Please replace your initial phone-number password before continuing to use the Director dashboard.'}</p>}
+              <div className="grid sm:grid-cols-2 gap-3">
+                <label className="block text-xs font-bold text-slate-700">{currentLang === 'ar' ? 'كلمة المرور الجديدة' : 'New password'}<input type="password" autoComplete="new-password" maxLength={1024} required={directorPasswordNeedsChange} value={directorNewPassword} onChange={event=>setDirectorNewPassword(event.target.value)} className="mt-1 w-full rounded-lg border p-2.5 text-sm" placeholder={currentLang === 'ar' ? 'اختر كلمة مرورك' : 'Choose your password'}/></label>
+                <label className="block text-xs font-bold text-slate-700">{currentLang === 'ar' ? 'تأكيد كلمة المرور الجديدة' : 'Confirm new password'}<input type="password" autoComplete="new-password" maxLength={1024} required={directorPasswordNeedsChange} value={directorConfirmPassword} onChange={event=>setDirectorConfirmPassword(event.target.value)} className="mt-1 w-full rounded-lg border p-2.5 text-sm" placeholder={currentLang === 'ar' ? 'أعد كتابة كلمة المرور' : 'Enter it again'}/></label>
+              </div>
+              <p className="text-[11px] text-slate-500">{currentLang === 'ar' ? 'لا يوجد حد أدنى للطول؛ يمكن استخدام حرف واحد.' : 'No minimum password length; a single character is accepted.'}</p>
+            </div>
             <button
               type="submit"
-              disabled={schoolNameSaving || !directorSchoolName.trim()}
+              disabled={schoolNameSaving || !directorSchoolName.trim() || (directorPasswordNeedsChange && !directorNewPassword)}
               className="rounded-xl bg-indigo-700 px-4 py-2.5 text-xs font-black text-white hover:bg-indigo-800 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {schoolNameSaving ? '…' : currentLang === 'ar' ? 'حفظ اسم المدرسة' : currentLang === 'fr' ? 'Enregistrer le nom' : currentLang === 'es' ? 'Guardar nombre' : currentLang === 'it' ? 'Salva nome' : 'Save school name'}
