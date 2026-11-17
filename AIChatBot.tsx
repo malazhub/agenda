@@ -28,31 +28,6 @@ interface ChatMessage {
  * independent from transient chat state so the assistant never relies on a
  * previous chat transcript to know how Agenda works.
  */
-const isQuestionAlreadyInLanguage = (value: string, language: Language): boolean => {
-  const normalized = value.toLocaleLowerCase().replace(/[^\p{L}\p{N}\s'-]/gu, ' ').replace(/\s+/g, ' ').trim();
-  if (!normalized) return false;
-  if (language === 'ar') return /[\u0600-\u06FF]/.test(normalized);
-
-  const strongPhrases: Record<Exclude<Language, 'ar'>, string[]> = {
-    en: ['hello', 'hi', 'hey', 'how are you', 'how is it going', 'good morning', 'good afternoon', 'good evening', 'thank you', 'thanks', 'what is up', 'who are you', 'what is', 'how do i', 'how can i', 'how do', 'how does', 'how can', 'can you', 'could you', 'would you', 'please help', 'help me', 'i need', 'i want', 'please explain', 'give me', 'tell me', 'my school', 'own copy', 'rename', 'overview', 'navigate', 'platform', 'application'],
-    fr: ['présentation', 'présentez', 'expliquez', 'explique-moi', 'donnez-moi', 'comment', 'mon école', 'ma propre', 'renommer', 'établissement', 'naviguer', 'plateforme', 'obtenir', 'copie'],
-    es: ['presentación', 'preséntame', 'explícame', 'dame', 'cómo', 'mi escuela', 'mi propia', 'cambiar', 'navegar', 'plataforma', 'obtener', 'copia'],
-    it: ['presentazione', 'spiegami', 'fammi', 'vorrei', 'come', 'la mia scuola', 'la mia copia', 'cambiare', 'rinominare', 'navigare', 'piattaforma', 'ottenere', 'copia'],
-  };
-  const phraseList = strongPhrases[language];
-  if (phraseList.some((phrase) => normalized.includes(phrase))) return true;
-
-  const languageWords: Record<Exclude<Language, 'ar'>, string[]> = {
-    en: ['the', 'and', 'what', 'how', 'please', 'my', 'your', 'you', 'are', 'is', 'am', 'was', 'were', 'do', 'does', 'did', 'have', 'has', 'will', 'should', 'school', 'explain', 'about', 'with', 'for', 'can', 'could', 'would', 'want', 'need', 'get', 'change', 'name', 'copy', 'hello', 'hi', 'hey', 'thanks', 'thank', 'good', 'morning', 'afternoon', 'evening'],
-    fr: ['le', 'la', 'les', 'des', 'une', 'un', 'et', 'pour', 'avec', 'comment', 'mon', 'ma', 'mes', 'école', 'changer', 'nom', 'propre', 'copie', 'plateforme', 'obtenir'],
-    es: ['el', 'la', 'los', 'las', 'una', 'un', 'y', 'para', 'con', 'cómo', 'mi', 'mis', 'escuela', 'cambiar', 'nombre', 'propia', 'copia', 'plataforma', 'obtener', 'quiero'],
-    it: ['il', 'lo', 'la', 'gli', 'le', 'una', 'un', 'e', 'per', 'con', 'come', 'mia', 'mio', 'scuola', 'cambiare', 'nome', 'propria', 'copia', 'piattaforma', 'ottenere', 'vorrei'],
-  };
-  const tokens = new Set(normalized.split(' '));
-  const matchingWords = languageWords[language].filter((word) => tokens.has(word)).length;
-  return matchingWords >= 2;
-};
-
 const AGENDA_ASSISTANT_KNOWLEDGE = [
   'Agenda is an education and school-management platform for students, educators, and school Directors.',
   'Students use their school-specific link to register, sign in, join their assigned live classes, and access saved learning resources.',
