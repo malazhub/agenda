@@ -149,6 +149,8 @@ export const AIChatBot: React.FC<AIChatBotProps> = ({ currentLang, schoolId, sch
       { seed: 'class size', terms: ['how many students', 'number of students', 'class size', 'students per class', 'five students', '5 students', 'unlimited students', 'unlimited educators', 'عدد الطلاب', 'خمسة طلاب', 'عدد التلاميذ'] },
       { seed: 'conference room', terms: ['conference room', 'video conference', 'video call', 'meeting room', 'classroom chat', 'camera and microphone', 'غرفة المؤتمر', 'مؤتمر فيديو', 'اجتماع مباشر'] },
       { seed: 'school navigation', terms: ['student screen', 'educator screen', 'student dashboard', 'educator dashboard', 'navigate between', 'navigation', 'how to use agenda', 'دور الطالب', 'دور المعلم', 'شاشة الطالب', 'شاشة الأستاذ', 'التنقل بين'] },
+      { seed: 'payment', terms: ['payment', 'how do i pay', 'how can i pay', 'suyool', 'paiement', 'pagar', 'pagamento', 'كيف أدفع', 'طريقة الدفع', 'الدفع'] },
+      { seed: 'contact', terms: ['contact', 'support', 'help desk', 'phone number', 'email address', 'whatsapp', 'contact us', 'اتصل', 'تواصل', 'رقم الهاتف', 'البريد الإلكتروني'] },
     ];
     const matchedTopics = quickTopics.filter((topic) => matchesAny(topic.terms));
     if (allowComposite && matchedTopics.length > 1) {
