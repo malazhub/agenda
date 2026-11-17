@@ -256,6 +256,13 @@ function fakeEnvironment() {
         return { meta: { changes: 1 } };
       }
       if (this.sql.startsWith('DELETE FROM login_attempts')) {
+        const account = this.sql.includes('SELECT username FROM accounts')
+          ? accounts.get(this.values[0])
+          : null;
+        const username = account?.username || this.values[0];
+        for (let index = attempts.length - 1; index >= 0; index -= 1) {
+          if (attempts[index].username === String(username).toLowerCase()) attempts.splice(index, 1);
+        }
         return { meta: { changes: 1 } };
       }
       if (this.sql.startsWith('DELETE FROM sessions WHERE id')) {
