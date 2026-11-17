@@ -104,11 +104,12 @@ if (!schoolName || schoolName.length > 160) {
   process.exit(1);
 }
 const command = [
-  'INSERT INTO accounts (id, username, password_hash, role, school_id, full_name, email, activated, paid)',
-  `VALUES (lower(hex(randomblob(16))), ${escapeSql(username)}, ${escapeSql(passwordHash)}, 'director', COALESCE((SELECT id FROM schools WHERE id = 'default-agenda-school' AND director_id IS NULL), 'school-' || lower(hex(randomblob(16)))), 'Director', '', 1, 1)`,
+  'INSERT INTO accounts (id, username, password_hash, role, school_id, full_name, email, activated, paid, expires_at)',
+  `VALUES (lower(hex(randomblob(16))), ${escapeSql(username)}, ${escapeSql(passwordHash)}, 'director', COALESCE((SELECT id FROM schools WHERE id = 'default-agenda-school' AND director_id IS NULL), 'school-' || lower(hex(randomblob(16)))), 'Director', '', 1, 1, datetime('now', '+1 year'))`,
   'ON CONFLICT(username) DO UPDATE SET password_hash = excluded.password_hash WHERE accounts.role = \'director\';',
   `INSERT INTO schools (id, name, director_id) SELECT school_id, ${escapeSql(schoolName)}, id FROM accounts WHERE username = ${escapeSql(username)} AND role = 'director'`,
   'ON CONFLICT(id) DO UPDATE SET name = ' + (explicitSchoolName ? 'excluded.name' : 'schools.name') + ', director_id = excluded.director_id;',
+  `UPDATE schools SET license_expires_at = (SELECT expires_at FROM accounts WHERE accounts.id = schools.director_id) WHERE director_id = (SELECT id FROM accounts WHERE username = ${escapeSql(username)} AND role = 'director');`,
 ].join(' ');
 
 const tempDir = await mkdtemp(join(tmpdir(), 'agenda-director-bootstrap-'));
