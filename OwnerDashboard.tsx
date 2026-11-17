@@ -139,12 +139,16 @@ export const OwnerDashboard: React.FC<{ currentLang:Language; token:string; onSi
               <td className="p-3"><div className="flex flex-col items-start gap-2"><button disabled={busy===row.id||!row.setupPending} onClick={()=>void resend(row.id)} className="text-xs underline disabled:opacity-40"><KeyRound size={13} className="inline"/> {t.resend}</button><button disabled={busy===row.id} onClick={()=>void update(row.id,{renewLicense:true})} className="text-xs underline disabled:opacity-40">{t.renew}</button><button disabled={busy===row.id} onClick={()=>void remove(row)} className="text-xs text-red-700 underline disabled:opacity-40"><Trash2 size={13} className="inline"/> {t.delete}</button></div></td>
             </tr>;
           })}</tbody>
+          <tfoot className="bg-indigo-50 border-t-2 border-indigo-200">
+            <tr><td colSpan={13} className="p-3">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <span className="text-xs font-semibold text-slate-700">{Object.keys(pendingStatuses).length ? `${Object.keys(pendingStatuses).length} ${t.unsaved}` : t.saved}</span>
+                <button type="button" onClick={()=>void saveAllStatuses()} disabled={!Object.keys(pendingStatuses).length || busy==='save-statuses'} className="rounded-lg bg-indigo-700 px-5 py-2.5 text-sm font-bold text-white shadow-sm disabled:cursor-not-allowed disabled:opacity-40">{busy==='save-statuses'?t.saving:t.saveChanges}</button>
+              </div>
+            </td></tr>
+          </tfoot>
         </table>
       </div>}
-      <div className="border-t bg-slate-50 px-4 py-3 flex flex-wrap items-center justify-between gap-3">
-        <span className="text-xs text-slate-600">{Object.keys(pendingStatuses).length ? `${Object.keys(pendingStatuses).length} ${t.unsaved}` : t.saved}</span>
-        <button type="button" onClick={()=>void saveAllStatuses()} disabled={!Object.keys(pendingStatuses).length || busy==='save-statuses'} className="rounded-lg bg-indigo-700 px-5 py-2 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-40">{busy==='save-statuses'?t.saving:t.saveChanges}</button>
-      </div>
     </section>
 
     {showCreate&&<section className="rounded-2xl border bg-white p-5 space-y-4">
