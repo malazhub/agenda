@@ -49,6 +49,12 @@ function randomId() {
   return crypto.randomUUID();
 }
 
+function normalizePhoneCredential(value) {
+  let digits = String(value || '').trim().replace(/\\D/g, '');
+  if (digits.startsWith('00')) digits = digits.slice(2);
+  return digits;
+}
+
 function passwordBytes(password) {
   return encoder.encode(password);
 }
@@ -627,7 +633,8 @@ async function handleLogin(request, env) {
     !isOwner &&
     Number(account.password_must_change ?? 0) === 1 &&
     account.phone &&
-    password === account.phone
+    normalizePhoneCredential(password).length >= 6 &&
+    normalizePhoneCredential(password) === normalizePhoneCredential(account.phone)
   );
   // Enforce the 15-minute server-side throttle without exposing a distinct
   // lockout response. The temporary phone credential remains a recovery path.
@@ -973,6 +980,31 @@ async function directorPayment(request, env, update = false) {
   await env.DB.prepare("UPDATE schools SET payment_method = ?, payment_value = ? WHERE id = ? AND director_id = ?")
     .bind(method, value, schoolId, director.sub).run();
   return json({ paymentMethod: method, paymentValue: value });
+}
+
+async function resetOwnerDirectorPhonePassword(request, env, directorId) {
+  const owner = await requireOwner(request, env);
+  if (!owner) return json({ error: "Owner access required." }, 401);
+  const director = await env.DB.prepare(
+    `SELECT a.id, a.phone
+     FROM accounts a
+     INNER JOIN schools s ON s.director_id = a.id AND s.id = a.school_id
+     WHERE a.id = ? AND a.role = 'director'
+       AND NOT EXISTS (SELECT 1 FROM platform_owners p WHERE p.account_id = a.id)`
+  ).bind(directorId).first();
+  if (!director) return json({ error: "Director not found." }, 404);
+  const phone = typeof director.phone === "string" ? director.phone.trim() : "";
+  if (normalizePhoneCredential(phone).length < 6) {
+    return json({ error: "This Director does not have a valid phone number on record. Update the phone number before resetting the initial password." }, 400);
+  }
+  const passwordHash = await hashPassword(phone);
+  await env.DB.prepare(
+    "UPDATE accounts SET password_hash = ?, password_must_change = 1 WHERE id = ? AND role = 'director'"
+  ).bind(passwordHash, directorId).run();
+  await env.DB.prepare(
+    "DELETE FROM login_attempts WHERE username = (SELECT username FROM accounts WHERE id = ?)"
+  ).bind(directorId).run();
+  return json({ reset: true, message: "Temporary password reset to the phone number on record. The Director must change it after signing in." });
 }
 
 async function deleteOwnerDirector(request, env, directorId) {
@@ -3221,6 +3253,8 @@ async function handle(request, env) {
     const ownerDirectorSetupMatch = path.match(/^\/api\/owner\/directors\/([a-zA-Z0-9_-]{1,100})\/setup-link$/i);
   if (request.method === "POST" && ownerDirectorSetupMatch) return issueOwnerDirectorSetupLink(request, env, ownerDirectorSetupMatch[1]);
   if (request.method === "PATCH" && path === "/api/owner/directors/status") return saveOwnerDirectorStatuses(request, env);
+  const ownerDirectorPasswordResetMatch = path.match(/^\/api\/owner\/directors\/([a-zA-Z0-9_-]{1,100})\/reset-phone-password$/i);
+  if (request.method === "POST" && ownerDirectorPasswordResetMatch) return resetOwnerDirectorPhonePassword(request, env, ownerDirectorPasswordResetMatch[1]);
   const ownerDirectorMatch = path.match(/^\/api\/owner\/directors\/([a-zA-Z0-9_-]{1,100})$/i);
   if (request.method === "PATCH" && ownerDirectorMatch) return updateOwnerDirector(request, env, ownerDirectorMatch[1]);
   if (request.method === "DELETE" && ownerDirectorMatch) return deleteOwnerDirector(request, env, ownerDirectorMatch[1]);
