@@ -617,29 +617,19 @@ export function getGradeSessions(
 
 
 /**
- * Calls Gemini through the Cloudflare Worker. The Gemini API key remains
- * server-side in the Worker secret and is never included in the browser bundle.
+ * Calls Cloudflare Workers AI through the server-side Worker binding.
+ * No third-party model API key is exposed to the browser.
  */
-export async function generateGeminiContent(
+export async function generateAIContent(
   contents: unknown,
-  options?: {
-    model?: 'gemini-2.5-flash' | 'gemini-3.6-flash' | 'gemini-3.8-flash';
-    thinkingLevel?: 'low' | 'medium' | 'high';
-    maxOutputTokens?: number;
-  },
+  options?: { maxOutputTokens?: number },
 ): Promise<{ text: string }> {
   return request<{ text: string }>('/api/ai/generate', {
     method: 'POST',
-    signal: AbortSignal.timeout(45_000),
+    signal: AbortSignal.timeout(55_000),
     body: JSON.stringify({
-      model: options?.model || 'gemini-2.5-flash',
       contents,
-      generationConfig: {
-        maxOutputTokens: options?.maxOutputTokens || 1024,
-        ...(options?.thinkingLevel
-          ? { thinkingConfig: { thinkingLevel: options.thinkingLevel } }
-          : {}),
-      },
+      maxOutputTokens: options?.maxOutputTokens || 1024,
     }),
   });
 }
