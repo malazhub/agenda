@@ -296,7 +296,7 @@ async function authenticate(request, env, requiredRole) {
   // Platform Owners retain access to administer their own school.
   if (authenticated.role === "director" && !authenticated.isPlatformOwner) {
     const licence = await env.DB.prepare(
-      `SELECT accounts.expires_at, accounts.activated,
+      `SELECT accounts.expires_at, accounts.activated, accounts.paid,
               schools.license_active, schools.license_expires_at
        FROM accounts
        INNER JOIN schools ON schools.id = accounts.school_id
@@ -305,6 +305,7 @@ async function authenticate(request, env, requiredRole) {
     ).bind(authenticated.sub).first();
     if (!licence ||
         Number(licence.activated ?? 1) !== 1 ||
+        Number(licence.paid ?? 0) !== 1 ||
         Number(licence.license_active ?? 1) !== 1) return null;
     const expiry = licence.license_expires_at || licence.expires_at;
     const expiryTime = expiry ? Date.parse(String(expiry).replace(" ", "T") + "Z") : null;
@@ -626,6 +627,9 @@ async function handleLogin(request, env) {
     return json({ error: "Invalid username or password, or account is not activated or has expired." }, 401);
   }
   if (account.role === "director" && !isOwner) {
+    if (Number(account.paid ?? 0) !== 1) {
+      return json({ error: "This Director account is marked unpaid. Contact the platform Owner." }, 403);
+    }
     const school = await env.DB.prepare("SELECT license_active, license_expires_at FROM schools WHERE id = ? AND director_id = ?").bind(account.school_id, account.id).first();
     const licenseExpiry = school?.license_expires_at ? Date.parse(`${String(school.license_expires_at).replace(' ', 'T')}Z`) : null;
     if (!school || Number(school.license_active ?? 1) !== 1 || (licenseExpiry !== null && (!Number.isFinite(licenseExpiry) || licenseExpiry <= Date.now()))) {
