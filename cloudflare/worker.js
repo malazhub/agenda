@@ -296,13 +296,16 @@ async function authenticate(request, env, requiredRole) {
   // Platform Owners retain access to administer their own school.
   if (authenticated.role === "director" && !authenticated.isPlatformOwner) {
     const licence = await env.DB.prepare(
-      `SELECT accounts.expires_at, schools.license_active, schools.license_expires_at
+      `SELECT accounts.expires_at, accounts.activated,
+              schools.license_active, schools.license_expires_at
        FROM accounts
        INNER JOIN schools ON schools.id = accounts.school_id
          AND schools.director_id = accounts.id
        WHERE accounts.id = ? AND accounts.role = 'director'`
     ).bind(authenticated.sub).first();
-    if (!licence || Number(licence.license_active ?? 1) !== 1) return null;
+    if (!licence ||
+        Number(licence.activated ?? 1) !== 1 ||
+        Number(licence.license_active ?? 1) !== 1) return null;
     const expiry = licence.license_expires_at || licence.expires_at;
     const expiryTime = expiry ? Date.parse(String(expiry).replace(" ", "T") + "Z") : null;
     if (expiryTime !== null && (!Number.isFinite(expiryTime) || expiryTime <= Date.now())) return null;
