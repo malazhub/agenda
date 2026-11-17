@@ -623,7 +623,7 @@ export function getGradeSessions(
 export async function generateGeminiContent(
   contents: unknown,
   options?: {
-    model?: 'gemini-3.6-flash' | 'gemini-3.8-flash';
+    model?: 'gemini-2.5-flash' | 'gemini-3.6-flash' | 'gemini-3.8-flash';
     thinkingLevel?: 'low' | 'medium' | 'high';
     maxOutputTokens?: number;
   },
@@ -632,7 +632,7 @@ export async function generateGeminiContent(
     method: 'POST',
     signal: AbortSignal.timeout(45_000),
     body: JSON.stringify({
-      model: options?.model || 'gemini-3.6-flash',
+      model: options?.model || 'gemini-2.5-flash',
       contents,
       generationConfig: {
         maxOutputTokens: options?.maxOutputTokens || 1024,
