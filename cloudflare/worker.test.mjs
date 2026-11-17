@@ -133,6 +133,37 @@ function fakeEnvironment() {
     }
 
     async all() {
+      if (this.sql.includes("FROM accounts a") && this.sql.includes("INNER JOIN schools s ON s.director_id = a.id")) {
+        const results = [...accounts.values()]
+          .filter((account) => {
+            const school = schools.get(account.school_id);
+            return account.role === 'director' && school?.director_id === account.id && !platformOwners.has(account.id);
+          })
+          .map((account) => {
+            const school = schools.get(account.school_id);
+            return {
+              id: account.id,
+              username: account.username,
+              full_name: account.full_name,
+              email: account.email,
+              phone: account.phone,
+              created_at: account.created_at,
+              activated: account.activated,
+              paid: account.paid,
+              expires_at: account.expires_at,
+              school_id: school.id,
+              school_name: school.name,
+              license_expires_at: school.license_expires_at || null,
+              license_active: school.license_active ?? 1,
+              payment_method: school.payment_method || 'unset',
+              payment_value: school.payment_value || '',
+              setup_pending: [...setupTokens.values()].some((item) => item.account_id === account.id && !item.used_at),
+              student_count: [...accounts.values()].filter((item) => item.school_id === school.id && item.role === 'student').length,
+              educator_count: [...accounts.values()].filter((item) => item.school_id === school.id && item.role === 'educator').length,
+            };
+          });
+        return { results };
+      }
       if (this.sql.includes('FROM school_grade_pricing')) {
         const schoolId = this.values[0];
         return { results: [...pricing.values()].filter((item) => item.school_id === schoolId) };
@@ -227,6 +258,25 @@ function fakeEnvironment() {
         if (!account || account.role !== 'director') return { meta: { changes: 0 } };
         account.username = username;
         account.password_hash = password_hash;
+        return { meta: { changes: 1 } };
+      }
+      if (this.sql.startsWith('UPDATE accounts SET') && this.sql.includes('WHERE id = ?') && this.sql.includes("role = 'director'")) {
+        const id = this.values[this.values.length - 1];
+        const account = accounts.get(id);
+        if (!account || account.role !== 'director') return { meta: { changes: 0 } };
+        let valueIndex = 0;
+        if (this.sql.includes('activated = ?')) account.activated = this.values[valueIndex++];
+        if (this.sql.includes('paid = ?')) account.paid = this.values[valueIndex++];
+        if (this.sql.includes("expires_at = datetime('now', '+1 year')")) account.expires_at = '2027-11-17 10:00:00';
+        return { meta: { changes: 1 } };
+      }
+      if (this.sql.startsWith('UPDATE schools SET') && this.sql.includes('WHERE id = ?')) {
+        const id = this.values[this.values.length - 1];
+        const school = schools.get(id);
+        if (!school) return { meta: { changes: 0 } };
+        let valueIndex = 0;
+        if (this.sql.includes('license_active = ?')) school.license_active = this.values[valueIndex++];
+        if (this.sql.includes("license_expires_at = datetime('now', '+1 year')")) school.license_expires_at = '2027-11-17 10:00:00';
         return { meta: { changes: 1 } };
       }
       if (this.sql.startsWith('UPDATE accounts') && this.sql.includes(' SET ')) {
@@ -577,7 +627,7 @@ test('Owner creates a one-year Director school and Director sets their own usern
 
   const claimed = await send(env, '/api/director/claim', {
     method: 'POST',
-    body: { token: setupToken, username: 'new.director', password: 'ChosenByDirectorPassword#2026' },
+    body: { token: setupToken, username: 'new.director', password: 'x' },
   });
   assert.equal(claimed.status, 200);
   const { token: directorToken, account } = await claimed.json();
@@ -594,6 +644,51 @@ test('Owner creates a one-year Director school and Director sets their own usern
   const profile = await send(env, '/api/director/profile', { token: directorToken });
   assert.equal(profile.status, 200);
   assert.equal((await profile.json()).profile.schoolName, 'New Learning School');
+  const tokenClaims = JSON.parse(Buffer.from(directorToken.split('.')[0], 'base64url').toString());
+  assert.equal(tokenClaims.username, 'new.director');
+
+  const oneCharacterLogin = await send(env, '/api/auth/login', {
+    method: 'POST',
+    body: { username: 'new.director', password: 'x' },
+  });
+  assert.equal(oneCharacterLogin.status, 200);
+
+  const ownerRows = await send(env, '/api/owner/directors', { token: ownerToken });
+  assert.equal(ownerRows.status, 200);
+  const listedDirector = (await ownerRows.json()).directors.find((item) => item.id === director.id);
+  assert.equal(listedDirector.fullName, 'New Director');
+  assert.equal(listedDirector.createdAt, '2026-11-03 10:00:00');
+  assert.equal(listedDirector.activated, true);
+  assert.equal(listedDirector.paid, true);
+
+  const disabledAndUnpaid = await send(env, `/api/owner/directors/${director.id}`, {
+    method: 'PATCH',
+    token: ownerToken,
+    body: { activated: false, paid: false },
+  });
+  assert.equal(disabledAndUnpaid.status, 200);
+  const updatedRows = await send(env, '/api/owner/directors', { token: ownerToken });
+  const updatedDirector = (await updatedRows.json()).directors.find((item) => item.id === director.id);
+  assert.equal(updatedDirector.activated, false);
+  assert.equal(updatedDirector.paid, false);
+
+  const blockedDirectorLogin = await send(env, '/api/auth/login', {
+    method: 'POST',
+    body: { username: 'new.director', password: 'x' },
+  });
+  assert.equal(blockedDirectorLogin.status, 401);
+
+  const restored = await send(env, `/api/owner/directors/${director.id}`, {
+    method: 'PATCH',
+    token: ownerToken,
+    body: { activated: true, paid: true },
+  });
+  assert.equal(restored.status, 200);
+  const restoredLogin = await send(env, '/api/auth/login', {
+    method: 'POST',
+    body: { username: 'new.director', password: 'x' },
+  });
+  assert.equal(restoredLogin.status, 200);
 });
 
 test('Only the platform Owner can create Director schools', async () => {
