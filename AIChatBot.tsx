@@ -2,7 +2,6 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Language } from '../types';
 import { generateGeminiContent, getSchoolPublicContext } from '../services/cloudflareApi';
 import type { SchoolPublicContext } from '../services/cloudflareApi';
-import { LEBANESE_GRADE_LEVELS } from '../data/mockGradesAndSessions';
 import { 
   X, 
   Send, 
@@ -29,20 +28,27 @@ interface ChatMessage {
  * previous chat transcript to know how Agenda works.
  */
 const AGENDA_ASSISTANT_KNOWLEDGE = [
-  'Agenda is an education and school-management platform for students, educators, and school Directors.',
-  'Students use their school-specific link to register, sign in, join their assigned live classes, and access saved learning resources.',
-  'Educators manage and deliver their assigned classes, start live broadcasts, and upload or edit only their own lesson/resource slots.',
-  'Directors manage their own school from the Director Dashboard. They manage student and educator accounts, activate accounts, configure classes and grade-specific monthly prices, and monitor every classroom belonging to their school.',
-  'Live-class access requires an activated, paid student account assigned to the same educator session. The educator must start the broadcast before the student can join.',
-  'Every Director has a separate school tenant and school ID. Student accounts, educator accounts, classes, saved educator lessons, and grade-specific prices are isolated by school. A Director cannot access another school\'s accounts or files. The school-specific share link selects the school; there is no public school dropdown.',
-  'Registration: open the correct school link, choose Student or Educator, enter the requested details, create a username and password, and select an available grade and educator/session. The Director activates the account.',
-  'Sign-in uses the username and password created during registration. A user who forgets a password must ask their school Director to reset it. Never ask the user to share a password.',
-  'Saved lessons: sign in, open the classroom, choose Learning Resources, and select the educator to view their published lessons and files.',
-  'Monthly school fees are configured by the Director for each grade. The default is USD 125 per student per month unless that school has saved a different grade rate. Always use the live school configuration for actual prices and distinguish monthly school fees from other fees.',
-  'An independent Agenda copy is available for a one-time USD 150 price. The purchaser becomes the Director of that separate copy and can manage its school name, educators, students, classes, saved lessons, monthly grade pricing, and classroom monitoring/delivery. The copy and its data remain isolated from other schools. This is not the monthly student fee. The AI chat does not process payments.',
-  'To rename a school, sign in from the Director Login card, open Director Dashboard > Accounts, edit the School name field, and save. The new name updates the platform branding for that school.',
-  'The school context supplied with each request is authoritative for that school\'s name, educators, sessions, and saved grade prices. Never invent school records, credentials, schedules, or custom prices, and never disclose private data or information from another school.',
-  'The application supports Arabic, English, French, Spanish, and Italian. All user-visible questions and assistant answers must follow the currently selected language.'
+  'Agenda is a school-management and learning platform with separate Student, Educator, and Director experiences.',
+  'A separate Agenda school setup costs USD 150 once. This purchases/creates the school identity and name plus its own independent platform space; the purchaser becomes that school\'s Director. This is not a student lesson fee.',
+  'The default student rate is USD 125 per student per session. The Director may set a different rate according to the school\'s circumstances and decision. Users should confirm the current rate with their own Director.',
+  'A school can have an unlimited number of student and educator accounts. A typical class is planned around an average of about five students; this is a planning guideline, not a universal hard cap.',
+  'Each student belongs to an assigned educator/classroom. During registration the student selects an available educator/session. The Director can later change a student\'s educator or session assignment from Director Dashboard > Accounts.',
+  'Students must register and sign in with their own school-specific link and account to use their assigned classroom and learning resources. Live access requires the account to be activated, marked paid, not expired, and assigned to the exact educator session.',
+  'Educators sign in with their Educator account, open their assigned classroom, and start or stop its live broadcast. Each educator has their own classroom and their own saved-lesson area.',
+  'Educators can save and update their own lectures and learning materials in their lesson slots for students to view later. Supported uploads include PDF, JPG, PNG, WebP, MP4, WebM, and MOV, up to 50 MB per file.',
+  'The live classroom is a real-time video-conference room for an educator and the students assigned to that educator. Participants can use camera and microphone controls and communicate through classroom chat and supported attachments.',
+  'The Director can manage accounts in their own school: review students and educators, activate or deactivate accounts, mark payment status, renew account validity, change student/educator usernames, reset their passwords, reassign students to another educator/session, and manage classroom sessions.',
+  'The Director can open and monitor any classroom belonging to their own school from Director Dashboard > Sessions / Manage Sessions, including joining the room as an administrator. This does not grant access to another school\'s rooms.',
+  'The Director can create and manage sessions, assign educators to classrooms, and monitor live sessions. Every educator has a separate classroom assignment.',
+  'The Director can update the school name and their own username/password in Director Dashboard profile settings. Student and educator usernames and passwords can be managed from the Accounts list.',
+  'Student path: open the school-specific link, register as Student, choose an available educator/session, wait for Director activation and payment confirmation, sign in, then open the assigned live class or Learning Resources.',
+  'Educator path: register as Educator using the school link, wait for Director activation and classroom assignment, sign in, open the assigned classroom, start the live session, and save lectures in the educator\'s own learning-resource slots.',
+  'Director path: choose Director Login, sign in, open Director Dashboard, use Accounts to manage students and educators, and use Sessions / Manage Sessions to create, assign, and monitor classrooms.',
+  'Payments are not processed or verified by this AI chat. Where the registration screen offers Suyool, users should follow its payment instructions. The Director confirms payment status in the Director Dashboard. Never ask users to share card details or passwords.',
+  'For account, activation, payment-status, or class-assignment help, users should contact their own school Director through the school\'s provided contact channel. Never invent an email address or phone number.',
+  'Each Director has an isolated school space. Student and educator accounts, assignments, classrooms, and saved lesson materials belong to that school and must not be disclosed to another school.',
+  'The application supports Arabic, English, French, Spanish, and Italian. All user-visible answers must follow the currently selected app language.',
+  'For questions outside Agenda operations, use Gemini for educational, general-knowledge, reasoning, and study questions. Understand the original question directly and reply in the selected app language.'
 ].join('\\n');
 
 export const AIChatBot: React.FC<AIChatBotProps> = ({ currentLang, schoolId, schoolName }) => {
@@ -136,11 +142,27 @@ export const AIChatBot: React.FC<AIChatBotProps> = ({ currentLang, schoolId, sch
       matchesAny(['password', 'username', 'sign in', 'sign-in', 'login', 'log in', 'mot de passe', 'contraseña', 'nome utente', 'كلمة المرور']),
       matchesAny(['live class', 'live classes', 'live session', 'broadcast', 'join class', 'join the class', 'classroom', 'en direct', 'en vivo', 'diretta', 'صف مباشر', 'الصف المباشر']),
       matchesAny(['saved lesson', 'saved lessons', 'learning resources', 'recording', 'archive', 'lesson', 'leçon', 'lección', 'lezione', 'دروس محفوظة']),
-      matchesAny(['price', 'pricing', 'rate', 'cost', 'fee', 'payment', 'tarif', 'prix', 'precio', 'prezzo', 'شهري', 'سعر', 'دولار']),
+      matchesAny(['price', 'pricing', 'rate', 'cost', 'fee', 'payment', 'tarif', 'prix', 'precio', 'prezzo', 'لكل حصة', 'سعر', 'دولار']),
       matchesAny(['privacy', 'data isolation', 'separate schools', 'separate school', 'another school', 'school tenant', 'tenant isolation', 'خصوصية', 'بيانات المدارس']),
     ].filter(Boolean).length;
 
     if (intentMatches > 1) return null;
+
+    const schoolPurchaseQuestion = [
+      'school price', 'price of a school', 'buy a school', 'purchase a school', 'school setup',
+      'school name price', 'purchase school name', 'own school', 'own copy', 'independent school',
+      'prix de l’école', 'prix de l’ecole', 'acheter une école', 'acheter une ecole',
+      'precio de la escuela', 'comprar una escuela', 'mi propia escuela',
+      'prezzo della scuola', 'acquistare una scuola', 'la mia scuola',
+      'سعر المدرسة', 'ثمن المدرسة', 'شراء مدرسة', 'شراء اسم المدرسة', 'امتلاك مدرسة', 'نسخة مستقلة'
+    ].some((keyword) => q.includes(keyword));
+    if (schoolPurchaseQuestion) {
+      if (currentLang === 'ar') return 'تكلفة إنشاء مدرسة مستقلة على Agenda هي 150 دولاراً أمريكياً مرة واحدة. يُستخدم المبلغ لشراء/إنشاء هوية المدرسة واسمها ومساحتها المستقلة على المنصة، ويصبح المشتري مدير تلك المدرسة. هذا المبلغ منفصل عن رسوم الطالب لكل حصة. لا تتم معالجة الدفع من خلال هذه المحادثة؛ تواصل مع إدارة Agenda لإتمام الطلب.';
+      if (currentLang === 'fr') return 'La création/l’achat d’un espace scolaire indépendant sur Agenda coûte 150 USD une seule fois. Ce montant sert à obtenir l’identité et le nom de l’établissement ainsi que son espace séparé sur la plateforme ; l’acheteur devient le Directeur de cette école. Ce coût est distinct du tarif par séance des élèves. Le chat ne traite pas les paiements : contactez l’administration d’Agenda pour effectuer la demande.';
+      if (currentLang === 'es') return 'La compra/creación de una escuela independiente en Agenda cuesta 150 USD una sola vez. Este importe sirve para adquirir la identidad y el nombre de la escuela y su espacio separado en la plataforma; el comprador se convierte en Director de esa escuela. Este coste es distinto de la tarifa por sesión del estudiante. El chat no procesa pagos: contacta con la administración de Agenda para solicitarla.';
+      if (currentLang === 'it') return 'L’acquisto/la creazione di uno spazio scolastico indipendente su Agenda costa 150 USD una sola volta. L’importo serve per ottenere l’identità e il nome della scuola e il suo spazio separato sulla piattaforma; l’acquirente diventa il Direttore di quella scuola. Questo costo è distinto dalla tariffa per lezione dello studente. La chat non gestisce pagamenti: contatta l’amministrazione di Agenda per fare richiesta.';
+      return 'A separate Agenda school setup costs USD 150 as a one-time purchase. This purchases/creates the school identity and name plus its own independent space on the platform; the purchaser becomes that school’s Director. This is separate from the student rate per session. The chat does not take payments, so contact Agenda administration to arrange the school setup.';
+    }
 
     const applicationOverviewQuestion = [
       'what is agenda', 'about agenda', 'agenda application', 'agenda app', 'about the app',
@@ -185,7 +207,7 @@ export const AIChatBot: React.FC<AIChatBotProps> = ({ currentLang, schoolId, sch
         'Présentation d’Agenda :',
         'Agenda est une plateforme éducative et de gestion scolaire. Les élèves y accèdent aux cours en direct et aux ressources enregistrées, les éducateurs donnent leurs cours et gèrent leurs supports, et le Directeur administre son établissement et surveille les classes.',
         'Renommer votre établissement : connectez-vous avec la carte « Connexion Directeur » sur l’écran principal, puis ouvrez « Tableau de bord » → « Comptes ». Modifiez le champ « Nom de l’établissement » et cliquez sur « Enregistrer ». Le nouvel intitulé apparaît dans l’en-tête de la plateforme et l’identité du lien de l’établissement.',
-        'Navigation : les élèves ouvrent « Salle de diffusion » pour rejoindre leur cours attribué lorsque l’éducateur démarre la diffusion, puis « Ressources pédagogiques » pour retrouver les leçons et fichiers enregistrés. Les éducateurs ouvrent leur salle depuis « Salle de diffusion » et démarrent le cours. Dans « Tableau de bord » → « Comptes », le Directeur gère les élèves et les éducateurs ; dans « Gestion des cours », il ajoute des cours, fixe le tarif mensuel de chaque classe et surveille les salles.',
+        'Navigation : les élèves ouvrent « Salle de diffusion » pour rejoindre leur cours attribué lorsque l’éducateur démarre la diffusion, puis « Ressources pédagogiques » pour retrouver les leçons et fichiers enregistrés. Les éducateurs ouvrent leur salle depuis « Salle de diffusion » et démarrent le cours. Dans « Tableau de bord » → « Comptes », le Directeur gère les élèves et les éducateurs ; dans « Gestion des cours », il ajoute des cours, fixe le tarif par séance de chaque classe et surveille les salles.',
         'Votre propre copie : tout utilisateur peut obtenir une copie indépendante d’Agenda au prix de 150 USD. L’acheteur en devient le Directeur et peut gérer son établissement, son nom, ses éducateurs, ses élèves, ses cours, ses leçons enregistrées et ses tarifs mensuels, ainsi que surveiller et animer les cours. Son établissement et ses données restent séparés de ceux des autres Directeurs.',
         'Pour demander votre copie indépendante, contactez l’administration d’Agenda ; cette conversation ne traite pas les paiements.'
       ].join('\n\n');
@@ -193,7 +215,7 @@ export const AIChatBot: React.FC<AIChatBotProps> = ({ currentLang, schoolId, sch
         'Presentación de Agenda:',
         'Agenda es una plataforma educativa y de gestión escolar. Los estudiantes acceden a clases en directo y recursos guardados; los educadores imparten clases y gestionan sus materiales; y el Director administra su escuela y supervisa las aulas.',
         'Cambiar el nombre de la escuela: inicia sesión desde la tarjeta «Acceso del Director» en la pantalla principal y abre «Panel del Director» → «Cuentas». Cambia el campo «Nombre de la escuela» y pulsa «Guardar». El nuevo nombre aparecerá en el encabezado de la plataforma y en la identidad del enlace escolar.',
-        'Navegación: los estudiantes abren «Sala de emisión» para entrar en la sesión que tienen asignada cuando el educador inicia la emisión y después seleccionan «Recursos educativos» para recuperar lecciones y archivos guardados. Los educadores abren su aula desde «Sala de emisión» e inician la clase. En «Panel del Director» → «Cuentas», el Director gestiona estudiantes y educadores; en «Gestionar sesiones» añade clases, establece la tarifa mensual de cada curso y supervisa las aulas.',
+        'Navegación: los estudiantes abren «Sala de emisión» para entrar en la sesión que tienen asignada cuando el educador inicia la emisión y después seleccionan «Recursos educativos» para recuperar lecciones y archivos guardados. Los educadores abren su aula desde «Sala de emisión» e inician la clase. En «Panel del Director» → «Cuentas», el Director gestiona estudiantes y educadores; en «Gestionar sesiones» añade clases, establece la tarifa por sesión de cada curso y supervisa las aulas.',
         'Tu propia copia: cualquier usuario puede obtener una copia independiente de Agenda por 150 USD. El comprador se convierte en el Director de esa copia y puede gestionar su escuela, el nombre, los educadores, los estudiantes, las clases, las lecciones guardadas y las tarifas mensuales, además de supervisar e impartir las clases. Su escuela y sus datos permanecen separados de los de otros Directores.',
         'Para solicitar tu copia independiente, contacta con la administración de Agenda; este chat no procesa pagos.'
       ].join('\n\n');
@@ -201,7 +223,7 @@ export const AIChatBot: React.FC<AIChatBotProps> = ({ currentLang, schoolId, sch
         'Presentazione di Agenda:',
         'Agenda è una piattaforma educativa e di gestione scolastica. Gli studenti accedono alle lezioni in diretta e alle risorse salvate; gli educatori tengono le lezioni e gestiscono i propri materiali; il Direttore amministra la scuola e monitora le classi.',
         'Rinominare la scuola: accedi dalla scheda «Accesso Direttore» nella schermata principale, quindi apri «Dashboard del Direttore» → «Account». Modifica il campo «Nome della scuola» e premi «Salva». Il nuovo nome apparirà nell’intestazione della piattaforma e nell’identità del link della scuola.',
-        'Navigazione: gli studenti aprono «Sala trasmissione» per entrare nella lezione loro assegnata quando l’educatore avvia la diretta, poi scelgono «Risorse didattiche» per recuperare lezioni e file salvati. Gli educatori aprono la propria aula da «Sala trasmissione» e avviano la lezione. In «Dashboard del Direttore» → «Account», il Direttore gestisce studenti ed educatori; in «Gestione lezioni» aggiunge lezioni, imposta la tariffa mensile per ogni classe e monitora le aule.',
+        'Navigazione: gli studenti aprono «Sala trasmissione» per entrare nella lezione loro assegnata quando l’educatore avvia la diretta, poi scelgono «Risorse didattiche» per recuperare lezioni e file salvati. Gli educatori aprono la propria aula da «Sala trasmissione» e avviano la lezione. In «Dashboard del Direttore» → «Account», il Direttore gestisce studenti ed educatori; in «Gestione lezioni» aggiunge lezioni, imposta la tariffa per lezione per ogni classe e monitora le aule.',
         'La tua copia: qualsiasi utente può ottenere una copia indipendente di Agenda al prezzo di 150 USD. L’acquirente diventa il Direttore di quella copia e può gestire la propria scuola, il nome, gli educatori, gli studenti, le lezioni, i contenuti salvati e le tariffe mensili, oltre a monitorare e tenere le lezioni. La scuola e i relativi dati restano separati da quelli degli altri Direttori.',
         'Per richiedere la tua copia indipendente, contatta l’amministrazione di Agenda; questa chat non gestisce pagamenti.'
       ].join('\n\n');
@@ -209,43 +231,27 @@ export const AIChatBot: React.FC<AIChatBotProps> = ({ currentLang, schoolId, sch
         'About Agenda:',
         'Agenda is an education and school-management platform. Students can join live classes and retrieve saved learning resources; educators deliver classes and manage their materials; and the Director manages the school and monitors classrooms.',
         'Rename your school: sign in using the «Director Login» card on the main screen, then open «Director Dashboard» → «Accounts». Edit the «School name» field and select «Save». The new name appears in the platform header and in your school link identity.',
-        'Navigation: students open «Broadcast Room» to join their assigned class after the educator starts broadcasting, then choose «Learning Resources» to retrieve saved lessons and files. Educators open their classroom from «Broadcast Room» and start the class. In «Director Dashboard» → «Accounts», the Director manages students and educators; in «Manage Sessions», the Director adds classes, sets each grade’s monthly rate, and monitors classrooms.',
-        'Your own copy: any user can obtain an independent copy of Agenda for USD 150. The purchaser becomes the Director of that copy and can manage the school and its name, educators, students, classes, saved lessons, and monthly pricing, as well as monitor and deliver classes. Their school and data remain separate from those of other Directors.',
+        'Navigation: students open «Broadcast Room» to join their assigned class after the educator starts broadcasting, then choose «Learning Resources» to retrieve saved lessons and files. Educators open their classroom from «Broadcast Room» and start the class. In «Director Dashboard» → «Accounts», the Director manages students and educators; in «Manage Sessions», the Director adds classes, sets each grade’s student rate per session, and monitors classrooms.',
+        'Your own copy: any user can obtain an independent copy of Agenda for USD 150. The purchaser becomes the Director of that copy and can manage the school and its name, educators, students, classes, saved lessons, and student rates per session, as well as monitor and deliver classes. Their school and data remain separate from those of other Directors.',
         'To request an independent copy, contact the Agenda administration team; this chat does not process payments.'
       ].join('\n\n');
     }
-    const prices = context?.prices || [];
-    const monthlyPriceQuestion = [
-      'price', 'pricing', 'rate', 'rates', 'cost', 'fee', 'fees', 'usd', 'dollar',
-      'tarif', 'tarifa', 'tarifas', 'prix', 'precio', 'precios', 'prezzo', 'prezzi', 'tariffa', 'tariffe', 'coût', 'cout', 'costo', 'coste', 'quanto', 'cuanto', 'cuánto', 'how much', 'payer', 'mensuel', 'mensual', 'mensile',
-      'month', 'monthly', 'per month', 'شهري', 'سعر', 'اسعار', 'أسعار', 'تكلف', 'بكم', 'دولار', 'دفع'
-    ].some((keyword) => q.includes(keyword));
-
-    if (monthlyPriceQuestion) {
-      const priceMap = new Map(prices.map((price) => [price.gradeId, price.monthlyRateUsd]));
-      const gradeNumber = q.match(/(?:grade|grado|curso|classe|class)\s*(\d{1,2})/)?.[1];
-      const relevantGrades = gradeNumber
-        ? LEBANESE_GRADE_LEVELS.filter((grade) =>
-            [grade.name.en, grade.name.fr, grade.name.it, grade.name.es]
-              .some((name) => name?.match(new RegExp(`\\b${gradeNumber}\\b`)))
-          )
-        : LEBANESE_GRADE_LEVELS.filter((grade) => priceMap.has(grade.id));
-      const rateLines = relevantGrades.length
-        ? relevantGrades.map((grade) => `${grade.name[currentLang] || grade.name.en}: ${priceMap.get(grade.id) ?? context?.defaultMonthlyRateUsd ?? 125} USD`).join('\n')
-        : currentLang === 'ar'
-          ? `${context?.defaultMonthlyRateUsd ?? 125} دولار شهرياً (السعر الافتراضي)`
-          : currentLang === 'fr'
-            ? `${context?.defaultMonthlyRateUsd ?? 125} USD par mois (tarif par défaut)`
-            : currentLang === 'es'
-              ? `${context?.defaultMonthlyRateUsd ?? 125} USD al mes (tarifa predeterminada)`
-              : currentLang === 'it'
-                ? `${context?.defaultMonthlyRateUsd ?? 125} USD al mese (tariffa predefinita)`
-                : `${context?.defaultMonthlyRateUsd ?? 125} USD per month (default rate)`;
-      if (currentLang === 'ar') return `المدرسة: ${context?.schoolName || schoolName || 'Agenda'}\nالأسعار الشهرية المعتمدة حسب الصف:\n${rateLines}\nالسعر الافتراضي للصف الذي لم يحدد المدير سعره هو 125 دولاراً شهرياً. هذه الأسعار خاصة بمدرستك.`;
-      if (currentLang === 'fr') return `Établissement : ${context?.schoolName || schoolName || 'Agenda'}\nTarifs mensuels par classe :\n${rateLines}\nLe tarif par défaut d'une classe sans prix personnalisé est de 125 USD par mois. Ces tarifs sont propres à votre établissement.`;
-      if (currentLang === 'es') return `Escuela: ${context?.schoolName || schoolName || 'Agenda'}\nTarifas mensuales por curso:\n${rateLines}\nEl precio predeterminado para un curso sin tarifa personalizada es de 125 USD al mes. Estas tarifas pertenecen a tu escuela.`;
-      if (currentLang === 'it') return `Scuola: ${context?.schoolName || schoolName || 'Agenda'}\nTariffe mensili per classe:\n${rateLines}\nLa tariffa predefinita per una classe senza prezzo personalizzato è di 125 USD al mese. Queste tariffe appartengono alla tua scuola.`;
-      return `School: ${context?.schoolName || schoolName || 'Agenda'}\nApproved monthly rates by grade:\n${rateLines}\nThe default rate for a grade without a custom price is 125 USD per month. These prices belong to this school.`;
+    const studentSessionRateQuestion = [
+      'student rate', 'student price', 'session rate', 'rate per session', 'per session', 'per lesson',
+      'price per class', 'cost per class', 'how much per session', 'how much does a student pay',
+      'tarif par séance', 'tarif par seance', 'prix par séance', 'prix par seance', 'prix par cours',
+      'precio por sesión', 'precio por sesion', 'tarifa por sesión', 'tarifa por sesion', 'precio por clase',
+      'tariffa per lezione', 'prezzo per lezione', 'costo per sessione',
+      'رسوم الطالب', 'سعر الطالب', 'سعر الحصة', 'سعر كل حصة', 'لكل حصة', 'للحصة الواحدة', 'تكلفة الحصة', 'رسوم الحصة'
+    ].some((keyword) => q.includes(keyword)) ||
+      (['price', 'pricing', 'rate', 'cost', 'fee', 'fees', 'how much', 'tarif', 'prix', 'precio', 'prezzo', 'سعر', 'أسعار', 'بكم'].some((keyword) => q.includes(keyword)) &&
+       !['school price', 'price of a school', 'buy a school', 'school setup', 'school name price', 'سعر المدرسة', 'شراء مدرسة'].some((keyword) => q.includes(keyword)));
+    if (studentSessionRateQuestion) {
+      if (currentLang === 'ar') return `السعر الافتراضي للطالب هو 125 دولاراً أمريكياً لكل حصة. يمكن أن يختلف السعر بحسب ظروف المدرسة وقرار مديرها؛ لذلك يُرجى تأكيد السعر النهائي وعدد الحصص مع مدير مدرستك. هذه رسوم لكل حصة وليست رسوماً شهرية.\\nالمدرسة الحالية: ${context?.schoolName || schoolName || 'Agenda'}.`;
+      if (currentLang === 'fr') return `Le tarif étudiant par défaut est de 125 USD par séance. Le montant peut varier selon les conditions de l’établissement et la décision du Directeur ; veuillez donc confirmer le tarif final et le nombre de séances auprès de votre Directeur. Il s’agit d’un tarif par séance, et non d’un abonnement mensuel.\\nÉtablissement : ${context?.schoolName || schoolName || 'Agenda'}.`;
+      if (currentLang === 'es') return `La tarifa predeterminada para el estudiante es de 125 USD por sesión. Puede variar según las condiciones de la escuela y la decisión del Director; confirma el precio final y el número de sesiones con el Director de tu escuela. Es una tarifa por sesión, no una cuota mensual.\\nEscuela: ${context?.schoolName || schoolName || 'Agenda'}.`;
+      if (currentLang === 'it') return `La tariffa predefinita per lo studente è di 125 USD per lezione. Può variare in base alle condizioni della scuola e alla decisione del Direttore; conferma quindi il prezzo finale e il numero di lezioni con il Direttore della tua scuola. È una tariffa per lezione, non un costo mensile.\\nScuola: ${context?.schoolName || schoolName || 'Agenda'}.`;
+      return `The default student rate is USD 125 per session. The Director may adjust it according to the school’s circumstances, so confirm the final rate and number of sessions with your school Director. This is a per-session rate, per session rather than as a recurring monthly amount.\\nSchool: ${context?.schoolName || schoolName || 'Agenda'}.`;
     }
 
     const registrationQuestion = ['register', 'registration', 'sign up', 'create account', 'inscrire', 'inscription', 'créer un compte', 'm’inscrire', 'registrar', 'registro', 'registración', 'inscripción', 'crear cuenta', 'registrarme', 'registrazione', 'registrarmi', 'creare account', 'crea un account', 'تسجيل', 'سجل', 'التسجيل', 'إنشاء حساب', 'انشاء حساب'].some((keyword) => q.includes(keyword));
@@ -284,7 +290,85 @@ export const AIChatBot: React.FC<AIChatBotProps> = ({ currentLang, schoolId, sch
       return 'To join a live class, sign in with an activated, paid account assigned to the same educator session. Open Broadcast Room and choose your grade. The educator starts the broadcast. The Director can monitor any class from Dashboard → Manage Sessions.';
     }
 
-    const architectureQuestion = ['school', 'director', 'separate', 'data', 'privacy', 'educator', 'student', 'tenant', 'architecture', 'école', 'établissement', 'directeur', 'élève', 'éducateur', 'données', 'confidentialité', 'datos', 'escuela', 'estudiante', 'educador', 'privacidad', 'scuola', 'direttore', 'studente', 'educatore', 'privacy', 'مدرسة', 'مدير', 'طلاب', 'معلمين', 'خصوصية', 'بيانات', 'مدرستي'].some((keyword) => q.includes(keyword));
+    const schoolNavigationQuestion = [
+      'student screen', 'educator screen', 'student dashboard', 'educator dashboard', 'director dashboard',
+      'navigate between', 'navigation', 'how to use agenda', 'switch between student and educator',
+      'student role', 'educator role', 'director role', 'student area', 'educator area',
+      'écran étudiant', 'ecran etudiant', 'espace élève', 'espace eleve', 'espace éducateur',
+      'pantalla del estudiante', 'pantalla del educador', 'area del estudiante',
+      'schermata studente', 'schermata educatore', 'area studenti',
+      'شاشة الطالب', 'شاشة الأستاذ', 'شاشة المعلم', 'دور الطالب', 'دور المعلم', 'التنقل بين الشاشات', 'كيف أستخدم أجندة'
+    ].some((keyword) => q.includes(keyword));
+    if (schoolNavigationQuestion) {
+      if (currentLang === 'ar') return 'توجد ثلاث واجهات حسب نوع الحساب: الطالب، والأستاذ، والمدير. الطالب يسجّل الدخول ثم يفتح الصف أو غرفة البث المخصصة له، ويمكنه الانتقال إلى «الموارد التعليمية» لمشاهدة الدروس المحفوظة. الأستاذ يسجّل الدخول بحساب Educator ويفتح صفه المخصص لبدء البث وحفظ محاضراته. المدير يختار «دخول المدير» ثم يستخدم «لوحة المدير» لإدارة الحسابات والحصص ومراقبة الصفوف. استخدم حساب الدور الصحيح؛ صلاحيات كل واجهة تختلف.';
+      if (currentLang === 'fr') return 'Agenda propose trois espaces selon le type de compte : Élève, Éducateur et Directeur. L’élève se connecte puis ouvre sa classe ou sa salle de diffusion attribuée ; « Ressources pédagogiques » permet de consulter les cours enregistrés. L’éducateur se connecte avec son compte Educator, ouvre sa propre classe, démarre la diffusion et enregistre ses leçons. Le Directeur choisit « Connexion Directeur », puis utilise le tableau de bord pour gérer les comptes, les cours et surveiller les classes. Utilisez le compte correspondant à votre rôle.';
+      if (currentLang === 'es') return 'Agenda tiene tres espacios según el tipo de cuenta: Estudiante, Educador y Director. El estudiante inicia sesión y abre su aula o sala de emisión asignada; en «Recursos educativos» consulta las lecciones guardadas. El educador entra con su cuenta Educator, abre su propia aula, inicia la emisión y guarda sus lecciones. El Director selecciona «Acceso del Director» y usa el panel para gestionar cuentas, sesiones y supervisar las aulas. Utiliza la cuenta del rol que te corresponde.';
+      if (currentLang === 'it') return 'Agenda offre tre aree in base al tipo di account: Studente, Educatore e Direttore. Lo studente accede e apre la propria aula o sala trasmissione assegnata; in «Risorse didattiche» consulta le lezioni salvate. L’educatore accede con il proprio account Educator, apre la sua aula, avvia la diretta e salva le lezioni. Il Direttore seleziona «Accesso Direttore» e usa il pannello per gestire account, sessioni e monitorare le aule. Usa l’account corrispondente al tuo ruolo.';
+      return 'Agenda has three role-based areas: Student, Educator, and Director. Students sign in and open their assigned classroom or Broadcast Room; Learning Resources is where they view saved lectures. Educators sign in with an Educator account, open their own assigned classroom, start the broadcast, and save lectures. Directors choose Director Login and use the dashboard to manage accounts, sessions, and classroom monitoring. Use the account that matches your role.';
+    }
+
+    const assignmentQuestion = [
+      'assign student', 'student assignment', 'assigned educator', 'assigned teacher', 'change educator',
+      'change teacher', 'reassign student', 'student belongs to', 'who is my educator',
+      'changer d’éducateur', 'changer educateur', 'asignar estudiante', 'cambiar educador',
+      'assegnare studente', 'cambiare educatore', 'تعيين الطالب', 'تغيير الأستاذ', 'تغيير المعلم',
+      'الأستاذ المسؤول', 'لمن يتبع الطالب', 'تغيير صف الطالب'
+    ].some((keyword) => q.includes(keyword));
+    if (assignmentQuestion) {
+      if (currentLang === 'ar') return 'كل طالب مرتبط بأستاذ وصف محدد، ويختار الطالب الأستاذ/الحصة المتاحة أثناء التسجيل. يستطيع المدير تغيير تعيين الطالب لاحقاً من «لوحة المدير» ← «الحسابات» عبر قائمة الأستاذ، كما يمكنه تعديل تعيين جلسة الأستاذ. بعد التغيير، يدخل الطالب إلى الصف المرتبط بالتعيين الجديد.';
+      if (currentLang === 'fr') return 'Chaque élève est lié à un éducateur et à une classe précise. L’élève choisit l’éducateur/la séance disponible lors de l’inscription. Le Directeur peut modifier cette affectation ensuite dans « Tableau de bord » → « Comptes », à l’aide de la liste des éducateurs, et modifier également la séance attribuée à un éducateur. L’élève rejoint ensuite la classe correspondant à la nouvelle affectation.';
+      if (currentLang === 'es') return 'Cada estudiante está vinculado a un educador y a un aula concreta. Durante el registro, el estudiante elige el educador o la sesión disponible. El Director puede cambiar esa asignación después desde «Panel del Director» → «Cuentas», usando la lista de educadores, y también puede cambiar la sesión asignada a un educador. El estudiante entrará en el aula de la nueva asignación.';
+      if (currentLang === 'it') return 'Ogni studente è collegato a un educatore e a una classe specifica. Durante la registrazione, lo studente sceglie l’educatore o la lezione disponibile. Il Direttore può modificare l’assegnazione da «Dashboard del Direttore» → «Account», usando l’elenco degli educatori, e può anche cambiare la lezione assegnata a un educatore. Lo studente accederà quindi alla classe della nuova assegnazione.';
+      return 'Each student is linked to one assigned educator and classroom. During registration, the student chooses an available educator/session. The Director can later change that assignment in Director Dashboard → Accounts using the educator selector, and can also change an educator’s assigned session. The student then accesses the classroom linked to the new assignment.';
+    }
+
+    const directorManagementQuestion = [
+      'director manage', 'manage accounts', 'director dashboard', 'reset password', 'change username',
+      'change user name', 'change password', 'activate account', 'deactivate account', 'mark as paid',
+      'renew account', 'student account management', 'educator account management',
+      'gestion des comptes', 'réinitialiser le mot de passe', 'gestionar cuentas', 'restablecer contraseña',
+      'gestione account', 'reimpostare password', 'إدارة الحسابات', 'لوحة المدير', 'تغيير اسم المستخدم',
+      'تغيير كلمة المرور', 'إعادة تعيين كلمة المرور', 'تفعيل الحساب', 'تجديد الحساب', 'حالة الدفع'
+    ].some((keyword) => q.includes(keyword));
+    if (directorManagementQuestion) {
+      if (currentLang === 'ar') return 'من «دخول المدير» ثم «لوحة المدير» ← «الحسابات»، يستطيع المدير مراجعة الطلاب والأساتذة، تفعيل الحسابات أو إيقافها، تحديث حالة الدفع، تجديد صلاحية الحساب، تغيير اسم مستخدم الطالب أو الأستاذ، وإعادة تعيين كلمة المرور. كما يستطيع تغيير تعيين الطالب للأستاذ. ويستطيع المدير تعديل اسم المستخدم وكلمة المرور الخاصين به من إعدادات ملف المدير. لا يمكن للمساعد رؤية كلمات المرور الحالية أو طلبها منك.';
+      if (currentLang === 'fr') return 'Depuis « Connexion Directeur » → « Tableau de bord » → « Comptes », le Directeur peut consulter les élèves et les éducateurs, activer ou désactiver les comptes, mettre à jour le statut de paiement, renouveler la validité, modifier le nom d’utilisateur d’un élève ou d’un éducateur, réinitialiser son mot de passe et modifier son affectation. Le Directeur modifie son propre identifiant et mot de passe dans les paramètres de son profil. L’assistant ne voit pas les mots de passe existants et ne vous les demandera jamais.';
+      if (currentLang === 'es') return 'Desde «Acceso del Director» → «Panel del Director» → «Cuentas», el Director puede revisar estudiantes y educadores, activar o desactivar cuentas, actualizar el estado de pago, renovar la vigencia, cambiar el nombre de usuario de un estudiante o educador, restablecer su contraseña y modificar su asignación. El Director cambia su propio usuario y contraseña en la configuración de su perfil. El asistente no puede ver las contraseñas actuales y nunca te las pedirá.';
+      if (currentLang === 'it') return 'Da «Accesso Direttore» → «Dashboard del Direttore» → «Account», il Direttore può consultare studenti ed educatori, attivare o disattivare gli account, aggiornare lo stato di pagamento, rinnovare la validità, modificare il nome utente di uno studente o educatore, reimpostare la password e cambiare l’assegnazione. Il Direttore modifica il proprio nome utente e la propria password nelle impostazioni del profilo. L’assistente non può vedere le password esistenti e non te le chiederà mai.';
+      return 'From Director Login → Director Dashboard → Accounts, the Director can review students and educators, activate or deactivate accounts, update payment status, renew account validity, change a student’s or educator’s username, reset their password, and change student assignments. The Director can update their own username and password in Director profile settings. The assistant cannot see existing passwords and will never ask you to share one.';
+    }
+
+    const classSizeQuestion = [
+      'how many students', 'number of students', 'class size', 'students per class',
+      'five students', '5 students', 'unlimited students', 'unlimited educators',
+      'combien d’élèves', 'combien eleves', 'taille de classe', 'alumnos por clase',
+      'estudiantes por clase', 'studenti per classe', 'quanti studenti',
+      'عدد الطلاب', 'عدد التلاميذ', 'كم طالب', 'خمسة طلاب', '5 طلاب', 'عدد الأساتذة'
+    ].some((keyword) => q.includes(keyword));
+    if (classSizeQuestion) {
+      if (currentLang === 'ar') return 'يمكن للمدرسة إنشاء أعداد غير محدودة من حسابات الطلاب والأساتذة؛ لا يوجد حد إجمالي ثابت لعدد الحسابات. متوسط التخطيط المعتاد هو نحو خمسة طلاب في الصف الواحد، لكنه متوسط إرشادي وليس سقفاً عاماً ثابتاً. يحدد المدير تنظيم الصفوف وفق ظروف المدرسة.';
+      if (currentLang === 'fr') return 'L’établissement peut créer un nombre illimité de comptes élèves et éducateurs ; il n’existe pas de plafond global fixe pour les comptes. La moyenne habituelle visée est d’environ cinq élèves par classe, à titre indicatif et non comme une limite absolue. Le Directeur organise les classes selon les besoins de l’établissement.';
+      if (currentLang === 'es') return 'La escuela puede crear un número ilimitado de cuentas de estudiantes y educadores; no existe un límite global fijo de cuentas. La referencia habitual es un promedio de unos cinco estudiantes por clase, no un máximo absoluto. El Director organiza las clases según las necesidades de la escuela.';
+      if (currentLang === 'it') return 'La scuola può creare un numero illimitato di account per studenti ed educatori; non esiste un limite complessivo fisso agli account. Il riferimento medio è di circa cinque studenti per classe, come indicazione e non come limite assoluto. Il Direttore organizza le classi secondo le esigenze della scuola.';
+      return 'A school can create an unlimited number of student and educator accounts; there is no fixed overall account limit. The usual planning average is about five students per class, as a guideline rather than a universal hard cap. The Director organizes classes according to the school’s needs.';
+    }
+
+    const conferenceQuestion = [
+      'conference room', 'video conference', 'video call', 'meeting room', 'classroom chat',
+      'camera and microphone', 'talk to educator', 'talk with students', 'live conversation',
+      'salle de conférence', 'visioconférence', 'sala de reuniones', 'videollamada',
+      'sala conferenze', 'videochiamata', 'غرفة المؤتمر', 'مؤتمر فيديو', 'اجتماع مباشر',
+      'التواصل مع الأستاذ', 'التحدث مع الطلاب', 'كاميرا وميكروفون'
+    ].some((keyword) => q.includes(keyword));
+    if (conferenceQuestion) {
+      if (currentLang === 'ar') return 'غرفة الصف المباشر هي قاعة مؤتمر فيديو تجمع الأستاذ والطلاب المسجلين في صفه نفسه. يمكن للمشاركين الانضمام إلى البث المباشر واستخدام الكاميرا والميكروفون، كما تتوفر محادثة صفية لإرسال الرسائل والمرفقات المدعومة. يبدأ الأستاذ البث، وينضم الطلاب بعد تسجيل الدخول وتفعيل حساباتهم وتسديدها وتعيينهم إلى الصف الصحيح. يستطيع المدير دخول صفوف مدرسته لمراقبتها.';
+      if (currentLang === 'fr') return 'La salle de classe en direct est une salle de visioconférence réunissant l’éducateur et les élèves inscrits à sa classe. Les participants peuvent rejoindre la diffusion, utiliser la caméra et le microphone, et communiquer par le chat de classe avec les pièces jointes prises en charge. L’éducateur démarre la diffusion ; les élèves rejoignent après connexion, activation, confirmation du paiement et affectation à la bonne classe. Le Directeur peut entrer dans les classes de son établissement pour les surveiller.';
+      if (currentLang === 'es') return 'El aula en directo es una sala de videoconferencia que reúne al educador y a los estudiantes inscritos en su clase. Los participantes pueden unirse a la emisión, utilizar la cámara y el micrófono y comunicarse mediante el chat del aula con archivos adjuntos compatibles. El educador inicia la emisión; los estudiantes se unen después de iniciar sesión, activar la cuenta, confirmar el pago y estar asignados al aula correcta. El Director puede entrar en las clases de su escuela para supervisarlas.';
+      if (currentLang === 'it') return 'L’aula in diretta è una sala di videoconferenza che riunisce l’educatore e gli studenti iscritti alla sua classe. I partecipanti possono entrare nella diretta, usare videocamera e microfono e comunicare tramite la chat della classe con allegati supportati. L’educatore avvia la trasmissione; gli studenti accedono dopo il login, l’attivazione, la conferma del pagamento e l’assegnazione alla classe corretta. Il Direttore può entrare nelle classi della propria scuola per monitorarle.';
+      return 'The live classroom is a video-conference room for an educator and the students registered in that educator’s class. Participants can join the live session, use camera and microphone controls, and communicate through classroom chat with supported attachments. The educator starts the broadcast; students join after signing in, account activation, payment confirmation, and assignment to the correct class. The Director can enter any class in their own school to monitor it.';
+    }
+
+    const architectureQuestion = ['separate school', 'another school', 'school data', 'data isolation', 'tenant', 'privacy', 'confidentiality', 'écoles séparées', 'autre établissement', 'confidentialité', 'escuelas separadas', 'otra escuela', 'privacidad', 'scuole separate', 'altra scuola', 'riservatezza', 'مدارس منفصلة', 'مدرسة أخرى', 'خصوصية البيانات', 'عزل البيانات'].some((keyword) => q.includes(keyword));
     if (architectureQuestion) {
       if (currentLang === 'ar') return 'تعمل المنصة بنظام مدارس مستقلة: لكل مدير مدرسة خاصة به ومعرّف مدرسة مستقل، وطلاب ومدرسون وحصص وموارد تعليمية وأسعار منفصلة. لا يستطيع مدير الوصول إلى حسابات أو ملفات مدرسة أخرى. استخدم رابط المدرسة الخاص بها لتسجيل الطلاب والمدرسين.';
       if (currentLang === 'fr') return "La plateforme fonctionne avec des établissements séparés : chaque Directeur possède son propre établissement et identifiant, ses élèves, éducateurs, cours, ressources et tarifs. Un Directeur ne peut pas accéder aux comptes ni aux fichiers d’un autre établissement. Utilisez le lien propre à votre établissement pour les inscriptions.";
@@ -391,7 +475,7 @@ ${AGENDA_ASSISTANT_KNOWLEDGE}
 RECENT CONVERSATION (use only to understand follow-up references; canonical knowledge and current school data take precedence):
 ${recentConversation || '(No previous chat messages.)'}
 Platform constraints:
-- Use the selected school's live configuration for all monthly rates, educators, sessions, and school identity.
+- Use the selected school's live configuration for its name, educators, and sessions. The default student rate is USD 125 per session and may be adjusted by the Director; users should confirm the current rate with their Director.
 - Do not claim a fixed platform-wide price or timetable. Do not invent payment methods, schedules, account credentials, or school records.
 - Explain academic concepts, official Lebanese curriculum, homework, camera exercise submissions, and classroom navigation.
 REQUIRED OUTPUT LANGUAGE: ${languageNames[currentLang]}.
@@ -404,16 +488,16 @@ MANDATORY LANGUAGE POLICY:
 - Do not quote or restate the question in a different language.
 - Before sending, check that every sentence is in ${languageNames[currentLang]} and rewrite any sentence that is not.
 Authoritative school configuration (use current values, never invent a rate):
-${JSON.stringify(currentSchoolContext || { schoolName: schoolName || 'Agenda', defaultMonthlyRateUsd: 125, prices: [], sessions: [], educators: [] })}
+${JSON.stringify(currentSchoolContext ? { schoolName: currentSchoolContext.schoolName, sessions: currentSchoolContext.sessions, educators: currentSchoolContext.educators, guidance: currentSchoolContext.guidance } : { schoolName: schoolName || 'Agenda', sessions: [], educators: [] })}
 Platform architecture and navigation:
-- Each Director owns one separate school tenant. Students, educators, classes, saved educator lessons, and grade-specific monthly prices are isolated by that school's owner and school ID.
+- Each Director owns one separate school tenant. Students, educators, classes, saved educator lessons, and grade-specific student rates per session are isolated by that school's owner and school ID.
 - The correct school is selected by its dedicated share link. There is no public school dropdown.
 - Registration: open the school's link, choose Student or Educator, enter the required details, create a username and password, and choose an available grade and educator/session. The Director activates the account.
 - Sign-in: use the username and password created at registration. Ask the Director to reset a forgotten password.
 - Live class: an activated and paid student joins only their assigned educator session after the educator starts it. Educators enter their own assigned classroom. Directors can monitor every class belonging to their school from Director Dashboard > Manage Sessions, even if no educator account is registered for that class.
 - Saved lessons: sign in, open the classroom, select Learning Resources, and choose an educator. Educators can upload and edit only their own lesson slots.
-- Monthly prices are set by the Director for each grade. The default is 125 USD/month unless the school has saved a different rate. Clearly distinguish these monthly school fees from any separate booking or tutoring fee.
-- An independent Agenda copy is available to any user for USD 150. The purchaser becomes the Director of that independent copy and can manage their own school's name, educators, students, classes, saved lessons, monthly grade pricing, and classroom monitoring/delivery. Each copy remains isolated from other schools. Explain this price when users ask about obtaining, buying, or owning their own copy; do not confuse it with monthly school fees.
+- The default student rate is USD 125 per session. The Director may vary it according to school conditions and their decision. Confirm the current rate with the Director.
+- A separate Agenda school setup costs USD 150 one time to purchase/create the school identity/name and its independent school space. The purchaser becomes its Director. Keep this one-time setup cost distinct from the student rate per session.
 - To rename a school, the Director signs in from the Director Login card on the main screen, opens Director Dashboard > Accounts, edits the School name field, and saves. The new name updates the platform branding.
 - Explain the current school's prices, educators, grades and sessions using the supplied school configuration. Do not expose private account data, passwords, or other schools' information.
 Original user question (understand it directly; answer only in the selected language): "${selectedLanguageQuestion}"`
