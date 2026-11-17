@@ -61,6 +61,7 @@ export default function App() {
   const [sessionToken, setSessionToken] = useState('');
   const [ownerAccount, setOwnerAccount] = useState<CloudflareAccount | null>(null);
   const [ownerToken, setOwnerToken] = useState('');
+  const [ownerSchoolMode, setOwnerSchoolMode] = useState(false);
   const [schools, setSchools] = useState<SchoolRecord[]>([]);
   const [activeSchoolId, setActiveSchoolId] = useState(() => new URLSearchParams(window.location.search).get('schoolId') || 'default-agenda-school');
   const activeSchoolName = schools.find((school) => school.id === activeSchoolId)?.name || '';
@@ -233,6 +234,7 @@ const registerSignOutCleanup = useCallback(
     setRegisteredAccount(null);
     setOwnerAccount(null);
     setOwnerToken('');
+    setOwnerSchoolMode(false);
     sessionStorage.removeItem('agenda-owner-token');
 
     setUserProfile({
@@ -294,7 +296,55 @@ const registerSignOutCleanup = useCallback(
       {/* Main Content: Courses Hub or Live Classroom */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8 flex-1 w-full">
         {ownerAccount && ownerToken ? (
-          <OwnerDashboard currentLang={currentLang} token={ownerToken} onSignOut={handleSignOut} />
+          ownerSchoolMode ? (
+            <CoursesHub
+              currentLang={currentLang}
+              directorLoginRequest={0}
+              registeredAccount={null}
+              schoolId={ownerAccount.schoolId || activeSchoolId}
+              sessionToken=""
+              ownerSchoolToken={ownerToken}
+              onBackToOwner={() => setOwnerSchoolMode(false)}
+              onOwnerTokenRefresh={(token) => {
+                sessionStorage.setItem('agenda-owner-token', token);
+                setOwnerToken(token);
+              }}
+              onSchoolBrandChange={(schoolId, schoolName) => {
+                setActiveSchoolId(schoolId);
+                const nextUrl = new URL(window.location.href);
+                nextUrl.searchParams.set('schoolId', schoolId);
+                window.history.replaceState({}, '', nextUrl.toString());
+                setSchools((current) => {
+                  const exists = current.some((school) => school.id === schoolId);
+                  return exists
+                    ? current.map((school) => school.id === schoolId ? { ...school, name: schoolName } : school)
+                    : [...current, { id: schoolId, name: schoolName }].sort((a, b) => a.name.localeCompare(b.name));
+                });
+              }}
+              onRegisterSignOutCleanup={registerSignOutCleanup}
+              onShowMessage={showToast}
+              onBookTeacher={handleBookTeacherDirect}
+              onSelectQuestionForBooking={handleSelectQuestionForBooking}
+              onStartPractice={(exam) => setPracticeExam(exam)}
+              onEnterLiveClassroom={(liveSession) => {
+                if (liveSession) {
+                  const matchTeacher = MOCK_TEACHERS.find(t => t.name.includes(liveSession.teacherName.replace('Prof. ', '').replace('Dr. ', '').replace('Mme. ', ''))) || MOCK_TEACHERS[0];
+                  setSelectedTeacherForBooking(matchTeacher);
+                }
+                setIsClassroomActive(true);
+              }}
+            />
+          ) : (
+            <OwnerDashboard
+              currentLang={currentLang}
+              token={ownerToken}
+              onSignOut={handleSignOut}
+              onManageMySchool={() => {
+                setIsClassroomActive(false);
+                setOwnerSchoolMode(true);
+              }}
+            />
+          )
         ) : isClassroomActive ? (
           <VirtualClassroom
             currentLang={currentLang}
