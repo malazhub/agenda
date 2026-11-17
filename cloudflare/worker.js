@@ -2568,6 +2568,54 @@ async function clearClassroomMessages(request, env) {
     cleared: true
   });
 }
+function normalizeGeminiContents(contents) {
+  if (typeof contents === "string") {
+    const text = contents.trim();
+    return text ? [{ role: "user", parts: [{ text }] }] : null;
+  }
+  if (!Array.isArray(contents) || contents.length === 0) return null;
+
+  // Preserve already-valid Gemini Content objects.
+  if (contents.every((item) => item && typeof item === "object" && Array.isArray(item.parts))) {
+    return contents;
+  }
+
+  // Convert the app's flat list of strings/text/image parts into REST Content.
+  const parts = [];
+  for (const item of contents) {
+    if (typeof item === "string") {
+      if (item.trim()) parts.push({ text: item });
+      continue;
+    }
+    if (!item || typeof item !== "object") return null;
+    if (typeof item.text === "string") {
+      parts.push({ text: item.text });
+      continue;
+    }
+    if (item.inlineData && typeof item.inlineData === "object") {
+      parts.push({ inlineData: item.inlineData });
+      continue;
+    }
+    if (item.inline_data && typeof item.inline_data === "object") {
+      const data = item.inline_data;
+      parts.push({ inlineData: { mimeType: data.mimeType || data.mime_type, data: data.data } });
+      continue;
+    }
+    if (item.fileData && typeof item.fileData === "object") {
+      parts.push({ fileData: item.fileData });
+      continue;
+    }
+    if (item.file_data && typeof item.file_data === "object") {
+      const data = item.file_data;
+      parts.push({ fileData: { mimeType: data.mimeType || data.mime_type, fileUri: data.fileUri || data.file_uri } });
+      continue;
+    }
+    return null;
+  }
+
+  return parts.length ? [{ role: "user", parts }] : null;
+}
+
 async function generateGeminiResponse(request, env) {
   if (request.method !== "POST") return json({ error: "Method not allowed." }, 405);
   if (!env.GEMINI_API_KEY) return json({ error: "Gemini is not configured on the server. Add the GEMINI_API_KEY Worker secret." }, 503);
@@ -2584,9 +2632,9 @@ async function generateGeminiResponse(request, env) {
     return json({ error: "Invalid AI request body." }, 400);
   }
 
-  const contents = payload?.contents;
-  if (!contents || !(typeof contents === "string" || (Array.isArray(contents) && contents.length > 0))) {
-    return json({ error: "AI contents are required." }, 400);
+  const contents = normalizeGeminiContents(payload?.contents);
+  if (!contents) {
+    return json({ error: "AI contents are required in a supported text or media format." }, 400);
   }
   const model = payload?.model === "gemini-3.8-flash" ? payload.model : "gemini-3.8-flash";
 
@@ -2609,8 +2657,14 @@ async function generateGeminiResponse(request, env) {
 
   const result = await upstream.json().catch(() => null);
   if (!upstream.ok) {
+    // Log only non-secret diagnostics; never log the API key or request content.
+    console.error("Gemini API request failed.", { model, upstreamStatus: upstream.status });
     const status = upstream.status === 429 ? 429 : 502;
-    return json({ error: status === 429 ? "Gemini is temporarily rate-limited. Please try again shortly." : "Gemini request failed. Check the server-side API key and model access." }, status);
+    return json({
+      error: status === 429
+        ? "Gemini is temporarily rate-limited. Please try again shortly."
+        : `Gemini request failed (Google API HTTP ${upstream.status}). Check the server-side key, model access, and request format.`,
+    }, status);
   }
   const text = (result?.candidates?.[0]?.content?.parts || [])
     .map((part) => typeof part.text === "string" ? part.text : "")
