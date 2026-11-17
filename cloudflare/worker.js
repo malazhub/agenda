@@ -884,8 +884,8 @@ async function claimDirectorSetup(request, env) {
   const password = typeof body?.password === "string" ? body.password : "";
   if (!/^[a-z0-9._-]{3,32}$/.test(username)) return json({ error: "Choose a username with 3–32 letters, numbers, dots, underscores or hyphens." }, 400);
   if (!/^[A-Za-z0-9_-]{40,50}$/.test(token)) return json({ error: "This setup link is invalid or has expired." }, 400);
-  if (password.length < 12 || password.length > MAX_PASSWORD_LENGTH) {
-    return json({ error: "Choose a password with at least 12 characters." }, 400);
+  if (!password || password.length > MAX_PASSWORD_LENGTH) {
+    return json({ error: "Enter a non-empty password (maximum 1,024 characters)." }, 400);
   }
   const tokenHash = await hashSetupToken(token);
   const setup = await env.DB.prepare(
@@ -977,29 +977,63 @@ async function updateOwnerDirector(request, env, directorId) {
   if (!owner) return json({ error: "Owner access required." }, 401);
   const body = await requestJson(request);
   const director = await env.DB.prepare(
-    "SELECT a.id, a.school_id FROM accounts a INNER JOIN schools s ON s.director_id = a.id AND s.id = a.school_id WHERE a.id = ? AND a.role = 'director'"
+    `SELECT a.id, a.school_id
+     FROM accounts a
+     INNER JOIN schools s ON s.director_id = a.id AND s.id = a.school_id
+     WHERE a.id = ? AND a.role = 'director'
+       AND NOT EXISTS (SELECT 1 FROM platform_owners p WHERE p.account_id = a.id)`
   ).bind(directorId).first();
   if (!director) return json({ error: "Director not found." }, 404);
-  const updates = [];
-  const values = [];
+
   if (body?.paymentMethod !== undefined || body?.paymentValue !== undefined) {
     return json({ error: "Directors manage their own payment and contact link from their school dashboard." }, 403);
   }
+
+  const schoolUpdates = [];
+  const schoolValues = [];
+  const accountUpdates = new Map();
+
   if (body?.renewLicense === true) {
-    updates.push("license_expires_at = datetime('now', '+1 year')", "license_active = 1");
-    await env.DB.prepare("UPDATE accounts SET expires_at = datetime('now', '+1 year'), activated = 1, paid = 1 WHERE id = ?").bind(directorId).run();
+    schoolUpdates.push("license_expires_at = datetime('now', '+1 year')", "license_active = 1");
+    accountUpdates.set("expires_at", { sql: "datetime('now', '+1 year')" });
+    accountUpdates.set("activated", { sql: "1" });
+    accountUpdates.set("paid", { sql: "1" });
   }
   if (typeof body?.licenseActive === "boolean") {
-    updates.push("license_active = ?");
-    values.push(body.licenseActive ? 1 : 0);
+    schoolUpdates.push("license_active = ?");
+    schoolValues.push(body.licenseActive ? 1 : 0);
   }
-  if (!updates.length) return json({ error: "No supported Director changes were provided." }, 400);
-  values.push(director.school_id);
-  await env.DB.prepare(`UPDATE schools SET ${updates.join(", ")}, updated_at = datetime('now') WHERE id = ?`).bind(...values).run().catch(async () => {
-    // Older D1 schemas may not have updated_at on schools.
-    const safeUpdates = updates.filter((item) => item !== "updated_at = datetime('now')");
-    await env.DB.prepare(`UPDATE schools SET ${safeUpdates.join(", ")} WHERE id = ?`).bind(...values).run();
-  });
+  if (typeof body?.activated === "boolean") {
+    accountUpdates.set("activated", { sql: "?", value: body.activated ? 1 : 0 });
+  }
+  if (typeof body?.paid === "boolean") {
+    accountUpdates.set("paid", { sql: "?", value: body.paid ? 1 : 0 });
+  }
+
+  if (!schoolUpdates.length && accountUpdates.size === 0) {
+    return json({ error: "No supported Director changes were provided." }, 400);
+  }
+
+  if (accountUpdates.size > 0) {
+    const accountSet = [];
+    const accountValues = [];
+    for (const [column, update] of accountUpdates) {
+      accountSet.push(`${column} = ${update.sql}`);
+      if (update.sql === "?") accountValues.push(update.value);
+    }
+    await env.DB.prepare(`UPDATE accounts SET ${accountSet.join(", ")} WHERE id = ?`)
+      .bind(...accountValues, directorId).run();
+  }
+
+  if (schoolUpdates.length > 0) {
+    schoolValues.push(director.school_id);
+    await env.DB.prepare(`UPDATE schools SET ${schoolUpdates.join(", ")}, updated_at = datetime('now') WHERE id = ?`)
+      .bind(...schoolValues).run().catch(async () => {
+        // Older D1 schemas may not have updated_at on schools.
+        await env.DB.prepare(`UPDATE schools SET ${schoolUpdates.join(", ")} WHERE id = ?`)
+          .bind(...schoolValues).run();
+      });
+  }
   return json({ updated: true });
 }
 
