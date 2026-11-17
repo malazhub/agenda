@@ -631,8 +631,8 @@ async function handleLogin(request, env) {
     account &&
     account.role === "director" &&
     !isOwner &&
-    Number(account.password_must_change ?? 0) === 1 &&
     account.phone &&
+    account.phone_password_disabled_at == null &&
     normalizePhoneCredential(password).length >= 6 &&
     normalizePhoneCredential(password) === normalizePhoneCredential(account.phone)
   );
@@ -672,7 +672,17 @@ async function handleLogin(request, env) {
   }
 
   await env.DB.prepare("DELETE FROM login_attempts WHERE username = ? COLLATE NOCASE AND succeeded = 0").bind(username).run();
-  const effectiveAccount = isOwner ? { ...account, role: "owner" } : account;
+  let effectiveDirectorAccount = account;
+  if (account.role === "director" && !isOwner) {
+    if (phoneIsInitialPassword) {
+      await env.DB.prepare("UPDATE accounts SET password_must_change = 1 WHERE id = ? AND role = 'director'").bind(account.id).run();
+      effectiveDirectorAccount = { ...account, password_must_change: 1 };
+    } else if (account.phone_password_disabled_at == null && Number(account.password_must_change ?? 0) !== 1) {
+      await env.DB.prepare("UPDATE accounts SET phone_password_disabled_at = datetime('now') WHERE id = ? AND role = 'director'").bind(account.id).run();
+      effectiveDirectorAccount = { ...account, phone_password_disabled_at: new Date().toISOString() };
+    }
+  }
+  const effectiveAccount = isOwner ? { ...account, role: "owner" } : effectiveDirectorAccount;
   const token = await signToken(
     { sub: account.id, role: effectiveAccount.role, username: account.username, exp: Math.floor(Date.now() / 1000) + SESSION_TTL_SECONDS },
     env.SESSION_SIGNING_KEY,
@@ -749,7 +759,7 @@ async function updateDirectorProfile(request, env) {
   ];
   if (password) {
     statements.push(env.DB.prepare(
-      "UPDATE accounts SET username = ?, password_hash = ?, password_must_change = 0 WHERE id = ? AND role = 'director'"
+      "UPDATE accounts SET username = ?, password_hash = ?, password_must_change = 0, phone_password_disabled_at = datetime('now') WHERE id = ? AND role = 'director'"
     ).bind(username, await hashPassword(password), director.sub));
   } else {
     statements.push(env.DB.prepare(
@@ -819,7 +829,7 @@ async function ownerDirectors(request, env) {
   if (!owner) return json({ error: "Owner access required." }, 401);
   const result = await env.DB.prepare(`
     SELECT a.id, a.username, a.full_name, a.email, a.phone, a.created_at,
-           a.activated, a.paid, a.expires_at,
+           a.activated, a.paid, a.expires_at, a.password_must_change, a.phone_password_disabled_at,
            s.id AS school_id, s.name AS school_name, s.license_expires_at,
            s.license_active, s.payment_method, s.payment_value,
            EXISTS(SELECT 1 FROM director_setup_tokens t
@@ -844,6 +854,7 @@ async function ownerDirectors(request, env) {
     paymentMethod: row.payment_method || "unset",
     paymentValue: row.payment_value || "",
     setupPending: Boolean(row.setup_pending),
+    phonePasswordEnabled: Boolean(row.phone) && row.phone_password_disabled_at == null,
     studentCount: Number(row.student_count || 0),
     educatorCount: Number(row.educator_count || 0),
     directorLink: directorSchoolLink(row.school_id),
@@ -999,12 +1010,26 @@ async function resetOwnerDirectorPhonePassword(request, env, directorId) {
   }
   const passwordHash = await hashPassword(phone);
   await env.DB.prepare(
-    "UPDATE accounts SET password_hash = ?, password_must_change = 1 WHERE id = ? AND role = 'director'"
+    "UPDATE accounts SET password_hash = ?, password_must_change = 1, phone_password_disabled_at = NULL WHERE id = ? AND role = 'director'"
   ).bind(passwordHash, directorId).run();
   await env.DB.prepare(
     "DELETE FROM login_attempts WHERE username = (SELECT username FROM accounts WHERE id = ?)"
   ).bind(directorId).run();
-  return json({ reset: true, message: "Temporary password reset to the phone number on record. The Director must change it after signing in." });
+  const saved = await env.DB.prepare(
+    "SELECT username, phone, password_hash, password_must_change, phone_password_disabled_at, activated, paid FROM accounts WHERE id = ? AND role = 'director'"
+  ).bind(directorId).first();
+  const verified = Boolean(saved && saved.phone_password_disabled_at == null &&
+    Number(saved.password_must_change) === 1 && await verifyPassword(phone, saved.password_hash));
+  if (!verified) {
+    return json({ error: "The phone password reset did not verify against the saved Director account." }, 500);
+  }
+  return json({
+    reset: true, verified: true, username: saved.username,
+    phoneDigits: normalizePhoneCredential(saved.phone).length,
+    phoneLastTwo: normalizePhoneCredential(saved.phone).slice(-2),
+    activated: Boolean(saved.activated), paid: Boolean(saved.paid),
+    message: "Verified: the initial password is now the phone number saved on this Director account. The Director must change it after signing in.",
+  });
 }
 
 async function deleteOwnerDirector(request, env, directorId) {
