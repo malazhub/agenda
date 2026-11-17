@@ -661,6 +661,33 @@ test('Owner creates a one-year Director school and Director sets their own usern
   });
   assert.equal(replay.status, 400);
 
+  const stagedStatuses = await send(env, '/api/owner/directors/status', {
+    method: 'PATCH', token: ownerToken,
+    body: { updates: [{ id: director.id, activated: false, paid: false }] },
+  });
+  assert.equal(stagedStatuses.status, 200);
+  assert.deepEqual(await stagedStatuses.json(), { updated: 1 });
+  assert.equal(accounts.get(director.id).activated, 0);
+  assert.equal(accounts.get(director.id).paid, 0);
+  const blockedLogin = await send(env, '/api/auth/login', {
+    method: 'POST', body: { username: 'new.director', password: 'x' },
+  });
+  assert.equal(blockedLogin.status, 401);
+  const savedStatuses = await send(env, '/api/owner/directors/status', {
+    method: 'PATCH', token: ownerToken,
+    body: { updates: [{ id: director.id, activated: true, paid: true }] },
+  });
+  assert.equal(savedStatuses.status, 200);
+  assert.equal(accounts.get(director.id).activated, 1);
+  assert.equal(accounts.get(director.id).paid, 1);
+  const directorLogin = await send(env, '/api/auth/login', {
+    method: 'POST', body: { username: 'new.director', password: 'x' },
+  });
+  assert.equal(directorLogin.status, 200);
+  assert.equal((await directorLogin.json()).account.role, 'director');
+  const currentDirector = await send(env, '/api/auth/me', { token: directorToken });
+  assert.equal(currentDirector.status, 200);
+  assert.equal((await currentDirector.json()).account.role, 'director');
   const profile = await send(env, '/api/director/profile', { token: directorToken });
   assert.equal(profile.status, 200);
   assert.equal((await profile.json()).profile.schoolName, 'New Learning School');
