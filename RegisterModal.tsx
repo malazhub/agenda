@@ -204,11 +204,6 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
                 ? selectedEducator!.registeredSessionId || undefined
                 : undefined,
           });
-      if (isLogin && account.role === 'director') {
-        setError(t.directorSignInSeparate);
-        return;
-      }
-
       onRegisterSuccess(account, token);
       handleClose();
     } catch (requestError) {
