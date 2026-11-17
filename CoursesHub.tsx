@@ -220,6 +220,7 @@ export const CoursesHub: React.FC<CoursesHubProps> = ({
       return;
     }
     sessionStorage.removeItem('agenda-director-token');
+    sessionStorage.removeItem('agenda-session-token');
     setDirectorToken('');
     setStudentRows([]);
     setEducatorRows([]);
@@ -259,6 +260,7 @@ export const CoursesHub: React.FC<CoursesHubProps> = ({
         throw new Error(currentLang === 'ar' ? 'هذا الحساب لا يملك صلاحية المدير.' : currentLang === 'fr' ? 'Ce compte ne dispose pas des droits de Directeur.' : currentLang === 'es' ? 'Esta cuenta no tiene permisos de Director.' : currentLang === 'it' ? 'Questo account non dispone dei permessi di Direttore.' : 'This account does not have Director access.');
       }
       sessionStorage.setItem('agenda-director-token', token);
+      sessionStorage.setItem('agenda-session-token', token);
       setDirectorToken(token);
       setDirectorScreen('dashboard');
       setDirectorForm({ username: '', password: '' });
