@@ -976,6 +976,21 @@ async function updateAccount(request, env, accountId) {
     values.push(assignedSessionId, selectedSession.grade_id);
   }
 
+  if (typeof body?.username === "string") {
+    const username = body.username.trim();
+    if (!/^[a-zA-Z0-9_.-]{3,40}$/.test(username)) {
+      return json({ error: "Username must be 3–40 characters using letters, numbers, dot, underscore or hyphen." }, 400);
+    }
+    const existingUsername = await env.DB.prepare(
+      "SELECT id FROM accounts WHERE username = ? COLLATE NOCASE AND id != ?"
+    ).bind(username, accountId).first();
+    if (existingUsername) {
+      return json({ error: "That username is already in use." }, 409);
+    }
+    updates.push("username = ?");
+    values.push(username);
+  }
+
   if (typeof body?.password === "string") {
     if (!body.password || body.password.length > MAX_PASSWORD_LENGTH) {
       return json({
