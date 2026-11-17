@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Language } from '../types';
-import { generateGeminiContent, getSchoolPublicContext } from '../services/cloudflareApi';
+import { generateAIContent, getSchoolPublicContext } from '../services/cloudflareApi';
 import type { SchoolPublicContext } from '../services/cloudflareApi';
 import { 
   X, 
@@ -48,7 +48,7 @@ const AGENDA_ASSISTANT_KNOWLEDGE = [
   'For account, activation, payment-status, or class-assignment help, users should contact their own school Director through the school\'s provided contact channel. Never invent an email address or phone number.',
   'Each Director has an isolated school space. Student and educator accounts, assignments, classrooms, and saved lesson materials belong to that school and must not be disclosed to another school.',
   'The application supports Arabic, English, French, Spanish, and Italian. All user-visible answers must follow the currently selected app language.',
-  'For questions outside Agenda operations, use Gemini for educational, general-knowledge, reasoning, and study questions. Understand the original question directly and reply in the selected app language.'
+  'For questions outside Agenda operations, use the AI model for educational, general-knowledge, reasoning, and study questions. Understand the original question directly and reply in the selected app language.'
 ].join('\\n');
 
 export const AIChatBot: React.FC<AIChatBotProps> = ({ currentLang, schoolId, schoolName }) => {
@@ -123,8 +123,8 @@ export const AIChatBot: React.FC<AIChatBotProps> = ({ currentLang, schoolId, sch
   const getSavedResponse = (query: string, context = schoolContext, allowComposite = true): string | null => {
     const q = query.toLowerCase().trim();
 
-    // Lightweight greetings should be instant and should not spend a Gemini
-    // request. Detailed questions continue through the Gemini integration.
+    // Lightweight greetings should be instant and should not spend a the AI model
+    // request. Detailed questions continue through the the AI model integration.
     if (/^(hi|hello|hey|how are you|how's it going|good morning|good afternoon|good evening)[!.? ]*$/.test(q)) {
       if (currentLang === 'ar') return 'مرحباً! أنا بخير، شكراً لسؤالك. كيف يمكنني مساعدتك اليوم؟';
       if (currentLang === 'fr') return 'Bonjour ! Je vais bien, merci. Comment puis-je vous aider aujourd’hui ?';
@@ -134,7 +134,7 @@ export const AIChatBot: React.FC<AIChatBotProps> = ({ currentLang, schoolId, sch
     }
 
     // Combine multiple prepared Agenda support answers when a question covers
-    // more than one topic. Unmatched and educational questions continue to Gemini.
+    // more than one topic. Unmatched and educational questions continue to the AI model.
     const matchesAny = (terms: string[]) => terms.some((term) => q.includes(term));
     const quickTopics = [
       { seed: 'registration', terms: ['register', 'registration', 'sign up', 'create account', 'inscription', 'registrar', 'registrazione', 'تسجيل', 'التسجيل'] },
@@ -430,7 +430,7 @@ export const AIChatBot: React.FC<AIChatBotProps> = ({ currentLang, schoolId, sch
     setInputText('');
     setIsTyping(true);
 
-    // Send the user's original question directly to Gemini. Gemini can
+    // Send the user's original question directly to the AI model. the AI model can
     // understand the source language and answer in the selected app language;
     // a separate translation request added latency and could block the chat.
     const selectedLanguageQuestion = text;
@@ -458,7 +458,7 @@ export const AIChatBot: React.FC<AIChatBotProps> = ({ currentLang, schoolId, sch
         .catch((error) => console.warn('Background school AI context refresh failed.', error));
     }
     // Return the prepared, localized Agenda help for common operational questions.
-    // More complex, mixed-topic and educational questions continue to Gemini.
+    // More complex, mixed-topic and educational questions continue to the AI model.
     const savedAnswer = getSavedResponse(selectedLanguageQuestion, currentSchoolContext);
     if (savedAnswer) {
       if (activeLanguageRef.current !== currentLang) {
@@ -475,11 +475,11 @@ export const AIChatBot: React.FC<AIChatBotProps> = ({ currentLang, schoolId, sch
       return;
     }
 
-    // Generate the assistant's answer with Gemini
+    // Generate the assistant's answer with the AI model
     let reply = '';
     {
       try {
-        const response = await generateGeminiContent([
+        const response = await generateAIContent([
             {
               text: `You are the AI academic assistant for Agenda (منصة الأجندة اللبنانية).
 CANONICAL AGENDA KNOWLEDGE (always available; do not rely on previous chat messages to remember these facts):
@@ -514,13 +514,13 @@ Platform architecture and navigation:
 - Explain the current school's prices, educators, grades and sessions using the supplied school configuration. Do not expose private account data, passwords, or other schools' information.
 Original user question (understand it directly; answer only in the selected language): "${selectedLanguageQuestion}"`
             }
-          ], { thinkingLevel: 'low', model: 'gemini-2.5-flash', maxOutputTokens: 1024 });
+          ], { maxOutputTokens: 1024 });
 
         // The system prompt already requires the selected output language.
-        // Skip a second Gemini call just to translate the generated answer.
+        // Skip a second the AI model call just to translate the generated answer.
         reply = response.text?.trim() || '';
       } catch (e) {
-        console.warn('Gemini chat error (diagnostic):', e instanceof Error ? e.message : String(e));
+        console.warn('AI chat error (diagnostic):', e instanceof Error ? e.message : String(e));
       }
     }
 
