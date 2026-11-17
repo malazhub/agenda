@@ -679,6 +679,9 @@ export function getOwnerDirectors(token:string):Promise<{directors:OwnerDirector
 export function updateOwnerDirector(token:string,id:string,update:{renewLicense?:boolean;licenseActive?:boolean;activated?:boolean;paid?:boolean}):Promise<{updated:boolean}> {
   return request('/api/owner/directors/'+encodeURIComponent(id),{method:'PATCH',headers:authHeaders(token),body:JSON.stringify(update)});
 }
+export function saveOwnerDirectorStatuses(token:string,updates:Array<{id:string;activated:boolean;paid:boolean}>):Promise<{updated:number}> {
+  return request('/api/owner/directors/status',{method:'PATCH',headers:authHeaders(token),body:JSON.stringify({updates})});
+}
 export function deleteOwnerDirector(token:string,id:string):Promise<{deleted:boolean}> {
   return request('/api/owner/directors/'+encodeURIComponent(id),{method:'DELETE',headers:authHeaders(token)});
 }
