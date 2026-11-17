@@ -38,6 +38,7 @@ interface CoursesHubProps {
   schoolId: string;
   sessionToken: string;
   onSchoolBrandChange: (schoolId: string, schoolName: string) => void;
+  onOwnerLogin?: (account: CloudflareAccount, token: string) => void;
   onRegisterSignOutCleanup?: (
     cleanup: (() => Promise<void>) | null
   ) => void;
@@ -55,6 +56,7 @@ export const CoursesHub: React.FC<CoursesHubProps> = ({
   onShowMessage,
   onEnterLiveClassroom,
   onRegisterSignOutCleanup,
+  onOwnerLogin,
 }) => {
   const t = translations[currentLang];
 
@@ -194,6 +196,7 @@ export const CoursesHub: React.FC<CoursesHubProps> = ({
     setDirectorError('');
     try {
       const { account, token } = await loginAccount(directorForm.username, directorForm.password);
+      if (account.role === 'owner') { onOwnerLogin?.(account, token); setDirectorForm({ username: '', password: '' }); return; }
       if (account.role !== 'director') {
         throw new Error(currentLang === 'ar' ? 'هذا الحساب لا يملك صلاحية المدير.' : currentLang === 'fr' ? 'Ce compte ne dispose pas des droits de Directeur.' : currentLang === 'es' ? 'Esta cuenta no tiene permisos de Director.' : currentLang === 'it' ? 'Questo account non dispone dei permessi di Direttore.' : 'This account does not have Director access.');
       }
