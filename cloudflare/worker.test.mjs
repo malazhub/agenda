@@ -502,6 +502,7 @@ function fakeEnvironment() {
     schools,
     sessions,
     pricing,
+    attempts,
     password,
   };
 }
@@ -1087,6 +1088,10 @@ test('Public Director registration saves chosen password and signs in by email a
   });
   assert.equal(approval.status, 200, await approval.clone().text());
 
+  // Prior failed attempts must not reject the correct saved password.
+  for (let attempt = 0; attempt < 6; attempt += 1) {
+    attempts.push({ username: 'director@newschool.example', succeeded: false });
+  }
   const approvedLogin = await send(env, '/api/auth/login', {
     method: 'POST',
     body: { username: 'director@newschool.example', password: 'x' },
