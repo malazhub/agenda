@@ -1396,8 +1396,12 @@ async function saveDirectorAccountUpdates(request, env) {
     if (!account) return json({ error: "One or more accounts do not belong to this school. No changes were saved." }, 404);
 
     let gradeId = typeof item.gradeId === "string" ? item.gradeId.trim() : String(account.grade_id || "");
-    let sessionId = typeof item.registeredSessionId === "string" ? item.registeredSessionId.trim() : String(account.registered_session_id || "");
-    let educatorId = typeof item.registeredEducatorId === "string" ? item.registeredEducatorId.trim() : (account.registered_educator_id || null);
+    let sessionId = Object.prototype.hasOwnProperty.call(item, "registeredSessionId")
+      ? (typeof item.registeredSessionId === "string" ? item.registeredSessionId.trim() : "")
+      : String(account.registered_session_id || "");
+    let educatorId = Object.prototype.hasOwnProperty.call(item, "registeredEducatorId")
+      ? (typeof item.registeredEducatorId === "string" ? item.registeredEducatorId.trim() : null)
+      : (account.registered_educator_id || null);
 
     if (!gradeId || !/^[a-z0-9_-]{1,40}$/i.test(gradeId)) {
       return json({ error: "Choose a valid grade for every account before saving." }, 400);
