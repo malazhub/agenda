@@ -8,7 +8,7 @@ export interface CloudflareAccount {
   phone: string;
   schoolOrSubject: string;
   gradeId: string;
-  studentGradeLabel: string;
+  studentGradeLabel?: string;
   registeredSessionId: string | null;
   registeredEducatorId: string | null;
   createdAt: string;
