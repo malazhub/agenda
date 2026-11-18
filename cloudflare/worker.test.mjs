@@ -124,7 +124,18 @@ function fakeEnvironment() {
         return { count: recent.length };
       }
       if (this.sql.includes('SELECT * FROM accounts WHERE username')) {
-        return [...accounts.values()].find((item) => item.username.toLowerCase() === this.values[0].toLowerCase()) || null;
+        const loginIdentifier = String(this.values[0] || '').toLowerCase();
+        return [...accounts.values()].find((item) =>
+          item.username.toLowerCase() === loginIdentifier ||
+          (item.role === 'director' && String(item.email || '').toLowerCase() === loginIdentifier)
+        ) || null;
+      }
+      if (this.sql.includes("SELECT id FROM accounts WHERE role = 'director' AND email = ?")) {
+        const email = String(this.values[0] || '').toLowerCase();
+        const account = [...accounts.values()].find((item) =>
+          item.role === 'director' && String(item.email || '').toLowerCase() === email
+        );
+        return account ? { id: account.id } : null;
       }
       if (this.sql.includes('FROM accounts') && (this.sql.includes('WHERE id = ?') || this.sql.includes('WHERE a.id = ?'))) {
         const account = accounts.get(this.values[0]) || null;
@@ -295,7 +306,8 @@ function fakeEnvironment() {
       }
       if (this.sql.startsWith('INSERT INTO schools')) {
         const [id, name, director_id] = this.values;
-        schools.set(id, { id, name, director_id, license_expires_at: '2027-11-17 10:00:00', license_active: 1 });
+        const inactive = this.sql.includes('license_expires_at, license_active) VALUES (?, ?, ?, NULL, 0)');
+        schools.set(id, { id, name, director_id, license_expires_at: inactive ? null : '2027-11-17 10:00:00', license_active: inactive ? 0 : 1 });
         return { meta: { changes: 1 } };
       }
       if (this.sql.startsWith('UPDATE schools SET name')) {
@@ -403,7 +415,16 @@ function fakeEnvironment() {
     async batch(statements) {
       const results = [];
       for (const statement of statements) {
-        if (statement.sql.includes("INTO sessions")) {
+        if (statement.sql.startsWith("INSERT INTO accounts") && statement.sql.includes("VALUES (?, ?, ?, 'director'")) {
+          const [id, username, password_hash, school_id, full_name, email, phone] = statement.values;
+          accounts.set(id, {
+            id, username, password_hash, role: 'director', school_id, full_name, email, phone,
+            school_or_subject: '', grade_id: '', registered_session_id: null, registered_educator_id: null,
+            created_at: '2026-11-18 10:00:00', expires_at: null, activated: 0, paid: 0,
+            password_must_change: 0, phone_password_disabled_at: '2026-11-18 10:00:00',
+          });
+          results.push({ meta: { changes: 1 } });
+        } else if (statement.sql.includes("INTO sessions")) {
           const [id, school_id, grade_id, subject, title, teacher_name, source_name, source_url, playback_url, media_key, is_live, live_starts_at] = statement.values;
           sessions.set(id, {
             id, school_id, grade_id, subject, title, teacher_name, source_name, source_url, playback_url, is_live, live_starts_at,
@@ -572,7 +593,7 @@ test('registration hashes credentials and rejects duplicate usernames', async ()
   const { env, accounts, sessions } = fakeEnvironment();
   const registration = {
     username: 'learner.one',
-    password: 'x !',
+    password: 'x',
     role: 'student',
     fullName: 'Learner One',
     email: 'learner@example.com',
@@ -730,13 +751,13 @@ test('grade registration loads available grades and grants grade-scoped live acc
       email: 'first.educator@example.com',
       phone: '+961 70 123 456',
       schoolOrSubject: 'Life Sciences',
-      gradeId: 'bac_sv',
+      gradeId: '',
       className: 'Life Sciences Class 12',
     },
   });
   assert.equal(firstEducator.status, 201, JSON.stringify(await firstEducator.clone().json()));
   const firstEducatorResult = await firstEducator.json();
-  assert.equal(firstEducatorResult.account.gradeId, 'bac_sv');
+  assert.equal(firstEducatorResult.account.gradeId, 'class_life_sciences_class_12');
   assert.equal(firstEducatorResult.account.role, 'educator');
   assert.ok(firstEducatorResult.account.registeredSessionId);
   assert.equal(sessions.get(firstEducatorResult.account.registeredSessionId).title, 'Life Sciences Class 12');
@@ -989,6 +1010,445 @@ test('Owner creates a one-year Director school with phone initial password; Dire
     body: { username: 'nostafa.director', password: 'NewPrivatePassword#2026' },
   });
   assert.equal(restoredLogin.status, 200);
+});
+
+test('Public Director registration saves chosen password and signs in by email after Owner approval', async () => {
+  const { env, accounts, schools } = fakeEnvironment();
+  const registration = await send(env, '/api/director/register', {
+    method: 'POST',
+    body: {
+      fullName: 'New School Director',
+      schoolName: 'New School',
+      email: 'director@newschool.example',
+      phone: '+961 70 123 456',
+      password: 'x',
+    },
+  });
+  assert.equal(registration.status, 201, await registration.clone().text());
+  const created = await registration.json();
+  assert.equal(created.director.activated, false);
+  assert.equal(created.director.paid, false);
+  const account = accounts.get(created.director.id);
+  const school = schools.get(account.school_id);
+  assert.equal(account.role, 'director');
+  assert.equal(account.activated, 0);
+  assert.equal(account.paid, 0);
+  assert.equal(school.license_active, 0);
+  assert.ok(account.password_hash.startsWith('pbkdf2_sha256
+  const { env } = fakeEnvironment();
+  const response = await send(env, '/api/owner/directors', {
+    method: 'POST',
+    body: {
+      username: 'blocked.director',
+      password: 'TemporaryDirectorPassword#2026',
+      fullName: 'Blocked Director',
+      email: 'blocked@example.com',
+      schoolName: 'Blocked School',
+      paymentReceived: true,
+    },
+  });
+  assert.equal(response.status, 401);
+});
+
+test('Director login reads persisted role tables and saves status updates', async () => {
+  const { env } = fakeEnvironment();
+  const registration = {
+    username: 'educator.one',
+    password: 'A-long-password-2026',
+    role: 'educator',
+    fullName: 'Educator One',
+    email: 'educator@example.com',
+    phone: '',
+    schoolOrSubject: 'Mathematics',
+    gradeId: 'eb8',
+    className: 'Mathematics Class EB8',
+  };
+  await send(env, '/api/auth/register', { method: 'POST', body: registration });
+
+  const login = await send(env, '/api/auth/login', {
+    method: 'POST',
+    body: { username: 'director', password: 'DirectorPassword#2026' },
+  });
+  assert.equal(login.status, 200);
+  const { token } = await login.json();
+  const dashboard = await send(env, '/api/director/accounts', { token });
+  const lists = await dashboard.json();
+  assert.equal(lists.students.length, 0);
+  assert.equal(lists.educators.length, 2);
+  const educatorAccount = lists.educators.find((item) => item.username === 'educator.one');
+  assert.ok(educatorAccount);
+
+  const updated = await send(env, `/api/director/accounts/${educatorAccount.id}`, {
+    method: 'PATCH',
+    token,
+    body: { activated: false, paid: true, registeredSessionId: 'test-registration-session' },
+  });
+  assert.equal(updated.status, 200);
+  const { account } = await updated.json();
+  assert.equal(account.activated, false);
+  assert.equal(account.paid, true);
+  assert.notEqual(account.registeredSessionId, 'test-registration-session');
+
+  const renewed = await send(env, `/api/director/accounts/${account.id}`, {
+    method: 'PATCH',
+    token,
+    body: { activated: true, renew: true, password: 'new pass !' },
+  });
+  assert.equal(renewed.status, 200);
+  assert.equal((await renewed.json()).account.expiresAt, '2026-12-03 10:00:00');
+  const relogin = await send(env, '/api/auth/login', {
+    method: 'POST',
+    body: { username: 'educator.one', password: 'new pass !' },
+  });
+  assert.equal(relogin.status, 200);
+
+  const denied = await send(env, '/api/director/accounts');
+  assert.equal(denied.status, 401);
+});
+
+test('Platform Owner can manage only the school owned by their Director account', async () => {
+  const { env, platformOwners } = fakeEnvironment();
+  platformOwners.add('director-account-0000000000000000');
+
+  const login = await send(env, '/api/auth/login', {
+    method: 'POST',
+    body: { username: 'director', password: 'DirectorPassword#2026' },
+  });
+  assert.equal(login.status, 200);
+  const { account, token } = await login.json();
+  assert.equal(account.role, 'owner');
+
+  const profile = await send(env, '/api/director/profile', { token });
+  assert.equal(profile.status, 200);
+  assert.deepEqual(await profile.json(), {
+    profile: {
+      schoolId: 'default-agenda-school',
+      schoolName: 'Agenda',
+      username: 'director',
+    },
+  });
+
+  const dashboard = await send(env, '/api/director/accounts', { token });
+  assert.equal(dashboard.status, 200);
+
+  // Owner identity remains Owner for platform-level routes.
+  const ownerDashboard = await send(env, '/api/owner/directors', { token });
+  assert.equal(ownerDashboard.status, 200);
+});
+
+test('A platform Owner without a Director-owned school cannot use Director endpoints', async () => {
+  const { env, accounts, platformOwners } = fakeEnvironment();
+  const educator = accounts.get('00000000-0000-4000-8000-000000000001');
+  educator.password_hash = hashPassword('PlatformOwnerPassword#2026');
+  platformOwners.add(educator.id);
+
+  const login = await send(env, '/api/auth/login', {
+    method: 'POST',
+    body: { username: 'assigned.educator', password: 'PlatformOwnerPassword#2026' },
+  });
+  assert.equal(login.status, 200);
+  const { account, token } = await login.json();
+  assert.equal(account.role, 'owner');
+
+  const profile = await send(env, '/api/director/profile', { token });
+  assert.equal(profile.status, 401);
+});
+
+test('Director can save a live session and the grade catalog returns its playback URL', async () => {
+  const { env, accounts, sessions: sessionMap } = fakeEnvironment();
+  const login = await send(env, '/api/auth/login', {
+    method: 'POST',
+    body: { username: 'director', password: 'DirectorPassword#2026' },
+  });
+  const { token: directorToken } = await login.json();
+  const saved = await send(env, '/api/director/sessions', {
+    method: 'POST',
+    token: directorToken,
+    body: {
+      sessions: [{
+        id: 'live-eb8-math',
+        gradeId: 'eb8',
+        subject: 'Mathematics',
+        title: 'Live algebra lesson',
+        sourceName: 'Agenda Classroom',
+        sourceUrl: 'https://example.org/live',
+        playbackUrl: 'https://example.org/live/video',
+        isLive: true,
+        liveStartsAt: '2026-11-03T10:00:00Z',
+      }],
+    },
+  });
+  assert.equal(saved.status, 201);
+
+  env.DB; // The fake environment shares the mutable account map used by the Worker.
+  const liveEducator = {
+    id: 'live-session-educator',
+    username: 'live.educator',
+    password_hash: 'unused',
+    role: 'educator',
+    school_id: 'default-agenda-school',
+    full_name: 'Live Educator',
+    email: 'live.educator@example.com',
+    phone: '',
+    school_or_subject: 'Mathematics',
+    grade_id: 'eb8',
+    registered_session_id: 'live-eb8-math',
+    created_at: '2026-11-03 09:03:00',
+    expires_at: null,
+    activated: 1,
+    paid: 1,
+  };
+  accounts.set(liveEducator.id, liveEducator);
+  const registration = await send(env, '/api/auth/register', {
+    method: 'POST',
+    body: {
+      username: 'live.student',
+      password: 'live session password',
+      role: 'student',
+      fullName: 'Live Student',
+      email: 'live@example.com',
+      phone: '',
+      schoolOrSubject: 'Grade 8',
+      registeredSessionId: 'live-eb8-math',
+    },
+  });
+  assert.equal(registration.status, 201);
+  const { account, token } = await registration.json();
+  const blockedBeforeActivation = await send(env, '/api/sessions?gradeId=eb8&live=true&sessionId=live-eb8-math', { token });
+  assert.equal(blockedBeforeActivation.status, 403);
+
+  await send(env, `/api/director/accounts/${account.id}`, {
+    method: 'PATCH',
+    token: directorToken,
+    body: { activated: true, paid: true },
+  });
+  const anonymous = await send(env, '/api/sessions?gradeId=eb8&live=true&sessionId=live-eb8-math');
+  assert.equal(anonymous.status, 401);
+  sessionMap.get('test-registration-session').is_live = 1;
+  const wrongSession = await send(env, '/api/sessions?gradeId=eb8&live=true&sessionId=test-registration-session', { token });
+  assert.equal(wrongSession.status, 403);
+
+  const response = await send(env, '/api/sessions?gradeId=eb8&live=true&sessionId=live-eb8-math', { token });
+  const { sessions } = await response.json();
+  assert.equal(sessions.length, 1);
+  assert.equal(sessions[0].isLive, true);
+  assert.equal(sessions[0].playbackUrl, 'https://example.org/live/video');
+  const liveStatus = await send(env, '/api/live-stream?sessionId=live-eb8-math', { token });
+  const liveCredentials = await liveStatus.json();
+  assert.equal(liveStatus.status, 200);
+  assert.equal(liveCredentials.status, 'waiting');
+    assert.equal(liveCredentials.callId, 'live-eb8-math');
+  assert.equal(liveCredentials.apiKey, 'test-stream-video-key');
+
+  const videoTokenPayload = JSON.parse(
+    Buffer.from(
+      liveCredentials.token.split('.')[1],
+      'base64url'
+    ).toString()
+  );
+
+  assert.deepEqual(
+  videoTokenPayload.call_cids,
+  ['default:live-eb8-math']
+);
+  assert.equal('STREAM_VIDEO_API_SECRET' in liveCredentials, false);
+  const [header, payload, signature] = liveCredentials.token.split('.');
+  assert.equal(
+    signature,
+    createHmac('sha256', 'test-stream-video-secret-with-sufficient-length')
+      .update(`${header}.${payload}`)
+      .digest('base64url'),
+  );
+});
+
+test('Director can list and delete stored sessions', async () => {
+  const { env } = fakeEnvironment();
+  const login = await send(env, '/api/auth/login', {
+    method: 'POST',
+    body: { username: 'director', password: 'DirectorPassword#2026' },
+  });
+  const { token } = await login.json();
+  const saved = await send(env, '/api/director/sessions', {
+    method: 'POST',
+    token,
+    body: {
+      sessions: [{
+        id: 'resource-eb8-science',
+        gradeId: 'eb8',
+        subject: 'Science',
+        title: 'Ecosystems',
+        sourceName: 'Khan Academy',
+        sourceUrl: 'https://www.khanacademy.org/science',
+      }],
+    },
+  });
+  assert.equal(saved.status, 201);
+  const listed = await send(env, '/api/director/sessions', { token });
+  assert.ok((await listed.json()).sessions.some((session) => session.id === 'resource-eb8-science'));
+  const deleted = await send(env, '/api/director/sessions/resource-eb8-science', { method: 'DELETE', token });
+  assert.equal(deleted.status, 200);
+  assert.deepEqual(await deleted.json(), { deleted: true });
+  const afterDelete = await send(env, '/api/director/sessions', { token });
+  assert.equal((await afterDelete.json()).sessions.some((session) => session.id === 'resource-eb8-science'), false);
+});
+
+test('Director can obtain a call-scoped host token for the shared livestream', async () => {
+  const { env } = fakeEnvironment();
+  const login = await send(env, '/api/auth/login', {
+    method: 'POST',
+    body: { username: 'director', password: 'DirectorPassword#2026' },
+  });
+  const { token } = await login.json();
+  const setup = await send(env, '/api/director/live-stream', { method: 'POST', token });
+  assert.equal(setup.status, 200);
+  const credentials = await setup.json();
+  assert.equal(credentials.callId, 'agenda-shared-classroom');
+  assert.equal(credentials.userId, 'director-account-0000000000000000');
+  const videoTokenPayload = JSON.parse(Buffer.from(credentials.token.split('.')[1], 'base64url').toString());
+  assert.equal(videoTokenPayload.role, 'admin');
+  assert.deepEqual(videoTokenPayload.call_cids, ['livestream:agenda-shared-classroom']);
+  assert.equal('STREAM_VIDEO_API_SECRET' in credentials, false);
+});
+
+test('live-video setup reports missing provider credentials explicitly', async () => {
+  const { env } = fakeEnvironment();
+  delete env.STREAM_VIDEO_API_KEY;
+  delete env.STREAM_VIDEO_API_SECRET;
+  const login = await send(env, '/api/auth/login', {
+    method: 'POST',
+    body: { username: 'director', password: 'DirectorPassword#2026' },
+  });
+  const { token } = await login.json();
+  const response = await send(env, '/api/director/live-stream', { method: 'POST', token });
+  assert.equal(response.status, 503);
+  assert.match((await response.json()).error, /Stream Video credentials/i);
+});
+
+test('live stream endpoint rejects users without an assigned activated session', async () => {
+  const { env } = fakeEnvironment();
+  const response = await send(env, '/api/live-stream?sessionId=test-registration-session');
+  assert.equal(response.status, 401);
+});
+
+test('Director accounts, sessions, and monthly grade prices are isolated by owned school', async () => {
+  const { env, accounts, schools, sessions, pricing } = fakeEnvironment();
+  const secondPassword = 'DirectorTwoPassword#2026';
+  schools.set('school-two', { id: 'school-two', name: 'Second School', director_id: 'director-account-two' });
+  accounts.set('director-account-two', {
+    id: 'director-account-two',
+    username: 'director.two',
+    password_hash: hashPassword(secondPassword),
+    role: 'director',
+    school_id: 'school-two',
+    full_name: 'Second Director',
+    email: '',
+    phone: '',
+    school_or_subject: '',
+    grade_id: '',
+    registered_session_id: null,
+    created_at: '2026-11-03 09:01:00',
+    expires_at: null,
+    activated: 1,
+    paid: 1,
+  });
+  accounts.set('educator-two', {
+    id: 'educator-two',
+    username: 'educator.two',
+    password_hash: hashPassword('EducatorTwoPassword#2026'),
+    role: 'educator',
+    school_id: 'school-two',
+    full_name: 'Educator Two',
+    email: 'educator.two@example.com',
+    phone: '',
+    school_or_subject: 'Science',
+    grade_id: 'eb8',
+    registered_session_id: 'other-school-session',
+    created_at: '2026-11-03 09:02:00',
+    expires_at: '2026-12-03 10:00:00',
+    activated: 1,
+    paid: 1,
+  });
+  sessions.set('other-school-session', {
+    id: 'other-school-session',
+    school_id: 'school-two',
+    grade_id: 'eb8',
+    subject: 'Science',
+    title: 'Other school class',
+    teacher_name: 'Educator Two',
+    source_name: 'Agenda',
+    source_url: 'https://example.org/other',
+    playback_url: 'https://example.org/other/video',
+    media_key: null,
+    is_live: 0,
+    live_starts_at: null,
+  });
+
+  const firstLogin = await send(env, '/api/auth/login', {
+    method: 'POST',
+    body: { username: 'director', password: 'DirectorPassword#2026' },
+  });
+  const { token: firstToken } = await firstLogin.json();
+  const firstAccounts = await send(env, '/api/director/accounts', { token: firstToken });
+  const firstAccountData = await firstAccounts.json();
+  assert.equal(firstAccounts.status, 200);
+  assert.equal(firstAccountData.educators.some((account) => account.id === 'educator-two'), false);
+
+  const firstSessions = await send(env, '/api/director/sessions', { token: firstToken });
+  const firstSessionData = await firstSessions.json();
+  assert.equal(firstSessionData.sessions.some((session) => session.id === 'other-school-session'), false);
+
+  const savedPrice = await send(env, '/api/director/pricing', {
+    method: 'PUT',
+    token: firstToken,
+    body: { gradeId: 'eb8', monthlyRateUsd: 500 },
+  });
+  assert.equal(savedPrice.status, 200);
+  assert.equal((await savedPrice.json()).price.monthlyRateUsd, 500);
+
+  const firstPricing = await send(env, '/api/director/pricing', { token: firstToken });
+  assert.equal((await firstPricing.json()).prices[0].monthlyRateUsd, 500);
+
+  const secondLogin = await send(env, '/api/auth/login', {
+    method: 'POST',
+    body: { username: 'director.two', password: secondPassword },
+  });
+  const { token: secondToken } = await secondLogin.json();
+  const secondPricing = await send(env, '/api/director/pricing', { token: secondToken });
+  assert.deepEqual((await secondPricing.json()).prices, []);
+
+  const context = await send(env, '/api/school-context?schoolId=default-agenda-school');
+  const contextData = await context.json();
+  assert.equal(contextData.schoolName, 'Agenda');
+  assert.equal(contextData.prices.find((price) => price.gradeId === 'eb8').monthlyRateUsd, 500);
+  assert.equal(pricing.get('default-agenda-school:eb8').monthly_rate_usd, 500);
+});
+));
+
+  const pendingLogin = await send(env, '/api/auth/login', {
+    method: 'POST',
+    body: { username: 'director@newschool.example', password: 'x' },
+  });
+  assert.equal(pendingLogin.status, 403);
+  assert.match((await pendingLogin.json()).error, /Director account is inactive/i);
+
+  const ownerLogin = await send(env, '/api/auth/login', {
+    method: 'POST',
+    body: { username: 'director', password: 'DirectorPassword#2026' },
+  });
+  assert.equal(ownerLogin.status, 200);
+  const { token: ownerToken } = await ownerLogin.json();
+  const approval = await send(env, '/api/owner/directors/status', {
+    method: 'PATCH',
+    token: ownerToken,
+    body: { updates: [{ id: account.id, activated: true, paid: true }] },
+  });
+  assert.equal(approval.status, 200, await approval.clone().text());
+  const approvedLogin = await send(env, '/api/auth/login', {
+    method: 'POST',
+    body: { username: 'director@newschool.example', password: 'x' },
+  });
+  assert.equal(approvedLogin.status, 200);
+  assert.equal((await approvedLogin.json()).account.role, 'director');
 });
 
 test('Only the platform Owner can create Director schools', async () => {
