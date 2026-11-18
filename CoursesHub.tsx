@@ -277,20 +277,9 @@ export const CoursesHub: React.FC<CoursesHubProps> = ({
       setDirectorForm({ username: '', password: '' });
     } catch (error) {
       const detail = error instanceof Error ? error.message : 'Unable to sign in.';
-      const credentialHint = detail.includes('Invalid username or password.')
-        ? currentLang === 'ar'
-          ? 'إذا كنت قد اخترت كلمة مرور جديدة بالفعل، فاستخدمها بدلاً من رقم الهاتف.'
-          : currentLang === 'fr'
-            ? 'Si vous avez déjà choisi un nouveau mot de passe, utilisez-le à la place du numéro de téléphone.'
-            : currentLang === 'es'
-              ? 'Si ya elegiste una contraseña nueva, úsala en lugar del número de teléfono.'
-              : currentLang === 'it'
-                ? 'Se hai già scelto una nuova password, usa quella al posto del numero di telefono.'
-                : 'If you already set a new password, use it instead of the phone number.'
-        : '';
-      const explainedDetail = credentialHint ? `${detail} ${credentialHint}` : detail;
       const prefix = currentLang === 'ar' ? 'تعذر تسجيل دخول المدير' : currentLang === 'fr' ? 'Connexion du Directeur impossible' : currentLang === 'es' ? 'No se pudo iniciar sesión como Director' : currentLang === 'it' ? 'Accesso Direttore non riuscito' : 'Director sign-in failed';
-      setDirectorError(currentLang === 'en' ? explainedDetail : `${prefix}: ${explainedDetail}`);
+      setDirectorError(currentLang === 'en' ? detail : `${prefix}: ${detail}`);
+
     }
   };
 
@@ -826,7 +815,7 @@ const updateAccount = async (
         >
           <div>
             <label className="block text-[11px] font-bold text-slate-700 mb-1">
-              {t.usernameLabel}
+              {currentLang === 'ar' ? 'البريد الإلكتروني أو اسم المستخدم' : currentLang === 'fr' ? 'Adresse e-mail ou nom d’utilisateur' : currentLang === 'es' ? 'Correo electrónico o nombre de usuario' : currentLang === 'it' ? 'E-mail o nome utente' : 'Email address or username'}
             </label>
             <div className="relative">
               <User className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
