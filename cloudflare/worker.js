@@ -407,9 +407,6 @@ async function handleRegister(request, env) {
     // The selected grade/custom label is saved for the Director's roster display.
     // Keep grade_id aligned with the selected educator's exact session so live
     // classroom authorization continues to match the real educator session.
-    if (requestedGradeId && !REGISTRATION_GRADE_ID_SET.has(requestedGradeId)) {
-      return json({ error: "Choose a standard grade or enter your own class name in the grade field." }, 400);
-    }
     // Student's educator selection is persisted directly. A classroom may be
     // assigned later by the Director, so an educator without a session remains selectable.
     if (!registeredEducatorId && registeredSessionId) {
