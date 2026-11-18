@@ -30,7 +30,7 @@ function dateLabel(value: string | null, lang: Language): string {
   return Number.isNaN(date.getTime()) ? value : new Intl.DateTimeFormat(lang, { dateStyle:'medium' }).format(date);
 }
 
-export const OwnerDashboard: React.FC<{ currentLang:Language; token:string; onSignOut:()=>void; onManageMySchool:()=>void }> = ({ currentLang, token, onSignOut, onManageMySchool }) => {
+export const OwnerDashboard: React.FC<{ currentLang:Language; token:string; onSignOut:()=>void; onManageMySchool:()=>void; onDirectorSignIn:()=>void }> = ({ currentLang, token, onSignOut, onManageMySchool, onDirectorSignIn }) => {
   const t: Labels = labels[currentLang] || labels.en;
   const [rows,setRows] = useState<OwnerDirector[]>([]);
   const [pendingStatuses,setPendingStatuses] = useState<Record<string,{activated:boolean;paid:boolean}>>({});
@@ -126,7 +126,7 @@ export const OwnerDashboard: React.FC<{ currentLang:Language; token:string; onSi
   return <div className="space-y-5" dir={currentLang === 'ar' ? 'rtl' : 'ltr'}>
     <div className="rounded-3xl bg-slate-950 text-white p-6 flex flex-wrap justify-between items-center gap-4">
       <div className="flex items-center gap-3"><ShieldCheck className="w-9 h-9 text-amber-300"/><div><h1 className="text-2xl font-black">{t.title}</h1><p className="text-sm text-slate-300">{t.subtitle}</p></div></div>
-      <div className="flex items-center gap-2"><button onClick={onManageMySchool} className="rounded-xl bg-indigo-600 hover:bg-indigo-500 px-4 py-2 text-sm font-bold">{currentLang==='ar'?'إدارة مدرستي':'Manage My School'}</button><button onClick={onSignOut} className="rounded-xl bg-white/10 px-4 py-2 text-sm">{currentLang==='ar'?'تسجيل الخروج':'Sign out'}</button></div>
+      <div className="flex items-center gap-2"><button onClick={onDirectorSignIn} className="rounded-xl bg-emerald-600 hover:bg-emerald-500 px-4 py-2 text-sm font-bold">{currentLang==='ar'?'دخول المدير':currentLang==='fr'?'Connexion Directeur':currentLang==='es'?'Acceso Director':currentLang==='it'?'Accesso Direttore':'Director sign in'}</button><button onClick={onManageMySchool} className="rounded-xl bg-indigo-600 hover:bg-indigo-500 px-4 py-2 text-sm font-bold">{currentLang==='ar'?'إدارة مدرستي':'Manage My School'}</button><button onClick={onSignOut} className="rounded-xl bg-white/10 px-4 py-2 text-sm">{currentLang==='ar'?'تسجيل الخروج':'Sign out'}</button></div>
     </div>
     <div className="grid sm:grid-cols-3 gap-3">
       <div className="rounded-2xl border bg-white p-4"><Building2/><b className="block text-2xl">{rows.length}</b>{t.directors}</div>
