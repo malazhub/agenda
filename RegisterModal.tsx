@@ -199,6 +199,7 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
           schoolName: directorSchoolName.trim(),
           email: email.trim(),
           phone: phone.trim(),
+          password,
         });
         setDirectorRequestSaved(
           currentLang === 'ar' ? 'تم إرسال طلب تسجيل المدرسة بنجاح. سيظهر في مركز تحكم المالك، وسيبقى الحساب غير مفعّل وغير مدفوع حتى يوافق المالك.' :
@@ -230,10 +231,6 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
       return;
     }
 
-    if (!isLogin && role === 'educator' && !registeredGradeId) {
-      setError(t.registrationChooseGrade);
-      return;
-    }
     if (!isLogin && role === 'educator' && newClassName.trim().length < 2) {
       setError(currentLang === 'ar' ? 'يرجى إدخال اسم الصف الذي ستدرّسه.' : currentLang === 'fr' ? 'Veuillez saisir le nom de la classe que vous enseignerez.' : currentLang === 'es' ? 'Introduce el nombre de la clase que impartirás.' : currentLang === 'it' ? 'Inserisci il nome della classe che insegnerai.' : 'Please enter the name of the class you will teach.');
       return;
@@ -256,7 +253,7 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
             schoolOrSubject,
 
             // Students inherit their selected educator's grade and current classroom.
-            gradeId: role === 'student' ? selectedEducator!.gradeId : registeredGradeId,
+            gradeId: role === 'student' ? selectedEducator!.gradeId : (registeredGradeId || undefined),
             registeredEducatorId: role === 'student' ? selectedEducatorId : undefined,
             registeredSessionId: role === 'student' ? selectedEducator!.registeredSessionId || undefined : undefined,
             // Every educator creates a dedicated class that the API assigns to the account.
@@ -432,13 +429,10 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
             <input
               type="text"
               required
-              minLength={3}
-              maxLength={32}
-              pattern="[a-zA-Z0-9._-]+"
-              autoComplete="username"
+              autoComplete={isLogin ? 'username' : 'username'}
               value={username}
               onChange={(e) => setUsername(e.target.value)}
-              placeholder={t.usernamePlaceholder}
+              placeholder={isLogin ? (currentLang === 'ar' ? 'اسم المستخدم أو البريد الإلكتروني' : currentLang === 'fr' ? 'Nom d’utilisateur ou e-mail' : currentLang === 'es' ? 'Usuario o correo electrónico' : currentLang === 'it' ? 'Nome utente o e-mail' : 'Username or email') : t.usernamePlaceholder}
               className="w-full text-xs p-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:outline-emerald-600 font-medium"
             />
           </div>
@@ -446,11 +440,10 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
 
           {!isLogin && role !== 'director' && <div>
             <label className="block text-xs font-bold text-slate-700 mb-1" htmlFor="registration-grade">
-              {t.registeredGradeLabel}
+              {currentLang === 'ar' ? 'الصف (اختياري عند إدخال اسم صف جديد)' : currentLang === 'fr' ? 'Niveau (facultatif si vous saisissez une nouvelle classe)' : currentLang === 'es' ? 'Curso (opcional si introduce una clase nueva)' : currentLang === 'it' ? 'Classe (facoltativa se inserisci una nuova classe)' : 'Grade (optional when entering a new class name)'}
             </label>
             <select
               id="registration-grade"
-              required
               value={registeredGradeId}
               onChange={(event) => setRegisteredGradeId(event.target.value)}
               className="w-full text-xs p-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:outline-emerald-600 font-medium"
@@ -546,41 +539,36 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
             </div>
           </div>}
 
-          {role !== 'director' && (
-            <>
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">{t.passwordLabel}</label>
-                <div className="relative">
-                  <input
-                    type={showPassword ? 'text' : 'password'}
-                    required
-                    maxLength={1024}
-                    autoComplete={isLogin ? 'current-password' : 'off'}
-                    value={password}
-                    onChange={(event) => setPassword(event.target.value)}
-                    placeholder={t.passwordPlaceholder}
-                    className="w-full text-xs p-2.5 pr-8 bg-slate-50 border border-slate-200 rounded-lg focus:outline-emerald-600 font-medium"
-                  />
-                  <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 transition cursor-pointer" title={showPassword ? 'Hide password' : 'Show password'}>
-                    {showPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                  </button>
-                </div>
-              </div>
-              {!isLogin && (
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">
-                    {role === 'student' ? t.schoolOrGradeLabel : t.educatorSubjectLabel}
-                  </label>
-                  <input
-                    type="text"
-                    value={schoolOrSubject}
-                    onChange={(event) => setSchoolOrSubject(event.target.value)}
-                    placeholder={role === 'student' ? t.schoolPlaceholder : t.educatorSubjectPlaceholder}
-                    className="w-full text-xs p-2.5 bg-slate-50 border border-slate-200 rounded-lg font-medium"
-                  />
-                </div>
-              )}
-            </>
+          <div>
+            <label className="block text-xs font-bold text-slate-700 mb-1">{t.passwordLabel}</label>
+            <div className="relative">
+              <input
+                type={showPassword ? 'text' : 'password'}
+                required
+                autoComplete={isLogin ? 'current-password' : 'off'}
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                placeholder={t.passwordPlaceholder}
+                className="w-full text-xs p-2.5 pr-8 bg-slate-50 border border-slate-200 rounded-lg focus:outline-emerald-600 font-medium"
+              />
+              <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 transition cursor-pointer" title={showPassword ? 'Hide password' : 'Show password'}>
+                {showPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+              </button>
+            </div>
+          </div>
+          {!isLogin && role !== 'director' && (
+            <div>
+              <label className="block text-xs font-bold text-slate-700 mb-1">
+                {role === 'student' ? t.schoolOrGradeLabel : t.educatorSubjectLabel}
+              </label>
+              <input
+                type="text"
+                value={schoolOrSubject}
+                onChange={(event) => setSchoolOrSubject(event.target.value)}
+                placeholder={role === 'student' ? t.schoolPlaceholder : t.educatorSubjectPlaceholder}
+                className="w-full text-xs p-2.5 bg-slate-50 border border-slate-200 rounded-lg font-medium"
+              />
+            </div>
           )}
           {directorRequestSaved && (
             <div role="status" className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-800">
