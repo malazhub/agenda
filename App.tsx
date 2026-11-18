@@ -26,7 +26,6 @@ import { DirectorSetupPage } from './components/DirectorSetupPage';
 import { 
   CheckCircle2, 
   Heart,
-  ShieldCheck
 } from 'lucide-react';
 
 export default function App() {
@@ -57,7 +56,6 @@ export default function App() {
 
   // Register Modal State
   const [isRegisterOpen, setIsRegisterOpen] = useState(false);
-  const [directorLoginRequest, setDirectorLoginRequest] = useState(0);
   const [registeredAccount, setRegisteredAccount] = useState<CloudflareAccount | null>(null);
   const [sessionToken, setSessionToken] = useState('');
   const [ownerAccount, setOwnerAccount] = useState<CloudflareAccount | null>(null);
@@ -348,7 +346,6 @@ const registerSignOutCleanup = useCallback(
           ownerSchoolMode ? (
             <CoursesHub
               currentLang={currentLang}
-              directorLoginRequest={0}
               registeredAccount={null}
               schoolId={ownerAccount.schoolId || activeSchoolId}
               sessionToken=""
@@ -405,7 +402,6 @@ const registerSignOutCleanup = useCallback(
         ) : (
                     <CoursesHub
             currentLang={currentLang}
-            directorLoginRequest={directorLoginRequest}
             registeredAccount={registeredAccount}
             onOwnerLogin={(account, token) => { sessionStorage.setItem('agenda-owner-token', token); sessionStorage.removeItem('agenda-session-token'); setSessionToken(''); setOwnerAccount(account); setOwnerToken(token); setRegisteredAccount(null); }}
             schoolId={registeredAccount?.schoolId || activeSchoolId}
@@ -504,24 +500,7 @@ const registerSignOutCleanup = useCallback(
                 </p>
               </div>
             </div>
-            <button
-                type="button"
-                onClick={() => {
-                  setIsClassroomActive(false);
-                  setDirectorLoginRequest((request) => request + 1);
-                }}
-                className="flex items-center gap-3 rounded-2xl border border-white/15 bg-white/5 px-4 py-3 text-start transition hover:bg-white/10"
-              >
-                <ShieldCheck className="h-5 w-5 shrink-0 text-amber-300" />
-                <span>
-                  <span className="block text-sm font-black text-white">
-                    {currentLang === 'ar' ? 'المدير' : currentLang === 'fr' ? 'Directeur' : currentLang === 'es' ? 'Director' : currentLang === 'it' ? 'Direttore' : 'Director'}
-                  </span>
-                  <span className="block text-[10px] font-semibold text-slate-300">
-                    {currentLang === 'ar' ? 'تسجيل الدخول وإدارة المحتوى' : currentLang === 'fr' ? 'Connexion et gestion du contenu' : currentLang === 'es' ? 'Iniciar sesión y gestionar el contenido' : currentLang === 'it' ? 'Accedi e gestisci i contenuti' : 'Sign in and manage content'}
-                  </span>
-                </span>
-              </button>
+
           </div>
 
                     <div className="flex flex-wrap items-center justify-between gap-4 text-xs text-slate-400">
