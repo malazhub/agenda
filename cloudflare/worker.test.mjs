@@ -508,7 +508,8 @@ function fakeEnvironment() {
     env: {
       DB,
       SESSION_SIGNING_KEY: signingKey,
-      ALLOWED_ORIGINS: 'https://malazhub.github.io',
+      ALLOWED_ORIGINS: 'https://malazhub.github.io,https://agenda.mycamp.workers.dev',
+      APP_BASE_URL: 'https://agenda.mycamp.workers.dev',
       STREAM_VIDEO_API_KEY: 'test-stream-video-key',
       STREAM_VIDEO_API_SECRET: 'test-stream-video-secret-with-sufficient-length',
       AI: { run: async () => ({ response: 'Workers AI test response' }) },
@@ -610,12 +611,14 @@ test('health and CORS preflight are served', async () => {
   assert.equal(health.status, 200);
   assert.deepEqual(await health.json(), { status: 'ok' });
 
-  const options = await worker.fetch(new Request('https://agenda-api.test/api/auth/register', {
-    method: 'OPTIONS',
-    headers: { Origin: 'https://malazhub.github.io' },
-  }), env);
-  assert.equal(options.status, 204);
-  assert.equal(options.headers.get('access-control-allow-origin'), 'https://malazhub.github.io');
+  for (const origin of ['https://malazhub.github.io', 'https://agenda.mycamp.workers.dev']) {
+    const options = await worker.fetch(new Request('https://agenda-api.test/api/auth/register', {
+      method: 'OPTIONS',
+      headers: { Origin: origin },
+    }), env);
+    assert.equal(options.status, 204);
+    assert.equal(options.headers.get('access-control-allow-origin'), origin);
+  }
 });
 
 test('registration hashes credentials and rejects duplicate usernames', async () => {
@@ -925,6 +928,12 @@ test('Owner creates a one-year Director school with phone initial password; Dire
   assert.equal(director.paid, true);
   assert.equal(director.setupPending, true);
   assert.match(setupLink, /directorSetup=/);
+  assert.equal(new URL(setupLink).origin, env.APP_BASE_URL);
+  assert.equal(new URL(setupLink).searchParams.get('schoolId'), director.schoolId);
+  assert.equal(
+    director.directorLink,
+    `https://agenda.mycamp.workers.dev/new-learning-school?schoolId=${encodeURIComponent(director.schoolId)}`
+  );
   assert.equal(director.username.startsWith('pending-'), true);
 
   const setupToken = new URL(setupLink).searchParams.get('directorSetup');
@@ -1110,7 +1119,7 @@ test('Public Director registration saves chosen password and signs in by email a
   assert.equal(created.schoolId, school.id);
   assert.equal(
     created.directorLink,
-    `https://agenda.malazhub-agenda.workers.dev/new-school?schoolId=${encodeURIComponent(school.id)}`
+    `https://agenda.mycamp.workers.dev/new-school?schoolId=${encodeURIComponent(school.id)}`
   );
   assert.equal(account.role, 'director');
   assert.equal(account.activated, 0);
@@ -1187,11 +1196,18 @@ test('Public Director registration saves chosen password and signs in by email a
   const agendaEntryResult = await agendaEntryLogin.json();
   assert.equal(
     agendaEntryResult.directorLink,
-    `https://agenda.malazhub-agenda.workers.dev/new-school?schoolId=${encodeURIComponent(created.schoolId)}`
+    `https://agenda.mycamp.workers.dev/new-school?schoolId=${encodeURIComponent(created.schoolId)}`
   );
   const approvedToken = approvedLoginResult.token;
   const directorSessionOnAgenda = await send(env, '/api/auth/me?schoolId=default-agenda-school', { token: approvedToken });
   assert.equal(directorSessionOnAgenda.status, 401);
+  const directorSessionOnSchool = await send(
+    env,
+    `/api/auth/me?schoolId=${encodeURIComponent(created.schoolId)}`,
+    { token: approvedToken },
+  );
+  assert.equal(directorSessionOnSchool.status, 200);
+  assert.equal((await directorSessionOnSchool.json()).account.schoolId, created.schoolId);
 
   const fullNameLogin = await send(env, '/api/auth/login', {
     method: 'POST',

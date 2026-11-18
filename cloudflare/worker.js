@@ -86,8 +86,19 @@ async function hashSetupToken(token) {
 function createSetupToken() {
   return base64UrlEncode(crypto.getRandomValues(new Uint8Array(32)));
 }
-function directorSetupLink(schoolId, token) {
-  const url = new URL("https://agenda.malazhub-agenda.workers.dev/");
+function appBaseOrigin(env) {
+  const fallback = "https://agenda.mycamp.workers.dev";
+  const configured = typeof env?.APP_BASE_URL === "string" ? env.APP_BASE_URL.trim() : "";
+  try {
+    const url = new URL(configured || fallback);
+    if (url.protocol !== "https:" || url.username || url.password) return fallback;
+    return url.origin;
+  } catch {
+    return fallback;
+  }
+}
+function directorSetupLink(env, schoolId, token) {
+  const url = new URL("/", appBaseOrigin(env));
   url.searchParams.set("schoolId", schoolId);
   url.searchParams.set("directorSetup", token);
   return url.toString();
@@ -103,11 +114,12 @@ function schoolUrlSlug(schoolName, schoolId) {
     .replace(/-+$/g, "");
   return slug || `school-${String(schoolId || "new").slice(0, 12)}`;
 }
-function directorSchoolLink(schoolId, schoolName) {
+function directorSchoolLink(env, schoolId, schoolName) {
   // Keep the school ID as the stable tenant key, and put the actual school
-  // name in the path so the URL is branded and readable.
+  // name in the path so the URL is branded and readable. The frontend origin
+  // must match the origin that stores the browser's sessionStorage token.
   const slug = schoolUrlSlug(schoolName, schoolId);
-  const url = new URL(`/${encodeURIComponent(slug)}`, "https://agenda.malazhub-agenda.workers.dev");
+  const url = new URL(`/${encodeURIComponent(slug)}`, appBaseOrigin(env));
   url.searchParams.set("schoolId", schoolId);
   return url.toString();
 }
@@ -836,7 +848,7 @@ async function handleLogin(request, env) {
     if (!school) {
       return json({ error: "Your Director account is not linked to a school. Contact the platform Owner." }, 403);
     }
-    result.directorLink = directorSchoolLink(school.id, school.name);
+    result.directorLink = directorSchoolLink(env, school.id, school.name);
   }
   return json(result);
 }
@@ -1012,7 +1024,7 @@ async function ownerDirectors(request, env) {
     phonePasswordEnabled: Boolean(row.phone) && row.phone_password_disabled_at == null,
     studentCount: Number(row.student_count || 0),
     educatorCount: Number(row.educator_count || 0),
-    directorLink: directorSchoolLink(row.school_id, row.school_name),
+    directorLink: directorSchoolLink(env, row.school_id, row.school_name),
   })) });
 }
 
@@ -1069,7 +1081,7 @@ async function registerPublicDirectorSchool(request, env) {
     loginEmail: email,
     schoolId,
     // Use the exact canonical school URL shown in the Owner Control Center.
-    directorLink: directorSchoolLink(schoolId, schoolName),
+    directorLink: directorSchoolLink(env, schoolId, schoolName),
     director: {
       id: accountId,
       fullName,
@@ -1128,8 +1140,8 @@ async function createOwnerDirector(request, env) {
   return json({
     director: { id: accountId, username, fullName, email, phone, schoolId, schoolName,
       licenseActive: true, paid: true, setupPending: true, expiresInYears: 1,
-      directorLink: directorSchoolLink(schoolId) },
-    setupLink: directorSetupLink(schoolId, setupToken),
+      directorLink: directorSchoolLink(env, schoolId, schoolName) },
+    setupLink: directorSetupLink(env, schoolId, setupToken),
   }, 201);
 }
 
@@ -1150,7 +1162,7 @@ async function issueOwnerDirectorSetupLink(request, env, directorId) {
     env.DB.prepare("UPDATE director_setup_tokens SET used_at = datetime('now') WHERE account_id = ? AND used_at IS NULL").bind(directorId),
     env.DB.prepare("INSERT INTO director_setup_tokens (token_hash, account_id, expires_at) VALUES (?, ?, datetime('now', '+7 days'))").bind(tokenHash, directorId),
   ]);
-  return json({ setupLink: directorSetupLink(director.school_id, token) });
+  return json({ setupLink: directorSetupLink(env, director.school_id, token) });
 }
 
 async function claimDirectorSetup(request, env) {

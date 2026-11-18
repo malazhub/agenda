@@ -29,5 +29,5 @@ jobs:
         run: npm run test:worker
       - name: Production build
         env:
-          VITE_CLOUDFLARE_API_URL: ${{ vars.CLOUDFLARE_API_URL }}
+          VITE_CLOUDFLARE_API_URL: https://agenda-api.mycamp.workers.dev
         run: npm run build -- --base=/agenda/
