@@ -67,6 +67,12 @@ export default function App() {
   const [directorAccessToken, setDirectorAccessToken] = useState('');
   const [schools, setSchools] = useState<SchoolRecord[]>([]);
   const [activeSchoolId, setActiveSchoolId] = useState(() => new URLSearchParams(window.location.search).get('schoolId') || 'default-agenda-school');
+  const schoolPathTitle = (() => {
+    if (!new URLSearchParams(window.location.search).has('schoolId')) return '';
+    const segment = window.location.pathname.split('/').filter(Boolean).pop() || '';
+    try { return decodeURIComponent(segment).replace(/[-_]+/g, ' ').trim(); }
+    catch { return segment.replace(/[-_]+/g, ' ').trim(); }
+  })();
   const activeSchoolName = schools.find((school) => school.id === activeSchoolId)?.name || '';
   const signOutCleanupRef = useRef<(() => Promise<void>) | null>(null);
 
@@ -94,8 +100,10 @@ const registerSignOutCleanup = useCallback(
   }, [currentLang, isRTL]);
 
   useEffect(() => {
-    document.title = activeSchoolName || 'Agenda';
-  }, [activeSchoolName]);
+    // Set a branded tab title immediately from the school URL, then replace
+    // it with the authoritative database school name when it loads.
+    document.title = activeSchoolName || schoolPathTitle || 'Agenda';
+  }, [activeSchoolName, schoolPathTitle]);
 
   useEffect(() => {
     let active = true;
