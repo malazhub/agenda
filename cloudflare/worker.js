@@ -92,8 +92,22 @@ function directorSetupLink(schoolId, token) {
   url.searchParams.set("directorSetup", token);
   return url.toString();
 }
-function directorSchoolLink(schoolId) {
-  const url = new URL("https://agenda.malazhub-agenda.workers.dev/");
+function schoolUrlSlug(schoolName, schoolId) {
+  const slug = String(schoolName || "")
+    .normalize("NFKC")
+    .toLocaleLowerCase()
+    .trim()
+    .replace(/[^\\p{L}\\p{N}]+/gu, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 80)
+    .replace(/-+$/g, "");
+  return slug || `school-${String(schoolId || "new").slice(0, 12)}`;
+}
+function directorSchoolLink(schoolId, schoolName) {
+  // Keep the school ID as the stable tenant key, and put the actual school
+  // name in the path so the URL is branded and readable.
+  const slug = schoolUrlSlug(schoolName, schoolId);
+  const url = new URL(`/${encodeURIComponent(slug)}`, "https://agenda.malazhub-agenda.workers.dev");
   url.searchParams.set("schoolId", schoolId);
   return url.toString();
 }
@@ -939,7 +953,7 @@ async function ownerDirectors(request, env) {
     phonePasswordEnabled: Boolean(row.phone) && row.phone_password_disabled_at == null,
     studentCount: Number(row.student_count || 0),
     educatorCount: Number(row.educator_count || 0),
-    directorLink: directorSchoolLink(row.school_id),
+    directorLink: directorSchoolLink(row.school_id, row.school_name),
   })) });
 }
 
@@ -996,7 +1010,7 @@ async function registerPublicDirectorSchool(request, env) {
     loginEmail: email,
     schoolId,
     // Use the exact canonical school URL shown in the Owner Control Center.
-    directorLink: directorSchoolLink(schoolId),
+    directorLink: directorSchoolLink(schoolId, schoolName),
     director: {
       id: accountId,
       fullName,
