@@ -395,7 +395,7 @@ const saveAllDirectorAccountUpdates = async () => {
   setDirectorMessage('');
   try {
     const result = await saveDirectorAccountUpdates(directorToken, updates);
-    const savedById = new Map(result.accounts.map((account) => [account.id, account]));
+    const savedById = new Map<string, CloudflareAccount>(result.accounts.map((account) => [account.id, account] as const));
     setStudentRows((rows) => rows.map((row) => savedById.get(row.id) || row));
     setEducatorRows((rows) => rows.map((row) => savedById.get(row.id) || row));
     setPendingDirectorUpdates({});
