@@ -18,7 +18,7 @@ import {
   getDirectorPayment,
   updateDirectorPayment,
 } from '../services/cloudflareApi';
-import type { CloudflareAccount, RegistrationSession, StoredSessionRecord, LiveStreamStatus, DirectorPaymentMethod } from '../services/cloudflareApi';
+import type { CloudflareAccount, RegistrationSession, StoredSessionRecord, LiveStreamStatus, DirectorPaymentMethod, DirectorAccountUpdate } from '../services/cloudflareApi';
 import {
   Clock,
   ShieldCheck,
