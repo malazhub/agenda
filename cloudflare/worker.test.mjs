@@ -959,7 +959,7 @@ test('Owner creates a one-year Director school with phone initial password; Dire
   assert.equal(accounts.get(director.id).activated, 0);
   assert.equal(accounts.get(director.id).paid, 0);
   const blockedLogin = await send(env, '/api/auth/login', {
-    method: 'POST', body: { username: 'new.director', password: '+961 70 123 456' },
+    method: 'POST', body: { username: 'new.director', password: '+961 70 123 456', schoolId: director.schoolId },
   });
   assert.equal(blockedLogin.status, 403);
   assert.match((await blockedLogin.json()).error, /Director account is inactive/i);
@@ -977,7 +977,7 @@ test('Owner creates a one-year Director school with phone initial password; Dire
   // flag still permits the phone credential until a personal password is saved.
   accounts.get(director.id).password_must_change = 0;
   const directorLogin = await send(env, '/api/auth/login', {
-    method: 'POST', body: { username: 'new.director', password: '+961 70 123 456' },
+    method: 'POST', body: { username: 'new.director', password: '+961 70 123 456', schoolId: director.schoolId },
   });
   assert.equal(directorLogin.status, 200);
   const directorLoginResult = await directorLogin.json();
@@ -1650,7 +1650,7 @@ test('Director accounts, sessions, and monthly grade prices are isolated by owne
 
   const secondLogin = await send(env, '/api/auth/login', {
     method: 'POST',
-    body: { username: 'director.two', password: secondPassword },
+    body: { username: 'director.two', password: secondPassword, schoolId: 'school-two' },
   });
   const { token: secondToken } = await secondLogin.json();
   const secondPricing = await send(env, '/api/director/pricing', { token: secondToken });
