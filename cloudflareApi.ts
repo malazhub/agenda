@@ -21,6 +21,7 @@ export interface CloudflareAccount {
 export interface AuthResponse {
   account: CloudflareAccount;
   token: string;
+  directorLink?: string;
 }
 
 export interface RegistrationInput {
