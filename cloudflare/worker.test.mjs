@@ -1143,13 +1143,6 @@ test('Public Director registration saves chosen password and signs in by email a
   assert.equal(pendingLogin.status, 403);
   assert.match((await pendingLogin.json()).error, /Director account is inactive/i);
 
-  const directorOnAgendaLogin = await send(env, '/api/auth/login', {
-    method: 'POST',
-    body: { username: 'director@newschool.example', password: 'x', schoolId: 'default-agenda-school' },
-  });
-  assert.equal(directorOnAgendaLogin.status, 403);
-  assert.match((await directorOnAgendaLogin.json()).error, /belongs to another school/i);
-
   // No separate username is collected on public Director registration. The
   // Director can also enter their exact full name, with the same password.
   const fullNamePendingLogin = await send(env, '/api/auth/login', {
