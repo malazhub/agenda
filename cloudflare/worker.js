@@ -375,7 +375,7 @@ async function handleRegister(request, env) {
   const role = body?.role;
   const schoolId = typeof body?.schoolId === "string" ? body.schoolId.trim() : "";
   const fullName = typeof body?.fullName === "string" ? body.fullName.trim() : "";
-  const email = typeof body?.email === "string" ? body.email.trim().toLowerCase() : "";
+  const email = typeof body?.email === "string" ? body.email.normalize("NFKC").trim().toLowerCase() : "";
   const phone = typeof body?.phone === "string" ? body.phone.trim() : "";
   const schoolOrSubject = typeof body?.schoolOrSubject === "string" ? body.schoolOrSubject.trim() : "";
   const requestedGradeId = typeof body?.gradeId === "string" ? body.gradeId.trim() : "";
@@ -699,7 +699,11 @@ async function liveEducators(request, env, schoolId) {
 
 async function handleLogin(request, env) {
   const body = await requestJson(request);
-  const username = typeof body?.username === "string" ? body.username.trim().toLowerCase() : "";
+  // Normalize login identifiers for Unicode and copy/paste variations.
+  // Passwords deliberately remain byte-for-byte as entered by the Director.
+  const username = typeof body?.username === "string"
+    ? body.username.normalize("NFKC").trim().toLowerCase()
+    : "";
   const password = typeof body?.password === "string" ? body.password : "";
   if (!username || password.length === 0) return json({ error: "Invalid username or password." }, 401);
 
@@ -717,9 +721,20 @@ async function handleLogin(request, env) {
   const directorByEmail = await env.DB.prepare(
     "SELECT * FROM accounts WHERE role = 'director' AND lower(trim(email)) = ? LIMIT 1"
   ).bind(username).first();
-  const account = directorByEmail || await env.DB.prepare(
+  let account = directorByEmail || await env.DB.prepare(
     "SELECT * FROM accounts WHERE username = ? COLLATE NOCASE"
   ).bind(username).first();
+
+  // Public Director registration has no separate username field. Accept the
+  // exact full name as a fallback identifier only when it identifies exactly
+  // one Director; the registered email remains the preferred identifier.
+  if (!account && !username.includes("@")) {
+    const nameMatches = await env.DB.prepare(
+      "SELECT * FROM accounts WHERE role = 'director' AND lower(trim(full_name)) = ? COLLATE NOCASE LIMIT 2"
+    ).bind(username).all();
+    const matches = nameMatches.results || [];
+    if (matches.length === 1) account = matches[0];
+  }
   const ownerRow = account ? await env.DB.prepare("SELECT account_id FROM platform_owners WHERE account_id = ?").bind(account.id).first() : null;
   const isOwner = Boolean(ownerRow);
   const phoneIsInitialPassword = Boolean(
