@@ -689,6 +689,8 @@ test('Owner creates a one-year Director school with phone initial password; Dire
   const setupToken = new URL(setupLink).searchParams.get('directorSetup');
   const setupRecord = [...setupTokens.values()].find((row) => row.account_id === director.id);
   assert.ok(setupRecord);
+  // Simulate a stale disable marker left by an interrupted/older setup attempt.
+  accounts.get(director.id).phone_password_disabled_at = '2026-11-01 10:00:00';
 
   const claimed = await send(env, '/api/director/claim', {
     method: 'POST',
@@ -699,6 +701,7 @@ test('Owner creates a one-year Director school with phone initial password; Dire
   assert.equal(account.role, 'director');
   assert.equal(account.username, 'new.director');
   assert.equal(account.schoolId, director.schoolId);
+  assert.equal(accounts.get(director.id).phone_password_disabled_at, null);
 
   const replay = await send(env, '/api/director/claim', {
     method: 'POST',
@@ -773,21 +776,31 @@ test('Owner creates a one-year Director school with phone initial password; Dire
   assert.equal((await profile.json()).profile.schoolName, 'New Learning School');
   const passwordChanged = await send(env, '/api/director/profile', {
     method: 'PATCH', token: directorToken,
-    body: { schoolName: 'New Learning School', username: 'new.director', password: 'x' },
+    body: { schoolName: 'New Learning School', username: 'nostafa.director', password: 'NewPrivatePassword#2026' },
   });
   assert.equal(passwordChanged.status, 200);
   assert.equal(accounts.get(director.id).password_must_change, 0);
-  const tokenClaims = JSON.parse(Buffer.from(directorToken.split('.')[0], 'base64url').toString());
-  assert.equal(tokenClaims.username, 'new.director');
+  assert.ok(accounts.get(director.id).phone_password_disabled_at);
+  const changedProfileResult = await passwordChanged.json();
+  assert.equal(changedProfileResult.profile.username, 'nostafa.director');
+  const changedTokenClaims = JSON.parse(Buffer.from(changedProfileResult.token.split('.')[0], 'base64url').toString());
+  assert.equal(changedTokenClaims.username, 'nostafa.director');
 
-  const oneCharacterLogin = await send(env, '/api/auth/login', {
+  // A logout is stateless server-side: verify a new login request after the
+  // profile/password update using the renamed username and chosen password.
+  const reloginAfterLogout = await send(env, '/api/auth/login', {
     method: 'POST',
-    body: { username: 'new.director', password: 'x' },
+    body: { username: 'nostafa.director', password: 'NewPrivatePassword#2026' },
   });
-  assert.equal(oneCharacterLogin.status, 200);
+  assert.equal(reloginAfterLogout.status, 200);
+  const staleUsernameLogin = await send(env, '/api/auth/login', {
+    method: 'POST',
+    body: { username: 'new.director', password: 'NewPrivatePassword#2026' },
+  });
+  assert.equal(staleUsernameLogin.status, 401);
   const oldPhoneAfterPasswordChange = await send(env, '/api/auth/login', {
     method: 'POST',
-    body: { username: 'new.director', password: '+961 70 123 456' },
+    body: { username: 'nostafa.director', password: '+961 70 123 456' },
   });
   assert.equal(oldPhoneAfterPasswordChange.status, 401);
 
