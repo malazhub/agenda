@@ -37,6 +37,37 @@ export interface RegistrationInput {
   className?: string;
 }
 
+export interface PublicDirectorRegistrationInput {
+  fullName: string;
+  schoolName: string;
+  email: string;
+  phone: string;
+}
+
+export interface PublicDirectorRegistrationResult {
+  registered: boolean;
+  director: {
+    id: string;
+    fullName: string;
+    schoolName: string;
+    email: string;
+    phone: string;
+    activated: false;
+    paid: false;
+    licenseActive: false;
+    setupPending: true;
+  };
+}
+
+export function registerPublicDirectorSchool(
+  input: PublicDirectorRegistrationInput
+): Promise<PublicDirectorRegistrationResult> {
+  return request('/api/director/register', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+}
+
 export interface RegistrationEducator {
   id: string;
   name: string;
