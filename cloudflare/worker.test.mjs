@@ -365,9 +365,12 @@ function fakeEnvironment() {
         if (this.sql.includes("expires_at = datetime('now', '+1 year')")) account.expires_at = '2027-11-17 10:00:00';
         return { meta: { changes: 1 } };
       }
-      if (this.sql.startsWith('UPDATE schools SET') && this.sql.includes('WHERE id = ?')) {
+      if (this.sql.startsWith('UPDATE schools SET') && (this.sql.includes('WHERE id = ?') || this.sql.includes('WHERE director_id = ?'))) {
+        const directorScoped = this.sql.includes('WHERE director_id = ?');
         const id = this.values[this.values.length - 1];
-        const school = schools.get(id);
+        const school = directorScoped
+          ? [...schools.values()].find((item) => item.director_id === id)
+          : schools.get(id);
         if (!school) return { meta: { changes: 0 } };
         let valueIndex = 0;
         if (this.sql.includes('license_active = ?')) school.license_active = this.values[valueIndex++];
@@ -1014,8 +1017,8 @@ test('Director login reads persisted role tables and saves status updates', asyn
     email: 'educator@example.com',
     phone: '',
     schoolOrSubject: 'Mathematics',
-    registeredSessionId: 'test-registration-session',
     gradeId: 'eb8',
+    className: 'Mathematics Class EB8',
   };
   await send(env, '/api/auth/register', { method: 'POST', body: registration });
 
