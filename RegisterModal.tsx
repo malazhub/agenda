@@ -467,9 +467,7 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
               }}
               className="w-full text-xs p-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:outline-emerald-600 font-medium"
             >
-              <option value="">
-                {isLoadingGrades ? t.registrationLoadingGrades : registrationGrades.length ? t.registrationChooseGrade : t.registrationNoGrades}
-              </option>
+              <option value="">{' '}</option>
               {registrationGrades.map((gradeId) => (
                 <option key={gradeId} value={gradeId}>
                   {gradeLabel(gradeId)}
