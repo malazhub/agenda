@@ -421,7 +421,7 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
             </div>
           </div>}
 
-          {role !== 'director' && (
+          {(isLogin || role !== 'director') && (
           <div>
             <label className="block text-xs font-bold text-slate-700 mb-1">
               {t.usernameLabel}
