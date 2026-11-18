@@ -1261,6 +1261,7 @@ async function saveOwnerDirectorStatuses(request, env) {
      INNER JOIN schools s ON s.director_id = a.id AND s.id = a.school_id
      WHERE a.role = 'director' AND a.id IN (${placeholders})`
   ).bind(...ids).all();
+  const savedRowById = new Map((savedRows.results || []).map((row) => [row.id, row]));
   const statuses = await Promise.all((savedRows.results || []).map(async (row) => ({
     id: row.id,
     activated: Boolean(row.activated),
@@ -1270,9 +1271,11 @@ async function saveOwnerDirectorStatuses(request, env) {
   })));
   if (statuses.length !== updates.length || updates.some((item) => {
     const saved = statuses.find((row) => row.id === item.id);
-    return !saved || saved.activated !== item.activated || saved.paid !== item.paid ||
-      Boolean(saved.license_active) !== (item.activated && item.paid) ||
-      ((item.activated && item.paid) && !saved.license_expires_at);
+    const persisted = savedRowById.get(item.id);
+    return !saved || !persisted ||
+      saved.activated !== item.activated || saved.paid !== item.paid ||
+      Boolean(persisted.license_active) !== (item.activated && item.paid) ||
+      ((item.activated && item.paid) && !persisted.license_expires_at);
   })) {
     return json({ error: "The Director status changes could not be verified in the database. Refresh the list and try again." }, 500);
   }
