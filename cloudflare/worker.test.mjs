@@ -610,7 +610,12 @@ test('grade registration loads available grades and grants grade-scoped live acc
   const { env, accounts, sessions } = fakeEnvironment();
   const grades = await send(env, '/api/registration/grades');
   assert.equal(grades.status, 200);
-  assert.deepEqual(await grades.json(), { grades: ['eb8'] });
+  const gradeCatalogue = await grades.json();
+  assert.equal(gradeCatalogue.grades.length, 17);
+  assert.ok(gradeCatalogue.grades.includes('bac_sv'));
+  assert.ok(gradeCatalogue.grades.includes('kg'));
+  assert.ok(gradeCatalogue.grades.includes('eb1'));
+  assert.ok(gradeCatalogue.grades.includes('eb8'));
 
   const registration = await send(env, '/api/auth/register', {
     method: 'POST',
@@ -652,6 +657,26 @@ test('grade registration loads available grades and grants grade-scoped live acc
 
   const wrongGrade = await send(env, '/api/sessions?gradeId=eb7&live=true&sessionId=test-registration-session', { token });
   assert.equal(wrongGrade.status, 403);
+
+  // A school with no sessions must still be able to register its first educator.
+  sessions.clear();
+  const firstEducator = await send(env, '/api/auth/register', {
+    method: 'POST',
+    body: {
+      username: 'first.educator',
+      password: 'FirstEducatorPassword#2026',
+      role: 'educator',
+      fullName: 'First Educator',
+      email: 'first.educator@example.com',
+      phone: '+961 70 123 456',
+      schoolOrSubject: 'Life Sciences',
+      gradeId: 'bac_sv',
+    },
+  });
+  assert.equal(firstEducator.status, 201, JSON.stringify(await firstEducator.clone().json()));
+  const firstEducatorResult = await firstEducator.json();
+  assert.equal(firstEducatorResult.account.gradeId, 'bac_sv');
+  assert.equal(firstEducatorResult.account.role, 'educator');
 });
 
 test('Owner creates a one-year Director school with phone initial password; Director chooses username and changes password after sign-in', async () => {
