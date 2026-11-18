@@ -452,7 +452,7 @@ async function handleRegister(request, env) {
         .bind(username)
         .first();
       if (conflictingAccount) {
-        return existingRegistrationResponse(conflictingAccount, registration, env, selectedSession);
+        return existingRegistrationResponse(conflictingAccount, registration, env, selectedSession, selectedEducator);
       }
     }
     throw error;
