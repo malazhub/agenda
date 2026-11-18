@@ -1023,7 +1023,7 @@ test('Owner creates a one-year Director school with phone initial password; Dire
 });
 
 test('Public Director registration saves chosen password and signs in by email after Owner approval', async () => {
-  const { env, accounts, schools, platformOwners } = fakeEnvironment();
+  const { env, accounts, schools, platformOwners, attempts } = fakeEnvironment();
   platformOwners.add('director-account-0000000000000000');
   const registration = await send(env, '/api/director/register', {
     method: 'POST',
