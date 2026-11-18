@@ -179,7 +179,6 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
     setIsLogin(false);
     setError(null);
     setDirectorRequestSaved('');
-    setDirectorSchoolLinkFallback('');
     onClose();
   };
 
@@ -194,7 +193,6 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
       setIsSubmitting(true);
       setError(null);
       setDirectorRequestSaved('');
-      setDirectorSchoolLinkFallback('');
       try {
         const result = await registerPublicDirectorSchool({
           fullName: name.trim(),
