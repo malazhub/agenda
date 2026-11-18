@@ -249,7 +249,7 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
             schoolId,
             username,
             password,
-            role,
+            role: role === 'educator' ? 'educator' : 'student',
             fullName: name,
             email,
             phone,
@@ -555,7 +555,7 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
                     type={showPassword ? 'text' : 'password'}
                     required
                     maxLength={1024}
-                    autoComplete={isLogin ? 'current-password' : 'new-password'}
+                    autoComplete={isLogin ? 'current-password' : 'off'}
                     value={password}
                     onChange={(event) => setPassword(event.target.value)}
                     placeholder={t.passwordPlaceholder}
