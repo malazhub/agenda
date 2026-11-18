@@ -664,23 +664,32 @@ const updateAccount = async (
               
 <td className="px-3 py-3 text-slate-700">
   <div className="flex min-w-56 flex-col items-start gap-2">
-    <select
-      aria-label={row.fullName + ' ' + t.registeredSessionLabel}
-      value={stagedDirectorAccount(row).registeredSessionId || ''}
-      onChange={(event) => {
-        const selected = registrationSessions.find((session) => session.id === event.target.value);
-        stageDirectorAccountUpdate(row, {
-          registeredSessionId: selected?.id || null,
-          ...(selected ? { gradeId: selected.gradeId } : {}),
-        });
-      }}
-      className="w-full max-w-64 rounded border border-slate-300 bg-white p-1.5 text-[10px]"
-    >
-      <option value="">{currentLang === 'ar' ? 'بدون حصة مخصصة' : currentLang === 'fr' ? 'Aucune classe attribuée' : currentLang === 'es' ? 'Sin sesión asignada' : currentLang === 'it' ? 'Nessuna lezione assegnata' : 'No session assigned'}</option>
-      {registrationSessions.map((session) => (
-        <option key={session.id} value={session.id}>{session.gradeId.toUpperCase()} · {session.subject} · {session.title}</option>
-      ))}
-    </select>
+    {row.role === 'educator' ? (
+      <select
+        aria-label={row.fullName + ' ' + t.registeredSessionLabel}
+        value={stagedDirectorAccount(row).registeredSessionId || ''}
+        onChange={(event) => {
+          const selected = registrationSessions.find((session) => session.id === event.target.value);
+          stageDirectorAccountUpdate(row, {
+            registeredSessionId: selected?.id || null,
+            ...(selected ? { gradeId: selected.gradeId } : {}),
+          });
+        }}
+        className="w-full max-w-64 rounded border border-slate-300 bg-white p-1.5 text-[10px]"
+      >
+        <option value="">{currentLang === 'ar' ? 'بدون حصة مخصصة' : currentLang === 'fr' ? 'Aucune classe attribuée' : currentLang === 'es' ? 'Sin sesión asignada' : currentLang === 'it' ? 'Nessuna lezione assegnata' : 'No session assigned'}</option>
+        {registrationSessions.map((session) => (
+          <option key={session.id} value={session.id}>{session.gradeId.toUpperCase()} · {session.subject} · {session.title}</option>
+        ))}
+      </select>
+    ) : (
+      <span className="max-w-64 text-[10px] font-semibold text-slate-600">
+        {registrationSessions.find((session) => session.id === stagedDirectorAccount(row).registeredSessionId)?.title
+          || (stagedDirectorAccount(row).registeredSessionId
+            ? stagedDirectorAccount(row).registeredSessionId
+            : (currentLang === 'ar' ? 'لم يعيّن الأستاذ صفاً بعد' : currentLang === 'fr' ? 'Aucune classe attribuée à l’éducateur' : currentLang === 'es' ? 'El educador aún no tiene clase' : currentLang === 'it' ? 'L’educatore non ha ancora una classe' : 'Educator has no assigned class yet'))}
+      </span>
+    )}
     {row.role === 'educator' ? (
       <>
         <select
