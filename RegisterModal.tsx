@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Language } from '../types';
 import { translations } from '../translations';
+import { LEBANESE_GRADE_LEVELS } from '../data/mockGradesAndSessions';
 import { UserPlus, X, CheckCircle2, CreditCard, ArrowLeft, ArrowRight, Eye, EyeOff } from 'lucide-react';
 import {
   getSchoolPayment,
@@ -40,9 +41,12 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
   const [schoolOrSubject, setSchoolOrSubject] = useState('');
   const [registeredGradeId, setRegisteredGradeId] = useState('');
   const [selectedEducatorId, setSelectedEducatorId] = useState<string>('');
-  const [registrationGrades, setRegistrationGrades] = useState<string[]>([]);
+  const [registrationGrades, setRegistrationGrades] = useState<string[]>(
+    LEBANESE_GRADE_LEVELS.map((grade) => grade.id)
+  );
   const [isLoadingGrades, setIsLoadingGrades] = useState(false);
   const [showPayment, setShowPayment] = useState(false);
+  const [showAccessChoice, setShowAccessChoice] = useState(true);
   const [isLogin, setIsLogin] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -106,8 +110,9 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
         );
 
         if (active) {
+          // Educator registration must remain available even when this school
+          // has no educators yet. Students see the empty-state guidance below.
           setEducatorsList([]);
-          setError(t.registrationServiceUnavailable);
         }
       })
       .finally(() => {
@@ -125,12 +130,21 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
     if (!isOpen) return;
     let active = true;
     setIsLoadingGrades(true);
+    // Populate the full Lebanese grade list immediately; then merge any
+    // server-provided IDs without ever leaving the selector empty.
+    setRegistrationGrades(LEBANESE_GRADE_LEVELS.map((grade) => grade.id));
     getRegistrationGrades(schoolId)
       .then(({ grades }) => {
-        if (active) setRegistrationGrades(grades);
+        if (!active) return;
+        const available = new Set([
+          ...LEBANESE_GRADE_LEVELS.map((grade) => grade.id),
+          ...(Array.isArray(grades) ? grades : []),
+        ]);
+        setRegistrationGrades([...available]);
       })
-      .catch(() => {
-        if (active) setError(t.registrationServiceUnavailable);
+      .catch((gradeError) => {
+        console.warn('Using the built-in Lebanese grade catalogue:', gradeError);
+        if (active) setRegistrationGrades(LEBANESE_GRADE_LEVELS.map((grade) => grade.id));
       })
       .finally(() => {
         if (active) setIsLoadingGrades(false);
@@ -140,8 +154,24 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
     };
   }, [isOpen, schoolId, t.registrationServiceUnavailable]);
 
+  useEffect(() => {
+    if (!isOpen) return;
+    setShowAccessChoice(true);
+    setShowPayment(false);
+    setIsLogin(false);
+    setError(null);
+  }, [isOpen]);
+
+  const gradeLabel = (gradeId: string) => {
+    const grade = LEBANESE_GRADE_LEVELS.find((item) => item.id === gradeId);
+    return grade
+      ? (grade.name[currentLang] || grade.name.en || grade.badge)
+      : gradeId.toUpperCase();
+  };
+
   const handleClose = () => {
     setShowPayment(false);
+    setShowAccessChoice(true);
     setIsLogin(false);
     setError(null);
     onClose();
@@ -272,7 +302,39 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
           </button>
         </div>
 
-        {showPayment ? (
+        {showAccessChoice ? (
+          <div className="p-6 space-y-5">
+            <div className="text-center space-y-2">
+              <h3 className="text-lg font-black text-slate-900">
+                {currentLang === 'ar' ? 'مرحباً بك' : currentLang === 'fr' ? 'Bienvenue' : currentLang === 'es' ? 'Bienvenido' : currentLang === 'it' ? 'Benvenuto' : 'Welcome'}
+              </h3>
+              <p className="text-sm text-slate-600">
+                {currentLang === 'ar' ? 'اختر ما تريد القيام به للمتابعة.' : currentLang === 'fr' ? 'Choisissez comment continuer.' : currentLang === 'es' ? 'Elige cómo quieres continuar.' : currentLang === 'it' ? 'Scegli come continuare.' : 'Choose how you would like to continue.'}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => { setIsLogin(false); setShowAccessChoice(false); setError(null); }}
+              className="w-full rounded-xl bg-emerald-700 hover:bg-emerald-800 px-4 py-3 text-sm font-black text-white transition"
+            >
+              {t.createAccountLabel}
+            </button>
+            <button
+              type="button"
+              onClick={() => { setIsLogin(true); setShowAccessChoice(false); setError(null); }}
+              className="w-full rounded-xl border border-slate-300 bg-white hover:bg-slate-50 px-4 py-3 text-sm font-black text-slate-800 transition"
+            >
+              {t.signInLabel}
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowPayment(true)}
+              className="w-full text-center text-xs font-bold text-indigo-700 hover:text-indigo-900 underline"
+            >
+              {t.paymentBtn}
+            </button>
+          </div>
+        ) : showPayment ? (
           <div className="p-5 space-y-5">
             <div className="text-center space-y-2">
               <CreditCard className="mx-auto h-10 w-10 text-indigo-700" />
@@ -357,7 +419,7 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
               </option>
               {registrationGrades.map((gradeId) => (
                 <option key={gradeId} value={gradeId}>
-                  {gradeId.toUpperCase()}
+                  {gradeLabel(gradeId)}
                 </option>
               ))}
             </select>
@@ -573,7 +635,7 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
           <div className="pt-2">
             <button
               type="submit"
-              disabled={isSubmitting || (!isLogin && (isLoadingGrades || registrationGrades.length === 0))}
+              disabled={isSubmitting}
               className="w-full bg-emerald-700 hover:bg-emerald-800 disabled:opacity-60 text-white font-bold py-2.5 px-4 rounded-xl text-xs transition cursor-pointer flex items-center justify-center gap-1.5"
             >
               <CheckCircle2 className="w-4 h-4" />
@@ -593,6 +655,13 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
             className="w-full text-center text-xs font-bold text-indigo-700 underline"
           >
             {isLogin ? t.switchToRegister : t.signInPrompt}
+          </button>
+          <button
+            type="button"
+            onClick={() => { setShowAccessChoice(true); setError(null); }}
+            className="w-full text-center text-xs font-semibold text-slate-500 underline"
+          >
+            {currentLang === 'ar' ? 'العودة إلى الخيارات' : currentLang === 'fr' ? 'Retour aux options' : currentLang === 'es' ? 'Volver a las opciones' : currentLang === 'it' ? 'Torna alle opzioni' : 'Back to options'}
           </button>
           <div className="flex justify-end">
             <button
