@@ -386,7 +386,10 @@ function fakeEnvironment() {
         if (!school) return { meta: { changes: 0 } };
         let valueIndex = 0;
         if (this.sql.includes('license_active = ?')) school.license_active = this.values[valueIndex++];
-        if (this.sql.includes("license_expires_at = datetime('now', '+1 year')")) school.license_expires_at = '2027-11-17 10:00:00';
+        if (this.sql.includes("license_expires_at = datetime('now', '+1 year')") ||
+            (this.sql.includes("license_expires_at = CASE WHEN") && Number(this.values[valueIndex] ?? this.values[1]) === 1)) {
+          school.license_expires_at = '2027-11-17 10:00:00';
+        }
         return { meta: { changes: 1 } };
       }
       if (this.sql.startsWith('UPDATE accounts') && this.sql.includes(' SET ')) {
