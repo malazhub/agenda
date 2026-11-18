@@ -104,6 +104,14 @@ function fakeEnvironment() {
           license_expires_at: school.license_expires_at || null,
         } : null;
       }
+      if (this.sql.includes("SELECT id FROM accounts WHERE role = 'educator'") && this.sql.includes('registered_session_id = ?')) {
+        const educator = [...accounts.values()].find((item) =>
+          item.role === 'educator' &&
+          item.school_id === this.values[0] &&
+          item.registered_session_id === this.values[1]
+        );
+        return educator ? { id: educator.id } : null;
+      }
       if (this.sql.includes('SELECT id FROM accounts WHERE username')) {
         const account = [...accounts.values()].find((item) =>
           item.username.toLowerCase() === this.values[0].toLowerCase() &&
@@ -244,13 +252,14 @@ function fakeEnvironment() {
         return { meta: { changes: 1 } };
       }
       if (this.sql.startsWith('INSERT INTO accounts')) {
-        const [id, username, password_hash, role, school_id, full_name, email, phone, school_or_subject, grade_id, registered_session_id] = this.values;
+        const [id, username, password_hash, role, school_id, full_name, email, phone, school_or_subject, grade_id, registered_session_id, registered_educator_id] = this.values;
         if ([...accounts.values()].some((item) => item.username.toLowerCase() === username.toLowerCase())) {
           throw new Error('UNIQUE constraint failed: accounts.username');
         }
         const isDirectorCreation = this.sql.includes("datetime('now', '+1 year')");
         accounts.set(id, {
           id, username, password_hash, role, school_id, full_name, email, phone, school_or_subject, grade_id, registered_session_id,
+          registered_educator_id: registered_educator_id || null,
           created_at: '2026-11-03 10:00:00',
           expires_at: isDirectorCreation ? '2027-11-17 10:00:00' : '2026-12-03 10:00:00',
           activated: isDirectorCreation ? 1 : 0,
@@ -321,6 +330,13 @@ function fakeEnvironment() {
         account.password_must_change = this.sql.includes('password_must_change = 1') ? 1 : 0;
         if (this.sql.includes('phone_password_disabled_at = NULL')) account.phone_password_disabled_at = null;
         else if (this.sql.includes('phone_password_disabled_at = datetime')) account.phone_password_disabled_at = '2026-11-17 12:00:00';
+        return { meta: { changes: 1 } };
+      }
+      if (this.sql.startsWith('UPDATE accounts SET activated = ?, paid = ?, grade_id = ?, registered_session_id = ?, registered_educator_id = ?')) {
+        const [activated, paid, grade_id, registered_session_id, registered_educator_id, id, school_id] = this.values;
+        const account = accounts.get(id);
+        if (!account || account.school_id !== school_id || !['student', 'educator'].includes(account.role)) return { meta: { changes: 0 } };
+        Object.assign(account, { activated, paid, grade_id, registered_session_id, registered_educator_id });
         return { meta: { changes: 1 } };
       }
       if (this.sql.startsWith('UPDATE accounts SET') && this.sql.includes('WHERE id = ?') && !this.sql.includes('username = ?')) {
