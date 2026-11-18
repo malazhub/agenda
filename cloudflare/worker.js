@@ -1498,7 +1498,7 @@ async function updateAccount(request, env, accountId) {
   if (!schoolId) return json({ error: "Director school is not configured." }, 403);
 
   const account = await env.DB.prepare(
-    `SELECT id, role, full_name, registered_session_id, school_id
+    `SELECT id, role, full_name, grade_id, registered_session_id, registered_educator_id, school_id
      FROM accounts
      WHERE id = ? AND school_id = ?
        AND role IN ('student', 'educator')`
@@ -1521,45 +1521,26 @@ async function updateAccount(request, env, accountId) {
     updates.push("paid = ?");
     values.push(Number(body.paid));
   }
-  if (typeof body?.educatorId === "string") {
+  if (Object.prototype.hasOwnProperty.call(body || {}, "registeredEducatorId") ||
+      Object.prototype.hasOwnProperty.call(body || {}, "educatorId")) {
     if (account.role !== "student") {
-      return json({
-        error: "Only student accounts can be assigned to an educator."
-      }, 400);
+      return json({ error: "Only student accounts can be assigned to an educator." }, 400);
     }
-
-    const selectedEducator = await env.DB.prepare(
-      `SELECT id, registered_session_id
-       FROM accounts
-       WHERE id = ? AND school_id = ?
-         AND role = 'educator'`
-    ).bind(body.educatorId, schoolId).first();
-
-    if (!selectedEducator || !selectedEducator.registered_session_id) {
-      return json({
-        error: "The selected educator does not have an assigned classroom."
-      }, 400);
+    const educatorId = typeof body.registeredEducatorId === "string"
+      ? body.registeredEducatorId.trim()
+      : typeof body.educatorId === "string" ? body.educatorId.trim() : "";
+    let sessionId = null;
+    let gradeId = typeof body.gradeId === "string" ? body.gradeId.trim() : String(account.grade_id || "");
+    if (educatorId) {
+      const selectedEducator = await env.DB.prepare(
+        "SELECT id, grade_id, registered_session_id FROM accounts WHERE id = ? AND school_id = ? AND role = 'educator'"
+      ).bind(educatorId, schoolId).first();
+      if (!selectedEducator) return json({ error: "Select an educator registered at this school." }, 400);
+      gradeId = selectedEducator.grade_id || gradeId;
+      sessionId = selectedEducator.registered_session_id || null;
     }
-
-    const selectedEducatorSession = await env.DB.prepare(
-      "SELECT * FROM sessions WHERE id = ? AND school_id = ?"
-    ).bind(selectedEducator.registered_session_id, schoolId).first();
-
-    if (!selectedEducatorSession) {
-      return json({
-        error: "The selected educator classroom could not be found."
-      }, 400);
-    }
-
-    updates.push(
-      "registered_session_id = ?",
-      "grade_id = ?"
-    );
-
-    values.push(
-      selectedEducatorSession.id,
-      selectedEducatorSession.grade_id
-    );
+    updates.push("registered_educator_id = ?", "registered_session_id = ?", "grade_id = ?");
+    values.push(educatorId || null, sessionId, gradeId);
   }
   if (typeof body?.registeredSessionId === "string") {
     const selectedSession = await env.DB.prepare(
