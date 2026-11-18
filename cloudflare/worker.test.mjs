@@ -87,6 +87,7 @@ function fakeEnvironment() {
       }
       if (this.sql.includes('FROM schools WHERE id = ?')) {
         const school = schools.get(this.values[0]);
+        if (this.sql.includes('director_id = ?') && school?.director_id !== this.values[1]) return null;
         return school ? { id: school.id, name: school.name } : null;
       }
       if (this.sql.includes('schools.director_id = accounts.id') || this.sql.includes('schools.director_id = a.id')) {
@@ -1183,6 +1184,18 @@ test('Public Director registration saves chosen password and signs in by email a
   assert.equal(approvedLogin.status, 200);
   const approvedLoginResult = await approvedLogin.json();
   assert.equal(approvedLoginResult.account.role, 'director');
+  assert.equal(approvedLoginResult.directorLink, undefined);
+
+  const agendaEntryLogin = await send(env, '/api/auth/login', {
+    method: 'POST',
+    body: { username: 'director@newschool.example', password: 'x', schoolId: 'default-agenda-school' },
+  });
+  assert.equal(agendaEntryLogin.status, 200);
+  const agendaEntryResult = await agendaEntryLogin.json();
+  assert.equal(
+    agendaEntryResult.directorLink,
+    `https://agenda.malazhub-agenda.workers.dev/new-school?schoolId=${encodeURIComponent(created.schoolId)}`
+  );
   const approvedToken = approvedLoginResult.token;
   const directorSessionOnAgenda = await send(env, '/api/auth/me?schoolId=default-agenda-school', { token: approvedToken });
   assert.equal(directorSessionOnAgenda.status, 401);
