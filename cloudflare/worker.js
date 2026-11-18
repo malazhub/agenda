@@ -1,6 +1,12 @@
 const SESSION_TTL_SECONDS = 12 * 60 * 60;
 const PASSWORD_ITERATIONS = 100000;
 const MAX_PASSWORD_LENGTH = 1024;
+const REGISTRATION_GRADE_IDS = Object.freeze([
+  "bac_sg", "bac_sv", "bac_se", "bac_lh",
+  "premiere_sc", "premiere_lit", "seconde",
+  "brevet", "eb8", "eb7", "eb6", "eb5", "eb4", "eb3", "eb2", "eb1", "kg",
+]);
+const REGISTRATION_GRADE_ID_SET = new Set(REGISTRATION_GRADE_IDS);
 const STREAM_VIDEO_CALL_ID = "agenda-shared-classroom";
 const encoder = new TextEncoder();
 
@@ -394,22 +400,12 @@ async function handleRegister(request, env) {
     }, 400);
   }
 
-  // A student's grade must match the selected educator's actual classroom.
-  const gradeId =
-    role === "student"
-      ? selectedSession.grade_id
-      : requestedGradeId;
-
-  const selectedGrade = gradeId
-    ? await env.DB.prepare(
-        "SELECT grade_id FROM sessions WHERE grade_id = ? AND school_id = ? LIMIT 1"
-      ).bind(gradeId, schoolId).first()
-    : null;
-
-  if (!selectedGrade) {
-    return json({
-      error: "Choose a valid grade before registering."
-    }, 400);
+  // Students inherit the exact grade of their selected educator's assigned
+  // classroom. Educators may choose any supported Lebanese grade, even before
+  // a classroom/session has been created for that grade.
+  const gradeId = role === "student" ? selectedSession.grade_id : requestedGradeId;
+  if (!REGISTRATION_GRADE_ID_SET.has(gradeId)) {
+    return json({ error: "Choose a valid grade before registering." }, 400);
   }
 
   const existing = await env.DB.prepare("SELECT * FROM accounts WHERE username = ? COLLATE NOCASE")
@@ -542,10 +538,11 @@ async function registrationSessions(env, schoolId) {
 
 
 async function registrationGrades(env, schoolId) {
-  const result = await env.DB.prepare(
-    "SELECT DISTINCT grade_id FROM sessions WHERE grade_id != '' AND school_id = ? ORDER BY grade_id",
-  ).bind(schoolId).all();
-  return json({ grades: (result.results || []).map((row) => row.grade_id) });
+  const school = await env.DB.prepare("SELECT id FROM schools WHERE id = ?").bind(schoolId).first();
+  if (!school) return json({ error: "School not found." }, 404);
+  // The grade catalogue must not depend on existing classrooms. Otherwise a
+  // new school cannot register its first educator who would create those classes.
+  return json({ grades: REGISTRATION_GRADE_IDS });
 }
 async function registrationEducators(env, schoolId) {
   const result = await env.DB.prepare(
