@@ -45,6 +45,8 @@ interface CoursesHubProps {
   onBackToOwner?: () => void;
   onOwnerTokenRefresh?: (token: string) => void;
   directorAccessToken?: string;
+  initialDirectorLogin?: boolean;
+  onDirectorRedirect?: () => void;
   onRegisterSignOutCleanup?: (
     cleanup: (() => Promise<void>) | null
   ) => void;
@@ -66,8 +68,14 @@ export const CoursesHub: React.FC<CoursesHubProps> = ({
   onBackToOwner,
   onOwnerTokenRefresh,
   directorAccessToken,
+  initialDirectorLogin,
+  onDirectorRedirect,
 }) => {
   const t = translations[currentLang];
+
+  useEffect(() => {
+    if (initialDirectorLogin) setDirectorScreen('login');
+  }, [initialDirectorLogin]);
 
     const [activeGradeForSessions, setActiveGradeForSessions] = useState<GradeLevelDef | null>(null);
   const [activeGradeTab, setActiveGradeTab] = useState<'stored' | 'live'>('stored');
@@ -269,6 +277,7 @@ export const CoursesHub: React.FC<CoursesHubProps> = ({
       if (directorLink) {
         sessionStorage.setItem('agenda-director-token', token);
         sessionStorage.setItem('agenda-session-token', token);
+        onDirectorRedirect?.();
         window.location.replace(directorLink);
         return;
       }
