@@ -2442,7 +2442,9 @@ async function createSessions(request, env) {
     if (liveStartsAt && Number.isNaN(Date.parse(liveStartsAt))) {
       return json({ error: "The live start time must be a valid date." }, 400);
     }
-    const sessionId = randomId();
+    const sessionId = educatorId
+      ? randomId()
+      : (typeof session.id === "string" && /^[a-zA-Z0-9_-]{1,100}$/.test(session.id) ? session.id : randomId());
     statements.push(
       env.DB.prepare(
         "INSERT OR REPLACE INTO sessions (id, school_id, grade_id, subject, title, teacher_name, source_name, source_url, playback_url, media_key, is_live, live_starts_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
