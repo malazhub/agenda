@@ -61,6 +61,7 @@ export default function App() {
   const [ownerAccount, setOwnerAccount] = useState<CloudflareAccount | null>(null);
   const [ownerToken, setOwnerToken] = useState('');
   const [ownerSchoolMode, setOwnerSchoolMode] = useState(false);
+  const [ownerDirectorLoginMode, setOwnerDirectorLoginMode] = useState(false);
   const [directorSetupToken, setDirectorSetupToken] = useState(() => new URLSearchParams(window.location.search).get('directorSetup') || '');
   const [directorAccessToken, setDirectorAccessToken] = useState('');
   const [schools, setSchools] = useState<SchoolRecord[]>([]);
@@ -344,6 +345,30 @@ const registerSignOutCleanup = useCallback(
               showToast(currentLang === 'ar' ? 'تم تفعيل حساب المدير.' : 'Director account activated.');
             }}
           />
+         ) : ownerAccount && ownerToken && ownerDirectorLoginMode ? (
+          <CoursesHub
+            currentLang={currentLang}
+            registeredAccount={null}
+            schoolId="default-agenda-school"
+            sessionToken=""
+            onBackToOwner={() => setOwnerDirectorLoginMode(false)}
+            onSchoolBrandChange={(schoolId, schoolName) => {
+              setActiveSchoolId(schoolId);
+              const nextUrl = new URL(window.location.href);
+              nextUrl.searchParams.set('schoolId', schoolId);
+              nextUrl.searchParams.delete('directorLogin');
+              window.history.replaceState({}, '', nextUrl.toString());
+              setSchools((current) => current.some((school) => school.id === schoolId)
+                ? current.map((school) => school.id === schoolId ? { ...school, name: schoolName } : school)
+                : [...current, { id: schoolId, name: schoolName }]);
+            }}
+            onRegisterSignOutCleanup={registerSignOutCleanup}
+            onShowMessage={showToast}
+            onBookTeacher={handleBookTeacherDirect}
+            onSelectQuestionForBooking={handleSelectQuestionForBooking}
+            onStartPractice={(exam) => setPracticeExam(exam)}
+            onEnterLiveClassroom={() => setIsClassroomActive(true)}
+          />
         ) : ownerAccount && ownerToken ? (
           ownerSchoolMode ? (
             <CoursesHub
@@ -387,6 +412,7 @@ const registerSignOutCleanup = useCallback(
               currentLang={currentLang}
               token={ownerToken}
               onSignOut={handleSignOut}
+              onDirectorSignIn={() => setOwnerDirectorLoginMode(true)}
               onManageMySchool={() => {
                 setIsClassroomActive(false);
                 setOwnerSchoolMode(true);
