@@ -42,7 +42,6 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
   const [schoolOrSubject, setSchoolOrSubject] = useState('');
   const [directorSchoolName, setDirectorSchoolName] = useState('');
   const [directorRequestSaved, setDirectorRequestSaved] = useState('');
-  const [directorSchoolLinkFallback, setDirectorSchoolLinkFallback] = useState('');
   const [registeredGradeId, setRegisteredGradeId] = useState('');
   const [selectedEducatorId, setSelectedEducatorId] = useState<string>('');
   const [newClassName, setNewClassName] = useState('');
@@ -164,7 +163,6 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
     setIsLogin(false);
     setError(null);
     setDirectorRequestSaved('');
-    setDirectorSchoolLinkFallback('');
     setRole('student');
   }, [isOpen]);
 
@@ -197,23 +195,7 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
       setError(null);
       setDirectorRequestSaved('');
       setDirectorSchoolLinkFallback('');
-
-      // Reserve a separate tab synchronously during the user's submit click.
-      // Opening it only after the API request resolves is commonly blocked by
-      // popup protection, because the asynchronous request loses user gesture.
-      let schoolTab: Window | null = null;
       try {
-        schoolTab = window.open('about:blank', '_blank');
-        if (schoolTab) {
-          schoolTab.document.title = directorSchoolName.trim() || 'School';
-          schoolTab.document.body.textContent =
-            currentLang === 'ar' ? 'جارٍ فتح مدرستك...' :
-            currentLang === 'fr' ? 'Ouverture de votre école…' :
-            currentLang === 'es' ? 'Abriendo tu escuela…' :
-            currentLang === 'it' ? 'Apertura della scuola…' :
-            'Opening your school…';
-        }
-
         const result = await registerPublicDirectorSchool({
           fullName: name.trim(),
           schoolName: directorSchoolName.trim(),
@@ -222,40 +204,16 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
           password,
         });
 
-        // This is the canonical school link returned by the API and also
-        // shown in the Owner Control Center. It loads the schoolId, and the
-        // app changes the browser tab title to the registered school name.
+        // Replace this Agenda page in the current browser tab with the newly
+        // created school's canonical URL. Using replace() intentionally means
+        // the Director lands inside their school rather than returning to the
+        // generic Agenda registration screen with the Back button.
         if (!result.directorLink || !result.schoolId) {
           throw new Error('The school was created, but its school link was not returned. Please contact the Owner.');
         }
-
-        if (schoolTab && !schoolTab.closed) {
-          schoolTab.location.replace(result.directorLink);
-          setDirectorRequestSaved(
-            currentLang === 'ar' ? `تم إنشاء المدرسة وفتحها في علامة تبويب جديدة باسم ${directorSchoolName.trim()}.` :
-            currentLang === 'fr' ? `L’école ${directorSchoolName.trim()} a été créée et ouverte dans un nouvel onglet.` :
-            currentLang === 'es' ? `La escuela ${directorSchoolName.trim()} se creó y se abrió en una nueva pestaña.` :
-            currentLang === 'it' ? `La scuola ${directorSchoolName.trim()} è stata creata e aperta in una nuova scheda.` :
-            `The school ${directorSchoolName.trim()} was created and opened in a new tab.`
-          );
-        } else {
-          // Keep a visible, working fallback when the browser blocks popups.
-          setDirectorRequestSaved(
-            currentLang === 'ar' ? 'تم إنشاء المدرسة، لكن المتصفح منع فتح علامة تبويب جديدة. استخدم رابط المدرسة أدناه.' :
-            currentLang === 'fr' ? 'L’école a été créée, mais le navigateur a bloqué le nouvel onglet. Utilisez le lien ci-dessous.' :
-            currentLang === 'es' ? 'La escuela se creó, pero el navegador bloqueó la nueva pestaña. Usa el enlace de abajo.' :
-            currentLang === 'it' ? 'La scuola è stata creata, ma il browser ha bloccato la nuova scheda. Usa il link qui sotto.' :
-            'The school was created, but the browser blocked the new tab. Open your school using the link below.'
-          );
-          setDirectorSchoolLinkFallback(result.directorLink);
-        }
-        setName('');
-        setDirectorSchoolName('');
-        setEmail('');
-        setPhone('');
-        setPassword('');
+        window.location.replace(result.directorLink);
+        return;
       } catch (requestError) {
-        if (schoolTab && !schoolTab.closed) schoolTab.close();
         setError(requestError instanceof Error ? requestError.message : t.registrationServiceUnavailable);
       } finally {
         setIsSubmitting(false);
@@ -617,16 +575,6 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
             <div role="status" className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-800">
               {directorRequestSaved}
             </div>
-          )}
-          {directorSchoolLinkFallback && (
-            <a
-              href={directorSchoolLinkFallback}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="block rounded-lg bg-emerald-700 px-3 py-2 text-center text-xs font-black text-white underline"
-            >
-              {currentLang === 'ar' ? 'فتح رابط المدرسة' : currentLang === 'fr' ? 'Ouvrir le lien de l’école' : currentLang === 'es' ? 'Abrir el enlace de la escuela' : currentLang === 'it' ? 'Apri il link della scuola' : 'Open school link'}
-            </a>
           )}
           {error && (
             <div role="alert" className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-700">
