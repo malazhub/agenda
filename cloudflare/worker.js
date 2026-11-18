@@ -776,9 +776,16 @@ async function handleLogin(request, env) {
     return json({ error: "Invalid username or password." }, 401);
   }
 
-  // All non-owner accounts are tenant-bound. A valid credential is not enough
-  // to sign into a different school's URL or the shared Agenda landing school.
-  if (!isOwner && (!requestedSchoolId || account.school_id !== requestedSchoolId)) {
+  // The main Agenda / Owner entry page is a trusted discovery point for
+  // Directors: they may authenticate there only to be redirected to the
+  // canonical URL of the school they own. Students and Educators remain
+  // strictly tenant-bound, and a Director on a school's page must match it.
+  const redirectDirectorToSchool = Boolean(
+    account.role === "director" && !isOwner &&
+    requestedSchoolId === "default-agenda-school"
+  );
+  if (!isOwner && !redirectDirectorToSchool &&
+      (!requestedSchoolId || account.school_id !== requestedSchoolId)) {
     return json({ error: "This account belongs to another school. Open your own school's link to sign in." }, 403);
   }
 
@@ -821,7 +828,17 @@ async function handleLogin(request, env) {
     { sub: account.id, role: effectiveAccount.role, username: account.username, exp: Math.floor(Date.now() / 1000) + SESSION_TTL_SECONDS },
     env.SESSION_SIGNING_KEY,
   );
-  return json({ account: publicAccount(effectiveAccount), token });
+  const result = { account: publicAccount(effectiveAccount), token };
+  if (redirectDirectorToSchool) {
+    const school = await env.DB.prepare(
+      "SELECT id, name FROM schools WHERE id = ? AND director_id = ?"
+    ).bind(account.school_id, account.id).first();
+    if (!school) {
+      return json({ error: "Your Director account is not linked to a school. Contact the platform Owner." }, 403);
+    }
+    result.directorLink = directorSchoolLink(school.id, school.name);
+  }
+  return json(result);
 }
 
 async function getCurrentAccount(request, env) {
