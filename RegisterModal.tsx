@@ -273,7 +273,7 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
             {showPayment ? (
               <button
                 type="button"
-                onClick={() => setShowPayment(false)}
+                onClick={() => { setShowPayment(false); setShowAccessChoice(true); }}
                 className="inline-flex items-center gap-2 text-sm font-bold text-white cursor-pointer"
               >
                 {currentLang === 'ar' ? <ArrowRight className="h-4 w-4" /> : <ArrowLeft className="h-4 w-4" />}
@@ -330,7 +330,7 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
             </button>
             <button
               type="button"
-              onClick={() => setShowPayment(true)}
+              onClick={() => { setShowAccessChoice(false); setShowPayment(true); }}
               className="w-full text-center text-xs font-bold text-indigo-700 hover:text-indigo-900 underline"
             >
               {t.paymentBtn}
