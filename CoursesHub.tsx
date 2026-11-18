@@ -256,7 +256,7 @@ export const CoursesHub: React.FC<CoursesHubProps> = ({
   const handleDirectorLogin = async () => {
     setDirectorError('');
     try {
-      const { account, token } = await loginAccount(directorForm.username, directorForm.password);
+      const { account, token } = await loginAccount(directorForm.username, directorForm.password, schoolId);
       if (account.role === 'owner') { onOwnerLogin?.(account, token); setDirectorForm({ username: '', password: '' }); return; }
       if (account.role !== 'director') {
         throw new Error(currentLang === 'ar' ? 'هذا الحساب لا يملك صلاحية المدير.' : currentLang === 'fr' ? 'Ce compte ne dispose pas des droits de Directeur.' : currentLang === 'es' ? 'Esta cuenta no tiene permisos de Director.' : currentLang === 'it' ? 'Questo account non dispone dei permessi di Direttore.' : 'This account does not have Director access.');
@@ -696,7 +696,9 @@ const updateAccount = async (
       </>
     ) : (
       <span className="text-[10px] font-semibold text-slate-600">
-        {LEBANESE_GRADE_LEVELS.find((grade) => grade.id === stagedDirectorAccount(row).gradeId)?.name[currentLang] || stagedDirectorAccount(row).gradeId.toUpperCase()}
+        {row.studentGradeLabel
+          ? (LEBANESE_GRADE_LEVELS.find((grade) => grade.id === row.studentGradeLabel)?.name[currentLang] || row.studentGradeLabel)
+          : (LEBANESE_GRADE_LEVELS.find((grade) => grade.id === stagedDirectorAccount(row).gradeId)?.name[currentLang] || stagedDirectorAccount(row).gradeId.toUpperCase())}
       </span>
     )}
   </div>
