@@ -256,10 +256,19 @@ export const CoursesHub: React.FC<CoursesHubProps> = ({
   const handleDirectorLogin = async () => {
     setDirectorError('');
     try {
-      const { account, token } = await loginAccount(directorForm.username, directorForm.password, schoolId);
+      const { account, token, directorLink } = await loginAccount(directorForm.username, directorForm.password, schoolId);
       if (account.role === 'owner') { onOwnerLogin?.(account, token); setDirectorForm({ username: '', password: '' }); return; }
       if (account.role !== 'director') {
         throw new Error(currentLang === 'ar' ? 'هذا الحساب لا يملك صلاحية المدير.' : currentLang === 'fr' ? 'Ce compte ne dispose pas des droits de Directeur.' : currentLang === 'es' ? 'Esta cuenta no tiene permisos de Director.' : currentLang === 'it' ? 'Questo account non dispone dei permessi di Direttore.' : 'This account does not have Director access.');
+      }
+      // From the shared Agenda / Owner entry page, send every Director
+      // directly to their own canonical school URL. sessionStorage survives
+      // this same-origin navigation, so the Director arrives already signed in.
+      if (directorLink) {
+        sessionStorage.setItem('agenda-director-token', token);
+        sessionStorage.setItem('agenda-session-token', token);
+        window.location.replace(directorLink);
+        return;
       }
       sessionStorage.setItem('agenda-director-token', token);
       sessionStorage.setItem('agenda-session-token', token);
