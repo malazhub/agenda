@@ -9,6 +9,7 @@ export interface CloudflareAccount {
   schoolOrSubject: string;
   gradeId: string;
   registeredSessionId: string | null;
+  registeredEducatorId: string | null;
   createdAt: string;
   expiresAt: string | null;
   activated: boolean;
@@ -32,6 +33,8 @@ export interface RegistrationInput {
   schoolOrSubject: string;
   gradeId: string;
   registeredSessionId?: string;
+  registeredEducatorId?: string;
+  className?: string;
 }
 
 export interface RegistrationEducator {
@@ -85,6 +88,7 @@ export interface SessionInput {
   sourceUrl: string;
   playbackUrl?: string;
   teacherName?: string;
+  educatorId?: string;
   isLive?: boolean;
 }
 
@@ -426,6 +430,26 @@ export function getDirectorLiveStream(token: string, sessionId: string): Promise
     headers: authHeaders(token),
   });
 }
+export type DirectorAccountUpdate = {
+  id: string;
+  activated: boolean;
+  paid: boolean;
+  gradeId: string;
+  registeredSessionId: string | null;
+  registeredEducatorId: string | null;
+};
+
+export function saveDirectorAccountUpdates(
+  token: string,
+  updates: DirectorAccountUpdate[],
+): Promise<{ updated: number; accounts: CloudflareAccount[] }> {
+  return request('/api/director/accounts/status', {
+    method: 'PATCH',
+    headers: authHeaders(token),
+    body: JSON.stringify({ updates }),
+  });
+}
+
 export function updateDirectorAccount(
   token: string,
   accountId: string,
@@ -435,8 +459,10 @@ export function updateDirectorAccount(
     renew?: boolean;
     password?: string;
     username?: string;
-    registeredSessionId?: string;
-    educatorId?: string;
+    registeredSessionId?: string | null;
+    educatorId?: string | null;
+    registeredEducatorId?: string | null;
+    gradeId?: string;
   },
 ): Promise<{ account: CloudflareAccount }> {
   return request(`/api/director/accounts/${encodeURIComponent(accountId)}`, {
