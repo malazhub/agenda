@@ -351,6 +351,13 @@ const registerSignOutCleanup = useCallback(
             registeredAccount={null}
             schoolId="default-agenda-school"
             sessionToken=""
+            initialDirectorLogin
+            onDirectorRedirect={() => {
+              sessionStorage.removeItem('agenda-owner-token');
+              setOwnerAccount(null);
+              setOwnerToken('');
+              setOwnerDirectorLoginMode(false);
+            }}
             onBackToOwner={() => setOwnerDirectorLoginMode(false)}
             onSchoolBrandChange={(schoolId, schoolName) => {
               setActiveSchoolId(schoolId);
