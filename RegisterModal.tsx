@@ -32,6 +32,7 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
   onRegisterSuccess
 }) => {
   const t = translations[currentLang];
+  const canRegisterDirector = schoolId === 'default-agenda-school';
   const [role, setRole] = useState<'student' | 'educator' | 'director'>('student');
   const [username, setUsername] = useState('');
   const [name, setName] = useState('');
@@ -43,6 +44,7 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
   const [directorSchoolName, setDirectorSchoolName] = useState('');
   const [directorRequestSaved, setDirectorRequestSaved] = useState('');
   const [registeredGradeId, setRegisteredGradeId] = useState('');
+  const [studentGradeLabel, setStudentGradeLabel] = useState('');
   const [selectedEducatorId, setSelectedEducatorId] = useState<string>('');
   const [newClassName, setNewClassName] = useState('');
   const [registrationGrades, setRegistrationGrades] = useState<string[]>(
@@ -157,6 +159,10 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
   }, [isOpen, schoolId]);
 
   useEffect(() => {
+    if (!canRegisterDirector && role === 'director') setRole('student');
+  }, [canRegisterDirector, role]);
+
+  useEffect(() => {
     if (!isOpen) return;
     setShowAccessChoice(true);
     setShowPayment(false);
@@ -190,6 +196,11 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
     e.preventDefault();
 
     if (!isLogin && role === 'director') {
+      if (!canRegisterDirector) {
+        setRole('student');
+        setError(currentLang === 'ar' ? 'يمكن إنشاء حساب المدير من صفحة Agenda الرئيسية فقط.' : currentLang === 'fr' ? 'Le compte Directeur peut être créé uniquement depuis la page principale Agenda.' : currentLang === 'es' ? 'La cuenta de Director solo se puede crear desde la página principal de Agenda.' : currentLang === 'it' ? 'L’account Direttore può essere creato solo dalla pagina principale di Agenda.' : 'Director accounts can only be created from the main Agenda page.');
+        return;
+      }
       setIsSubmitting(true);
       setError(null);
       setDirectorRequestSaved('');
@@ -240,7 +251,7 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
 
     try {
       const { account, token } = isLogin
-        ? await loginAccount(username, password)
+        ? await loginAccount(username, password, schoolId)
         : await registerAccount({
             schoolId,
             username,
@@ -251,8 +262,10 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
             phone,
             schoolOrSubject,
 
-            // Students inherit their selected educator's grade and current classroom.
+            // Student's grade/class preference is saved separately; the actual
+            // grade and registered session stay aligned with the selected educator.
             gradeId: role === 'student' ? selectedEducator!.gradeId : registeredGradeId,
+            studentGradeLabel: role === 'student' ? (studentGradeLabel.trim() || registeredGradeId) : undefined,
             registeredEducatorId: role === 'student' ? selectedEducatorId : undefined,
             registeredSessionId: role === 'student' ? selectedEducator!.registeredSessionId || undefined : undefined,
             // Every educator creates a dedicated class that the API assigns to the account.
@@ -383,7 +396,7 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
             <label className="block text-xs font-bold text-slate-700 mb-1">
               {t.accountTypeLabel}
             </label>
-            <div className="grid grid-cols-3 gap-2">
+            <div className={`grid ${canRegisterDirector ? "grid-cols-3" : "grid-cols-2"} gap-2`}>
               <button
                 type="button"
                 onClick={() => setRole('student')}
@@ -406,6 +419,7 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
               >
                 {t.roleTeacher}
               </button>
+              {canRegisterDirector && (
               <button
                 type="button"
                 onClick={() => { setRole('director'); setDirectorRequestSaved(''); setError(null); }}
@@ -417,6 +431,7 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
               >
                 {currentLang === 'ar' ? 'مدير' : currentLang === 'fr' ? 'Directeur' : currentLang === 'es' ? 'Director' : currentLang === 'it' ? 'Direttore' : 'Director'}
               </button>
+              )}
             </div>
           </div>}
 
@@ -439,12 +454,17 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
 
           {!isLogin && role !== 'director' && <div>
             <label className="block text-xs font-bold text-slate-700 mb-1" htmlFor="registration-grade">
-              {currentLang === 'ar' ? 'الصف (اختياري عند إدخال اسم صف جديد)' : currentLang === 'fr' ? 'Niveau (facultatif si vous saisissez une nouvelle classe)' : currentLang === 'es' ? 'Curso (opcional si introduce una clase nueva)' : currentLang === 'it' ? 'Classe (facoltativa se inserisci una nuova classe)' : 'Grade (optional when entering a new class name)'}
+              {role === 'student'
+                ? (currentLang === 'ar' ? 'الصف (أو أضف صفك)' : currentLang === 'fr' ? 'Niveau (ou ajoutez votre classe)' : currentLang === 'es' ? 'Grado (o añade tu clase)' : currentLang === 'it' ? 'Classe (o aggiungi la tua classe)' : 'Grade (or add your class )')
+                : (currentLang === 'ar' ? 'الصف (اختياري عند إدخال اسم صف جديد)' : currentLang === 'fr' ? 'Niveau (facultatif si vous saisissez une nouvelle classe)' : currentLang === 'es' ? 'Curso (opcional si introduce una clase nueva)' : currentLang === 'it' ? 'Classe (facoltativa se inserisci una nuova classe)' : 'Grade (optional when entering a new class name)')}
             </label>
             <select
               id="registration-grade"
               value={registeredGradeId}
-              onChange={(event) => setRegisteredGradeId(event.target.value)}
+              onChange={(event) => {
+                setRegisteredGradeId(event.target.value);
+                if (role === 'student') setStudentGradeLabel('');
+              }}
               className="w-full text-xs p-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:outline-emerald-600 font-medium"
             >
               <option value="">
@@ -457,6 +477,23 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
               ))}
             </select>
           </div>}
+
+          {!isLogin && role === 'student' && (
+            <label className="block text-xs font-bold text-slate-700">
+              {currentLang === 'ar' ? 'أو أضف صفك / مستواك' : currentLang === 'fr' ? 'Ou ajoutez votre classe / niveau' : currentLang === 'es' ? 'O añade tu clase / grado' : currentLang === 'it' ? 'Oppure aggiungi la tua classe / livello' : 'Or add your class / grade'}
+              <input
+                type="text"
+                maxLength={160}
+                value={studentGradeLabel}
+                onChange={(event) => {
+                  setStudentGradeLabel(event.target.value);
+                  if (event.target.value.trim()) setRegisteredGradeId('');
+                }}
+                placeholder={currentLang === 'ar' ? 'اكتب اسم صفك أو مستواك' : currentLang === 'fr' ? 'Saisissez votre classe ou niveau' : currentLang === 'es' ? 'Escribe tu clase o grado' : currentLang === 'it' ? 'Inserisci la tua classe o livello' : 'Enter your class or grade'}
+                className="mt-1 w-full text-xs p-2.5 bg-slate-50 border border-slate-200 rounded-lg font-medium"
+              />
+            </label>
+          )}
 
           {!isLogin && role === 'educator' && (
             <label className="block text-xs font-bold text-slate-700">
