@@ -187,6 +187,14 @@ function fakeEnvironment() {
     }
 
     async all() {
+      if (this.sql.includes("lower(trim(full_name))") && this.sql.includes("role = 'director'")) {
+        const name = String(this.values[0] || '').trim().toLowerCase();
+        return {
+          results: [...accounts.values()].filter((item) =>
+            item.role === 'director' && String(item.full_name || '').trim().toLowerCase() === name
+          ).slice(0, 2),
+        };
+      }
       if (this.sql.includes("FROM accounts a") && this.sql.includes("INNER JOIN schools s ON s.director_id = a.id")) {
         const requestedIds = this.sql.includes('a.id IN (') ? new Set(this.values) : null;
         const results = [...accounts.values()]
@@ -1079,6 +1087,15 @@ test('Public Director registration saves chosen password and signs in by email a
   assert.equal(pendingLogin.status, 403);
   assert.match((await pendingLogin.json()).error, /Director account is inactive/i);
 
+  // No separate username is collected on public Director registration. The
+  // Director can also enter their exact full name, with the same password.
+  const fullNamePendingLogin = await send(env, '/api/auth/login', {
+    method: 'POST',
+    body: { username: '  New School Director  ', password: 'x' },
+  });
+  assert.equal(fullNamePendingLogin.status, 403);
+  assert.match((await fullNamePendingLogin.json()).error, /Director account is inactive/i);
+
   const ownerLogin = await send(env, '/api/auth/login', {
     method: 'POST',
     body: { username: 'director', password: 'DirectorPassword#2026' },
@@ -1103,6 +1120,13 @@ test('Public Director registration saves chosen password and signs in by email a
   });
   assert.equal(approvedLogin.status, 200);
   assert.equal((await approvedLogin.json()).account.role, 'director');
+
+  const fullNameLogin = await send(env, '/api/auth/login', {
+    method: 'POST',
+    body: { username: 'New School Director', password: 'x' },
+  });
+  assert.equal(fullNameLogin.status, 200);
+  assert.equal((await fullNameLogin.json()).account.role, 'director');
 });
 
 test('Only the platform Owner can create Director schools', async () => {
