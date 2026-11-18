@@ -2442,6 +2442,13 @@ async function createSessions(request, env) {
     if (mediaKey && !(await env.SESSION_MEDIA_BUCKET.head(mediaKey))) {
       return json({ error: "The referenced R2 media object does not exist." }, 400);
     }
+    const educatorId = typeof session.educatorId === "string" ? session.educatorId.trim() : "";
+    if (educatorId) {
+      const educator = await env.DB.prepare(
+        "SELECT id FROM accounts WHERE id = ? AND school_id = ? AND role = 'educator'"
+      ).bind(educatorId, schoolId).first();
+      if (!educator) return json({ error: "Choose an educator registered in this school." }, 400);
+    }
     if (typeof session.isLive !== "boolean" && session.isLive !== undefined) {
       return json({ error: "The isLive field must be a boolean." }, 400);
     }
@@ -2450,11 +2457,12 @@ async function createSessions(request, env) {
     if (liveStartsAt && Number.isNaN(Date.parse(liveStartsAt))) {
       return json({ error: "The live start time must be a valid date." }, 400);
     }
+    const sessionId = randomId();
     statements.push(
       env.DB.prepare(
         "INSERT OR REPLACE INTO sessions (id, school_id, grade_id, subject, title, teacher_name, source_name, source_url, playback_url, media_key, is_live, live_starts_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
       ).bind(
-        typeof session.id === "string" && /^[a-zA-Z0-9_-]{1,100}$/.test(session.id) ? session.id : randomId(),
+        sessionId,
         schoolId,
         gradeId,
         subject,
@@ -2468,6 +2476,13 @@ async function createSessions(request, env) {
         liveStartsAt,
       ),
     );
+    if (educatorId) {
+      // The selected educator receives this exact newly created classroom.
+      // Store the assignment with the session insert in the same D1 batch.
+      statements.push(env.DB.prepare(
+        "UPDATE accounts SET registered_session_id = ?, grade_id = ? WHERE id = ? AND school_id = ? AND role = 'educator'"
+      ).bind(sessionId, gradeId, educatorId, schoolId));
+    }
   }
   for (let offset = 0; offset < statements.length; offset += 100) {
     await env.DB.batch(statements.slice(offset, offset + 100));
