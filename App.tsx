@@ -144,7 +144,7 @@ const registerSignOutCleanup = useCallback(
     let active = true;
     const refreshAccount = async () => {
       try {
-        const { account } = await getCurrentAccount(sessionToken);
+        const { account } = await getCurrentAccount(sessionToken, activeSchoolId);
         if (!active) return;
         if (account.role === 'owner') { setOwnerAccount(account); setOwnerToken(sessionToken); return; }
         if (account.role === 'director') {
@@ -164,7 +164,9 @@ const registerSignOutCleanup = useCallback(
         if (!active) return;
         if (error instanceof Error && error.message.includes('(401)')) {
           sessionStorage.removeItem('agenda-session-token');
+          sessionStorage.removeItem('agenda-director-token');
           setSessionToken('');
+          setDirectorAccessToken('');
           setRegisteredAccount(null);
         } else {
           console.error('Unable to refresh the signed-in account status.', error);
@@ -177,7 +179,7 @@ const registerSignOutCleanup = useCallback(
       active = false;
       window.clearInterval(intervalId);
     };
-  }, [sessionToken]);
+  }, [sessionToken, activeSchoolId]);
 
   const showToast = (message: string) => {
     setNotification(message);
