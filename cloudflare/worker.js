@@ -1,6 +1,5 @@
 const SESSION_TTL_SECONDS = 12 * 60 * 60;
 const PASSWORD_ITERATIONS = 100000;
-const MAX_PASSWORD_LENGTH = 1024;
 const REGISTRATION_GRADE_IDS = Object.freeze([
   "bac_sg", "bac_sv", "bac_se", "bac_lh",
   "premiere_sc", "premiere_lit", "seconde",
@@ -261,6 +260,20 @@ async function requestJson(request) {
   }
 }
 
+function deriveGradeIdFromClassName(className) {
+  const normalized = String(className || "")
+    .normalize("NFKD")
+    .replace(/[\\u0300-\\u036f]/g, "")
+    .toLowerCase();
+  const slug = normalized.replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 34);
+  if (slug) return `class_${slug}`.slice(0, 40);
+  const hex = Array.from(encoder.encode(String(className || "")))
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("")
+    .slice(0, 32);
+  return `class_${hex || randomId().replace(/-/g, "").slice(0, 12)}`.slice(0, 40);
+}
+
 function publicAccount(account) {
   return {
     id: account.id,
@@ -362,8 +375,8 @@ async function handleRegister(request, env) {
   if (!schoolId || !(await env.DB.prepare("SELECT id FROM schools WHERE id = ?").bind(schoolId).first())) {
     return json({ error: "Choose a valid school before registering." }, 400);
   }
-  if (!/^[a-z0-9._-]{3,32}$/.test(username) || !password || password.length > MAX_PASSWORD_LENGTH) {
-    return json({ error: "Use a 3–32 character username and a non-empty password of at most 1,024 characters." }, 400);
+  if (!/^[a-z0-9._-]{3,32}$/.test(username) || password.length === 0) {
+    return json({ error: "Use a 3–32 character username and enter a password." }, 400);
   }
   if (!["student", "educator"].includes(role) || fullName.length < 2 || fullName.length > 120 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
     return json({ error: "Complete the required name, email, and account role fields." }, 400);
@@ -402,23 +415,23 @@ async function handleRegister(request, env) {
     }
     registeredSessionId = selectedSession?.id || "";
   } else {
-    if (!REGISTRATION_GRADE_ID_SET.has(requestedGradeId)) {
-      return json({ error: "Choose a valid grade before registering." }, 400);
-    }
     if (registeredSessionId) {
       return json({ error: "Educators create and name their own classroom during registration." }, 400);
     }
     if (className.length < 2) {
       return json({ error: "Enter the name of your own class or session before creating the educator account." }, 400);
     }
+    if (requestedGradeId && !REGISTRATION_GRADE_ID_SET.has(requestedGradeId)) {
+      return json({ error: "Choose a standard grade or leave it empty to use your class name as the grade." }, 400);
+    }
     registeredSessionId = "";
   }
 
-  // Students inherit the exact grade of their selected educator. Educators
-  // keep their selected grade and receive a dedicated classroom.
+  // An educator may choose a standard grade. If left blank, their new class
+  // name supplies both the grade identifier and the assigned classroom title.
   const gradeId = role === "student"
     ? (selectedSession?.grade_id || selectedEducator.grade_id)
-    : requestedGradeId;
+    : (requestedGradeId || deriveGradeIdFromClassName(className));
   if (!gradeId || !/^[a-z0-9_-]{1,40}$/.test(gradeId)) {
     return json({ error: "Choose a valid grade before registering." }, 400);
   }
@@ -677,7 +690,7 @@ async function handleLogin(request, env) {
   const body = await requestJson(request);
   const username = typeof body?.username === "string" ? body.username.trim().toLowerCase() : "";
   const password = typeof body?.password === "string" ? body.password : "";
-  if (!username || !password || password.length > MAX_PASSWORD_LENGTH) return json({ error: "Invalid username or password." }, 401);
+  if (!username || password.length === 0) return json({ error: "Invalid username or password." }, 401);
 
   const recentAttempts = await env.DB.prepare(
     "SELECT COUNT(*) AS count FROM login_attempts WHERE username = ? COLLATE NOCASE AND succeeded = 0 AND created_at >= datetime('now', '-15 minutes')",
@@ -687,9 +700,11 @@ async function handleLogin(request, env) {
   // must still work so an Owner can recover a Director after repeated tests.
   const throttled = Number(recentAttempts?.count || 0) >= 5;
 
-  const account = await env.DB.prepare("SELECT * FROM accounts WHERE username = ? COLLATE NOCASE")
-    .bind(username)
-    .first();
+  // Publicly registered Directors use their email address to sign in.
+  // Owners, students and educators continue to use their chosen usernames.
+  const account = await env.DB.prepare(
+    "SELECT * FROM accounts WHERE username = ? COLLATE NOCASE OR (role = 'director' AND email = ? COLLATE NOCASE) LIMIT 1"
+  ).bind(username, username).first();
   const ownerRow = account ? await env.DB.prepare("SELECT account_id FROM platform_owners WHERE account_id = ?").bind(account.id).first() : null;
   const isOwner = Boolean(ownerRow);
   const phoneIsInitialPassword = Boolean(
@@ -799,8 +814,8 @@ async function updateDirectorProfile(request, env) {
       !/^[a-z0-9._-]{3,32}$/.test(username)) {
     return json({ error: "Enter a school name and a valid 3–32 character username." }, 400);
   }
-  if (body.password !== undefined && (!password || password.length > MAX_PASSWORD_LENGTH)) {
-    return json({ error: "A password must contain 1–1,024 characters." }, 400);
+  if (body.password !== undefined && password.length === 0) {
+    return json({ error: "Enter a password." }, 400);
   }
 
   const account = await env.DB.prepare(
@@ -932,38 +947,43 @@ async function registerPublicDirectorSchool(request, env) {
   const schoolName = typeof body?.schoolName === "string" ? body.schoolName.trim() : "";
   const email = typeof body?.email === "string" ? body.email.trim().toLowerCase() : "";
   const phone = typeof body?.phone === "string" ? body.phone.trim() : "";
+  const password = typeof body?.password === "string" ? body.password : "";
 
   if (fullName.length < 2 || fullName.length > 120 ||
       schoolName.length < 2 || schoolName.length > 160 ||
-      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ||
+      !/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email) ||
       phone.length < 6 || phone.length > 40 ||
-      normalizePhoneCredential(phone).length < 6) {
-    return json({ error: "Enter a valid Director full name, school name, email address and phone number." }, 400);
+      normalizePhoneCredential(phone).length < 6 ||
+      password.length === 0) {
+    return json({ error: "Enter a Director name, school name, valid email, phone number and password." }, 400);
   }
 
+  // The email is the sign-in identifier for public Directors. The account
+  // schema still has a username column, so use an internal non-login username.
   const accountId = randomId();
-  const username = "pending-" + randomId().replace(/-/g, "").slice(0, 20);
+  const username = "director-" + randomId().replace(/-/g, "").slice(0, 20);
   const schoolId = "school-" + randomId();
-  const setupToken = createSetupToken();
-  const setupTokenHash = await hashSetupToken(setupToken);
-  const initialPasswordHash = await hashPassword(phone);
+  const passwordHash = await hashPassword(password);
 
   try {
+    const duplicateEmail = await env.DB.prepare(
+      "SELECT id FROM accounts WHERE role = 'director' AND email = ? COLLATE NOCASE LIMIT 1"
+    ).bind(email).first();
+    if (duplicateEmail) {
+      return json({ error: "A Director account already uses this email address. Sign in with that email instead." }, 409);
+    }
     await env.DB.batch([
       env.DB.prepare(
-        "INSERT INTO accounts (id, username, password_hash, role, school_id, full_name, email, phone, school_or_subject, grade_id, registered_session_id, registered_educator_id, expires_at, activated, paid, password_must_change, phone_password_disabled_at) VALUES (?, ?, ?, 'director', ?, ?, ?, ?, '', '', NULL, NULL, NULL, 0, 0, 1, NULL)"
-      ).bind(accountId, username, initialPasswordHash, schoolId, fullName, email, phone),
+        "INSERT INTO accounts (id, username, password_hash, role, school_id, full_name, email, phone, school_or_subject, grade_id, registered_session_id, registered_educator_id, expires_at, activated, paid, password_must_change, phone_password_disabled_at) VALUES (?, ?, ?, 'director', ?, ?, ?, ?, '', '', NULL, NULL, NULL, 0, 0, 0, datetime('now'))"
+      ).bind(accountId, username, passwordHash, schoolId, fullName, email, phone),
       env.DB.prepare(
         "INSERT INTO schools (id, name, director_id, license_expires_at, license_active) VALUES (?, ?, ?, NULL, 0)"
       ).bind(schoolId, schoolName, accountId),
-      env.DB.prepare(
-        "INSERT INTO director_setup_tokens (token_hash, account_id, expires_at) VALUES (?, ?, datetime('now', '+7 days'))"
-      ).bind(setupTokenHash, accountId),
     ]);
   } catch (error) {
     const detail = error instanceof Error ? error.message.toLowerCase() : "";
     if (detail.includes("unique")) {
-      return json({ error: "A school with this name is already registered. Please contact the Owner." }, 409);
+      return json({ error: "A Director account or school with these details already exists." }, 409);
     }
     console.error("Unable to save public Director registration:", error);
     return json({ error: "Your Director and school registration could not be saved. Please try again." }, 500);
@@ -971,6 +991,7 @@ async function registerPublicDirectorSchool(request, env) {
 
   return json({
     registered: true,
+    loginEmail: email,
     director: {
       id: accountId,
       fullName,
@@ -980,7 +1001,7 @@ async function registerPublicDirectorSchool(request, env) {
       activated: false,
       paid: false,
       licenseActive: false,
-      setupPending: true,
+      setupPending: false,
     },
   }, 201);
 }
@@ -1727,10 +1748,8 @@ async function updateAccount(request, env, accountId) {
   }
 
   if (typeof body?.password === "string") {
-    if (!body.password || body.password.length > MAX_PASSWORD_LENGTH) {
-      return json({
-        error: "A password must contain 1–1,024 characters."
-      }, 400);
+    if (body.password.length === 0) {
+      return json({ error: "Enter a password." }, 400);
     }
 
     updates.push("password_hash = ?");
