@@ -939,8 +939,7 @@ const updateAccount = async (
               />
             </label>
             <div className="w-full rounded-xl border border-amber-200 bg-amber-50 p-3 space-y-2">
-              <p className="text-xs text-amber-900">{currentLang === 'ar' ? 'كلمة المرور الأولية هي رقم الهاتف الذي قدمته للمالك. اختر كلمة مرورك الخاصة هنا لتغييرها.' : 'Your initial password is the phone number you gave the Owner. Choose your own password here to replace it.'}</p>
-              {directorPasswordNeedsChange && <p className="text-xs font-bold text-amber-900">{currentLang === 'ar' ? 'يجب تغيير كلمة المرور الأولية قبل متابعة استخدام لوحة المدير.' : 'Please replace your initial phone-number password before continuing to use the Director dashboard.'}</p>}
+              {directorPasswordNeedsChange && <p className="text-xs font-semibold text-slate-600">{currentLang === 'ar' ? 'يرجى تعيين كلمة مرورك الشخصية للمتابعة.' : 'Set your personal password to continue.'}</p>}
               <div className="grid sm:grid-cols-2 gap-3">
                 <label className="block text-xs font-bold text-slate-700">{currentLang === 'ar' ? 'كلمة المرور الجديدة' : 'New password'}<input type="password" autoComplete="new-password"  required={directorPasswordNeedsChange} value={directorNewPassword} onChange={event=>setDirectorNewPassword(event.target.value)} className="mt-1 w-full rounded-lg border p-2.5 text-sm" placeholder={currentLang === 'ar' ? 'اختر كلمة مرورك' : 'Choose your password'}/></label>
                 <label className="block text-xs font-bold text-slate-700">{currentLang === 'ar' ? 'تأكيد كلمة المرور الجديدة' : 'Confirm new password'}<input type="password" autoComplete="new-password"  required={directorPasswordNeedsChange} value={directorConfirmPassword} onChange={event=>setDirectorConfirmPassword(event.target.value)} className="mt-1 w-full rounded-lg border p-2.5 text-sm" placeholder={currentLang === 'ar' ? 'أعد كتابة كلمة المرور' : 'Enter it again'}/></label>
