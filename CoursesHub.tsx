@@ -821,12 +821,18 @@ const updateAccount = async (
               <User className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
               <input
                 autoComplete="username"
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
                 required
                 value={directorForm.username}
                 onChange={e => setDirectorForm(prev => ({ ...prev, username: e.target.value }))}
                 className="w-full pl-9 pr-3 py-2.5 border border-slate-200 rounded-xl text-sm text-slate-800 bg-slate-50 focus:outline-indigo-600"
                 placeholder={currentLang === 'ar' ? 'اسم المستخدم أو البريد الإلكتروني' : currentLang === 'fr' ? 'Nom d’utilisateur ou e-mail' : currentLang === 'es' ? 'Usuario o correo electrónico' : currentLang === 'it' ? 'Nome utente o e-mail' : 'Username or email address'}
               />
+            <p className="mt-1 text-[11px] leading-relaxed text-slate-500">
+              {currentLang === 'ar' ? 'في الحسابات التي أُنشئت من تسجيل المدير، استخدم البريد الإلكتروني الذي أدخلته عند إنشاء الحساب، أو الاسم الكامل للمدير.' : currentLang === 'fr' ? 'Pour un compte Directeur créé par inscription, utilisez l’e-mail saisi à la création ou le nom complet exact du Directeur.' : currentLang === 'es' ? 'Para una cuenta de Director creada al registrarse, use el correo introducido al crearla o el nombre completo exacto del Director.' : currentLang === 'it' ? 'Per un account Direttore creato durante la registrazione, usa l’e-mail inserita o il nome completo esatto del Direttore.' : 'For a Director account created during registration, use the email address entered at sign-up, or the Director’s exact full name.'}
+            </p>
             </div>
           </div>
 
