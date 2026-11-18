@@ -42,6 +42,7 @@ export interface PublicDirectorRegistrationInput {
   schoolName: string;
   email: string;
   phone: string;
+  password: string;
 }
 
 export interface PublicDirectorRegistrationResult {
@@ -55,7 +56,7 @@ export interface PublicDirectorRegistrationResult {
     activated: false;
     paid: false;
     licenseActive: false;
-    setupPending: true;
+    setupPending: false;
   };
 }
 
