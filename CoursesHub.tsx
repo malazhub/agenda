@@ -681,26 +681,34 @@ const updateAccount = async (
         <option key={session.id} value={session.id}>{session.gradeId.toUpperCase()} · {session.subject} · {session.title}</option>
       ))}
     </select>
-    <select
-      aria-label={row.fullName + ' grade'}
-      value={stagedDirectorAccount(row).gradeId || ''}
-      onChange={(event) => stageDirectorAccountUpdate(row, { gradeId: event.target.value })}
-      className="w-full max-w-64 rounded border border-slate-300 bg-white p-1.5 text-[10px]"
-    >
-      {LEBANESE_GRADE_LEVELS.map((grade) => (
-        <option key={grade.id} value={grade.id}>{grade.name[currentLang] || grade.name.en}</option>
-      ))}
-      {!LEBANESE_GRADE_LEVELS.some((grade) => grade.id === stagedDirectorAccount(row).gradeId) && stagedDirectorAccount(row).gradeId && (
-        <option value={stagedDirectorAccount(row).gradeId}>{stagedDirectorAccount(row).gradeId.toUpperCase()}</option>
-      )}
-    </select>
-    <input
-      aria-label={row.fullName + ' custom grade'}
-      value={LEBANESE_GRADE_LEVELS.some((grade) => grade.id === stagedDirectorAccount(row).gradeId) ? '' : stagedDirectorAccount(row).gradeId}
-      onChange={(event) => stageDirectorAccountUpdate(row, { gradeId: event.target.value.trim().toLowerCase().replace(/[^a-z0-9_-]/g, '_').slice(0, 40) })}
-      placeholder={currentLang === 'ar' ? 'أو اكتب صفاً جديداً' : currentLang === 'fr' ? 'Ou saisir une nouvelle classe' : currentLang === 'es' ? 'O escribe un nuevo curso' : currentLang === 'it' ? 'Oppure inserisci una nuova classe' : 'Or enter a new grade'}
-      className="w-full max-w-64 rounded border border-slate-300 bg-white p-1.5 text-[10px]"
-    />
+    {row.role === 'educator' ? (
+      <>
+        <select
+          aria-label={row.fullName + ' grade'}
+          value={stagedDirectorAccount(row).gradeId || ''}
+          onChange={(event) => stageDirectorAccountUpdate(row, { gradeId: event.target.value, registeredSessionId: null })}
+          className="w-full max-w-64 rounded border border-slate-300 bg-white p-1.5 text-[10px]"
+        >
+          {LEBANESE_GRADE_LEVELS.map((grade) => (
+            <option key={grade.id} value={grade.id}>{grade.name[currentLang] || grade.name.en}</option>
+          ))}
+          {!LEBANESE_GRADE_LEVELS.some((grade) => grade.id === stagedDirectorAccount(row).gradeId) && stagedDirectorAccount(row).gradeId && (
+            <option value={stagedDirectorAccount(row).gradeId}>{stagedDirectorAccount(row).gradeId.toUpperCase()}</option>
+          )}
+        </select>
+        <input
+          aria-label={row.fullName + ' custom grade'}
+          value={LEBANESE_GRADE_LEVELS.some((grade) => grade.id === stagedDirectorAccount(row).gradeId) ? '' : stagedDirectorAccount(row).gradeId}
+          onChange={(event) => stageDirectorAccountUpdate(row, { gradeId: event.target.value.trim().toLowerCase().replace(/[^a-z0-9_-]/g, '_').slice(0, 40), registeredSessionId: null })}
+          placeholder={currentLang === 'ar' ? 'أو اكتب صفاً جديداً' : currentLang === 'fr' ? 'Ou saisir une nouvelle classe' : currentLang === 'es' ? 'O escribe un nuevo curso' : currentLang === 'it' ? 'Oppure inserisci una nuova classe' : 'Or enter a new grade'}
+          className="w-full max-w-64 rounded border border-slate-300 bg-white p-1.5 text-[10px]"
+        />
+      </>
+    ) : (
+      <span className="text-[10px] font-semibold text-slate-600">
+        {LEBANESE_GRADE_LEVELS.find((grade) => grade.id === stagedDirectorAccount(row).gradeId)?.name[currentLang] || stagedDirectorAccount(row).gradeId.toUpperCase()}
+      </span>
+    )}
   </div>
 </td>
 
