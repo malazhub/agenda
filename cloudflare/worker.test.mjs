@@ -123,6 +123,12 @@ function fakeEnvironment() {
         const recent = attempts.filter((item) => item.username === this.values[0].toLowerCase() && !item.succeeded);
         return { count: recent.length };
       }
+      if (this.sql.includes("SELECT * FROM accounts WHERE role = 'director' AND lower(trim(email)) = ?")) {
+        const email = String(this.values[0] || '').trim().toLowerCase();
+        return [...accounts.values()].find((item) =>
+          item.role === 'director' && String(item.email || '').trim().toLowerCase() === email
+        ) || null;
+      }
       if (this.sql.includes('SELECT * FROM accounts WHERE username')) {
         const loginIdentifier = String(this.values[0] || '').toLowerCase();
         return [...accounts.values()].find((item) =>
@@ -1042,9 +1048,27 @@ test('Public Director registration saves chosen password and signs in by email a
   assert.equal(school.license_active, 0);
   assert.ok(account.password_hash.startsWith('pbkdf2_sha256$'));
 
+  // A different account username must never shadow an exact Director email.
+  accounts.set('unrelated-account', {
+    id: 'unrelated-account',
+    username: 'director@newschool.example',
+    password_hash: 'not-the-director-password',
+    role: 'educator',
+    school_id: 'default-agenda-school',
+    full_name: 'Unrelated Educator',
+    email: '',
+    phone: '',
+    school_or_subject: '',
+    grade_id: 'eb8',
+    registered_session_id: 'test-registration-session',
+    created_at: '2026-11-18 10:00:00',
+    expires_at: null,
+    activated: 1,
+    paid: 1,
+  });
   const pendingLogin = await send(env, '/api/auth/login', {
     method: 'POST',
-    body: { username: 'director@newschool.example', password: 'x' },
+    body: { username: ' DIRECTOR@NEWSCHOOL.EXAMPLE ', password: 'x' },
   });
   assert.equal(pendingLogin.status, 403);
   assert.match((await pendingLogin.json()).error, /Director account is inactive/i);
