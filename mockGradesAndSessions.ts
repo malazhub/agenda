@@ -17,6 +17,20 @@ export const LEBANESE_GRADE_LEVELS: GradeLevelDef[] = [
     iconBg: 'bg-blue-600'
   },
   {
+    id: 'bac_sv',
+    name: {
+      ar: 'الثانوية العامة - علوم الحياة (SV)',
+      fr: 'Terminale - Sciences de la Vie (SV)',
+      en: 'Grade 12 - Life Sciences (SV)',
+      it: 'Classe 12 - Scienze della vita (SV)',
+      es: 'Curso 12 - Ciencias de la vida (SV)'
+    },
+    badge: 'Bac SV',
+    cycle: { ar: 'المرحلة الثانوية', fr: 'Cycle Secondaire', en: 'Secondary', it: 'Scuola secondaria', es: 'Educación secundaria' },
+    color: 'from-emerald-600 to-teal-700',
+    iconBg: 'bg-emerald-600'
+  },
+  {
     id: 'bac_se',
     name: {
       ar: 'الثانوية العامة - اجتماع واقتصاد (SE)',
