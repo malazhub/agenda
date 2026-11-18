@@ -194,7 +194,7 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
       setError(null);
       setDirectorRequestSaved('');
       try {
-        await registerPublicDirectorSchool({
+        const result = await registerPublicDirectorSchool({
           fullName: name.trim(),
           schoolName: directorSchoolName.trim(),
           email: email.trim(),
@@ -206,12 +206,13 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
           currentLang === 'fr' ? 'La demande de création de l’école a été enregistrée. Elle apparaîtra dans le Centre de contrôle du propriétaire ; le compte restera inactif et impayé jusqu’à son approbation.' :
           currentLang === 'es' ? 'La solicitud de registro de la escuela se guardó correctamente. Aparecerá en el Centro de control del propietario y permanecerá inactiva y sin pagar hasta su aprobación.' :
           currentLang === 'it' ? 'La richiesta di registrazione della scuola è stata salvata. Apparirà nel Centro di controllo del proprietario e resterà inattiva e non pagata fino all’approvazione.' :
-          'Your school registration request was saved. It will appear in the Owner Control Center and remain inactive and unpaid until the Owner approves it.'
+          `Your school registration request was saved. Sign in with this email address: ${result.loginEmail}. The account remains inactive and unpaid until the Owner approves it.`
         );
         setName('');
         setDirectorSchoolName('');
         setEmail('');
         setPhone('');
+        setPassword('');
       } catch (requestError) {
         setError(requestError instanceof Error ? requestError.message : t.registrationServiceUnavailable);
       } finally {
