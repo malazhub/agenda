@@ -36,7 +36,6 @@ interface CoursesHubProps {
   onStartPractice: (exam: any) => void;
   onEnterLiveClassroom?: (session?: LiveSessionInfo) => void;
     onShowMessage: (message: string) => void;
-  directorLoginRequest: number;
   registeredAccount: CloudflareAccount | null;
   schoolId: string;
   sessionToken: string;
@@ -55,7 +54,6 @@ type DirectorRow = CloudflareAccount;
 
 export const CoursesHub: React.FC<CoursesHubProps> = ({
   currentLang,
-  directorLoginRequest,
   registeredAccount,
   schoolId,
   sessionToken,
@@ -104,12 +102,6 @@ export const CoursesHub: React.FC<CoursesHubProps> = ({
   const [monitorStream, setMonitorStream] = useState<LiveStreamStatus | null>(null);
   const [monitorLoading, setMonitorLoading] = useState(false);
   const [monitorError, setMonitorError] = useState('');
-
-    useEffect(() => {
-    if (directorLoginRequest > 0) {
-      setDirectorScreen('login');
-    }
-  }, [directorLoginRequest]);
 
   useEffect(() => {
     if (!ownerSchoolToken) return;
