@@ -748,7 +748,7 @@ test('grade registration loads available grades and grants grade-scoped live acc
     method: 'POST',
     body: {
       username: 'first.educator',
-      password: 'FirstEducatorPassword#2026',
+      password: '1',
       role: 'educator',
       fullName: 'First Educator',
       email: 'first.educator@example.com',
