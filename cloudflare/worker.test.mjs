@@ -589,10 +589,10 @@ test('registration hashes credentials and rejects duplicate usernames', async ()
 
   const invalidSession = await send(env, '/api/auth/register', {
     method: 'POST',
-    body: { ...registration, username: 'learner.invalid', registeredSessionId: 'missing-session' },
+    body: { ...registration, username: 'learner.invalid', registeredSessionId: 'missing-session', registeredEducatorId: 'missing-educator' },
   });
   assert.equal(invalidSession.status, 400);
-  assert.match((await invalidSession.json()).error, /choose a valid session/i);
+  assert.match((await invalidSession.json()).error, /choose an educator registered at this school/i);
 
   const registrationSessions = await send(env, '/api/registration/sessions');
   assert.equal(registrationSessions.status, 200);
@@ -665,7 +665,8 @@ test('grade registration loads available grades and grants grade-scoped live acc
   assert.equal(registration.status, 201);
   const { account, token } = await registration.json();
   assert.equal(account.gradeId, 'eb8');
-  assert.equal(account.registeredSessionId, 'test-registration-session');
+  assert.notEqual(account.registeredSessionId, 'test-registration-session');
+  assert.ok(sessionMap.get(account.registeredSessionId));
   assert.equal(account.registeredEducatorId, '00000000-0000-4000-8000-000000000001');
   assert.equal(accounts.get(account.id).grade_id, 'eb8');
   assert.equal(accounts.get(account.id).registered_educator_id, '00000000-0000-4000-8000-000000000001');
