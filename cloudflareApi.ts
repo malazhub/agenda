@@ -8,6 +8,7 @@ export interface CloudflareAccount {
   phone: string;
   schoolOrSubject: string;
   gradeId: string;
+  studentGradeLabel: string;
   registeredSessionId: string | null;
   registeredEducatorId: string | null;
   createdAt: string;
@@ -34,6 +35,7 @@ export interface RegistrationInput {
   gradeId: string;
   registeredSessionId?: string;
   registeredEducatorId?: string;
+  studentGradeLabel?: string;
   className?: string;
 }
 
@@ -329,15 +331,16 @@ export function getLiveEducators(
   return request(`/api/live-educators?${query.toString()}`);
 }
 
-export function loginAccount(username: string, password: string): Promise<AuthResponse> {
+export function loginAccount(username: string, password: string, schoolId: string): Promise<AuthResponse> {
   return request<AuthResponse>('/api/auth/login', {
     method: 'POST',
-    body: JSON.stringify({ username, password }),
+    body: JSON.stringify({ username, password, schoolId }),
   });
 }
 
-export function getCurrentAccount(token: string): Promise<{ account: CloudflareAccount }> {
-  return request('/api/auth/me', { headers: authHeaders(token) });
+export function getCurrentAccount(token: string, schoolId?: string): Promise<{ account: CloudflareAccount }> {
+  const query = schoolId ? `?schoolId=${encodeURIComponent(schoolId)}` : '';
+  return request(`/api/auth/me${query}`, { headers: authHeaders(token) });
 }
 export async function getEducatorLessons(
   schoolId: string,
