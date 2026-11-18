@@ -97,7 +97,7 @@ function schoolUrlSlug(schoolName, schoolId) {
     .normalize("NFKC")
     .toLocaleLowerCase()
     .trim()
-    .replace(/[^\\p{L}\\p{N}]+/gu, "-")
+    .replace(/[^\p{L}\p{N}]+/gu, "-")
     .replace(/^-+|-+$/g, "")
     .slice(0, 80)
     .replace(/-+$/g, "");
