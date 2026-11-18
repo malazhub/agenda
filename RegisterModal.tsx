@@ -253,7 +253,7 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
             schoolOrSubject,
 
             // Students inherit their selected educator's grade and current classroom.
-            gradeId: role === 'student' ? selectedEducator!.gradeId : (registeredGradeId || undefined),
+            gradeId: role === 'student' ? selectedEducator!.gradeId : registeredGradeId,
             registeredEducatorId: role === 'student' ? selectedEducatorId : undefined,
             registeredSessionId: role === 'student' ? selectedEducator!.registeredSessionId || undefined : undefined,
             // Every educator creates a dedicated class that the API assigns to the account.
