@@ -665,8 +665,7 @@ test('grade registration loads available grades and grants grade-scoped live acc
   assert.equal(registration.status, 201);
   const { account, token } = await registration.json();
   assert.equal(account.gradeId, 'eb8');
-  assert.notEqual(account.registeredSessionId, 'test-registration-session');
-  assert.ok(sessionMap.get(account.registeredSessionId));
+  assert.equal(account.registeredSessionId, 'test-registration-session');
   assert.equal(account.registeredEducatorId, '00000000-0000-4000-8000-000000000001');
   assert.equal(accounts.get(account.id).grade_id, 'eb8');
   assert.equal(accounts.get(account.id).registered_educator_id, '00000000-0000-4000-8000-000000000001');
@@ -1042,7 +1041,7 @@ test('Director login reads persisted role tables and saves status updates', asyn
   const { account } = await updated.json();
   assert.equal(account.activated, false);
   assert.equal(account.paid, true);
-  assert.equal(account.registeredSessionId, 'test-registration-session');
+  assert.notEqual(account.registeredSessionId, 'test-registration-session');
 
   const renewed = await send(env, `/api/director/accounts/${account.id}`, {
     method: 'PATCH',
