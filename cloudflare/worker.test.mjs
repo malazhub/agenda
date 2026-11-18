@@ -1043,6 +1043,11 @@ test('Public Director registration saves chosen password and signs in by email a
   const account = accounts.get(created.director.id);
   assert.ok(account);
   const school = schools.get(account.school_id);
+  assert.equal(created.schoolId, school.id);
+  assert.equal(
+    created.directorLink,
+    `https://agenda.malazhub-agenda.workers.dev/?schoolId=${encodeURIComponent(school.id)}`
+  );
   assert.equal(account.role, 'director');
   assert.equal(account.activated, 0);
   assert.equal(account.paid, 0);
