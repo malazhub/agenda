@@ -596,6 +596,7 @@ async function registrationEducators(env, schoolId) {
        a.school_or_subject,
        a.grade_id,
        a.registered_session_id,
+       a.id AS educator_account_id,
        s.id AS assigned_session_id,
        s.grade_id AS assigned_grade_id,
        s.subject AS assigned_subject
@@ -1369,6 +1370,90 @@ async function directorAccounts(request, env) {
   });
 }
 
+
+async function saveDirectorAccountUpdates(request, env) {
+  const director = await authenticate(request, env, "director");
+  if (!director) return json({ error: "Director authentication required." }, 401);
+  const schoolId = await getDirectorSchoolId(env, director);
+  if (!schoolId) return json({ error: "Director school is not configured." }, 403);
+  const body = await requestJson(request);
+  if (!Array.isArray(body?.updates) || body.updates.length < 1 || body.updates.length > 500) {
+    return json({ error: "Provide between 1 and 500 account changes." }, 400);
+  }
+
+  const seen = new Set();
+  const prepared = [];
+  const statements = [];
+  for (const item of body.updates) {
+    const id = typeof item?.id === "string" ? item.id : "";
+    if (!id || seen.has(id) || typeof item.activated !== "boolean" || typeof item.paid !== "boolean") {
+      return json({ error: "Each saved account must have a unique ID and valid activation/payment values." }, 400);
+    }
+    seen.add(id);
+    const account = await env.DB.prepare(
+      "SELECT id, role, full_name, grade_id, registered_session_id, registered_educator_id FROM accounts WHERE id = ? AND school_id = ? AND role IN ('student', 'educator')"
+    ).bind(id, schoolId).first();
+    if (!account) return json({ error: "One or more accounts do not belong to this school. No changes were saved." }, 404);
+
+    let gradeId = typeof item.gradeId === "string" ? item.gradeId.trim() : String(account.grade_id || "");
+    let sessionId = typeof item.registeredSessionId === "string" ? item.registeredSessionId.trim() : String(account.registered_session_id || "");
+    let educatorId = typeof item.registeredEducatorId === "string" ? item.registeredEducatorId.trim() : (account.registered_educator_id || null);
+
+    if (!gradeId || !/^[a-z0-9_-]{1,40}$/i.test(gradeId)) {
+      return json({ error: "Choose a valid grade for every account before saving." }, 400);
+    }
+
+    if (account.role === "student" && educatorId) {
+      const educator = await env.DB.prepare(
+        "SELECT id, grade_id, registered_session_id FROM accounts WHERE id = ? AND school_id = ? AND role = 'educator'"
+      ).bind(educatorId, schoolId).first();
+      if (!educator) return json({ error: "Select an educator from this school." }, 400);
+      gradeId = String(educator.grade_id || gradeId);
+      sessionId = educator.registered_session_id || "";
+    } else if (sessionId) {
+      const session = await env.DB.prepare(
+        "SELECT id, grade_id, subject, title, teacher_name, source_name, source_url, playback_url, media_key FROM sessions WHERE id = ? AND school_id = ?"
+      ).bind(sessionId, schoolId).first();
+      if (!session) return json({ error: "Select a session belonging to this school." }, 400);
+      gradeId = String(session.grade_id || gradeId);
+      if (account.role === "educator") {
+        const currentRoom = String(account.registered_session_id || "") === sessionId;
+        const anotherEducator = await env.DB.prepare(
+          "SELECT id FROM accounts WHERE role = 'educator' AND school_id = ? AND registered_session_id = ? AND id != ? LIMIT 1"
+        ).bind(schoolId, sessionId, id).first();
+        if (!currentRoom || anotherEducator) {
+          const dedicatedId = randomId();
+          statements.push(env.DB.prepare(
+            "INSERT INTO sessions (id, school_id, grade_id, subject, title, teacher_name, source_name, source_url, playback_url, media_key, is_live, live_starts_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, NULL)"
+          ).bind(dedicatedId, schoolId, gradeId, session.subject, session.title, account.full_name, session.source_name || account.full_name, session.source_url, session.playback_url || session.source_url, session.media_key || null));
+          sessionId = dedicatedId;
+        }
+      }
+    }
+
+    if (account.role === "educator") educatorId = null;
+    prepared.push({ id, activated: item.activated, paid: item.paid, gradeId, sessionId: sessionId || null, educatorId: educatorId || null });
+  }
+
+  for (const item of prepared) {
+    statements.push(env.DB.prepare(
+      "UPDATE accounts SET activated = ?, paid = ?, grade_id = ?, registered_session_id = ?, registered_educator_id = ? WHERE id = ? AND school_id = ? AND role IN ('student', 'educator')"
+    ).bind(Number(item.activated), Number(item.paid), item.gradeId, item.sessionId, item.educatorId, item.id, schoolId));
+  }
+  await env.DB.batch(statements);
+  const accounts = [];
+  for (const item of prepared) {
+    const saved = await env.DB.prepare("SELECT * FROM accounts WHERE id = ? AND school_id = ?").bind(item.id, schoolId).first();
+    if (!saved || Boolean(saved.activated) !== item.activated || Boolean(saved.paid) !== item.paid ||
+        String(saved.grade_id || "") !== item.gradeId ||
+        String(saved.registered_session_id || "") !== String(item.sessionId || "") ||
+        String(saved.registered_educator_id || "") !== String(item.educatorId || "")) {
+      return json({ error: "The account changes could not be verified after saving. Refresh and try again." }, 500);
+    }
+    accounts.push(publicAccount(saved));
+  }
+  return json({ updated: accounts.length, accounts });
+}
 
 async function deleteAccount(request, env, accountId) {
   const director = await authenticate(request, env, "director");
@@ -3391,6 +3476,7 @@ async function handle(request, env) {
   if (request.method === "PUT" && path === "/api/director/pricing") return updateDirectorGradePricing(request, env);
   if (request.method === "GET" && path === "/api/director/live-stream") return getDirectorLiveStream(request, env);
   if (request.method === "GET" && path === "/api/director/accounts") return directorAccounts(request, env);
+  if (request.method === "PATCH" && path === "/api/director/accounts/status") return saveDirectorAccountUpdates(request, env);
   if (request.method === "GET" && path === "/api/director/sessions") return directorSessions(request, env);
   if (request.method === "POST" && path === "/api/director/sessions") return createSessions(request, env);
   if (request.method === "PATCH" && path === "/api/educator/live-session") return setEducatorLiveSession(request, env);
