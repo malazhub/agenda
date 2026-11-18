@@ -959,7 +959,7 @@ test('Owner creates a one-year Director school with phone initial password; Dire
   assert.equal(accounts.get(director.id).activated, 0);
   assert.equal(accounts.get(director.id).paid, 0);
   const blockedLogin = await send(env, '/api/auth/login', {
-    method: 'POST', body: { username: 'new.director', password: '+961 70 123 456', schoolId: director.schoolId },
+    method: 'POST', body: { username: 'new.director', password: '+961 70 123 456', schoolId: director.schoolId, schoolId: director.schoolId },
   });
   assert.equal(blockedLogin.status, 403);
   assert.match((await blockedLogin.json()).error, /Director account is inactive/i);
@@ -977,7 +977,7 @@ test('Owner creates a one-year Director school with phone initial password; Dire
   // flag still permits the phone credential until a personal password is saved.
   accounts.get(director.id).password_must_change = 0;
   const directorLogin = await send(env, '/api/auth/login', {
-    method: 'POST', body: { username: 'new.director', password: '+961 70 123 456', schoolId: director.schoolId },
+    method: 'POST', body: { username: 'new.director', password: '+961 70 123 456', schoolId: director.schoolId, schoolId: director.schoolId },
   });
   assert.equal(directorLogin.status, 200);
   const directorLoginResult = await directorLogin.json();
@@ -991,24 +991,24 @@ test('Owner creates a one-year Director school with phone initial password; Dire
   assert.equal(accounts.get(director.id).password_must_change, 1);
   for (let attempt = 0; attempt < 6; attempt += 1) {
     const wrongPassword = await send(env, '/api/auth/login', {
-      method: 'POST', body: { username: 'new.director', password: 'incorrect' },
+      method: 'POST', body: { username: 'new.director', password: 'incorrect', schoolId: director.schoolId },
     });
     assert.equal(wrongPassword.status, 401);
     assert.deepEqual(await wrongPassword.json(), { error: 'Invalid username or password.' });
   }
   const phoneLoginAfterFailedAttempts = await send(env, '/api/auth/login', {
-    method: 'POST', body: { username: 'new.director', password: '+961 70 123 456' },
+    method: 'POST', body: { username: 'new.director', password: '+961 70 123 456', schoolId: director.schoolId },
   });
   assert.equal(phoneLoginAfterFailedAttempts.status, 200);
   const normalizedPhoneLogin = await send(env, '/api/auth/login', {
-    method: 'POST', body: { username: 'new.director', password: '70 123 456' },
+    method: 'POST', body: { username: 'new.director', password: '70 123 456', schoolId: director.schoolId },
   });
   assert.equal(normalizedPhoneLogin.status, 200);
   const trunkZeroPhoneLogin = await send(env, '/api/auth/login', {
-    method: 'POST', body: { username: 'new.director', password: '070123456' },
+    method: 'POST', body: { username: 'new.director', password: '070123456', schoolId: director.schoolId },
   });
   assert.equal(trunkZeroPhoneLogin.status, 200);
-  const currentDirector = await send(env, '/api/auth/me', { token: directorToken });
+  const currentDirector = await send(env, `/api/auth/me?schoolId=${director.schoolId}`, { token: directorToken });
   assert.equal(currentDirector.status, 200);
   assert.equal((await currentDirector.json()).account.role, 'director');
   const profile = await send(env, '/api/director/profile', { token: directorToken });
@@ -1016,7 +1016,7 @@ test('Owner creates a one-year Director school with phone initial password; Dire
   assert.equal((await profile.json()).profile.schoolName, 'New Learning School');
   const passwordChanged = await send(env, '/api/director/profile', {
     method: 'PATCH', token: directorToken,
-    body: { schoolName: 'New Learning School', username: 'nostafa.director', password: 'NewPrivatePassword#2026' },
+    body: { schoolName: 'New Learning School', username: 'nostafa.director', password: 'NewPrivatePassword#2026', schoolId: director.schoolId },
   });
   assert.equal(passwordChanged.status, 200);
   assert.equal(accounts.get(director.id).password_must_change, 0);
@@ -1030,17 +1030,17 @@ test('Owner creates a one-year Director school with phone initial password; Dire
   // profile/password update using the renamed username and chosen password.
   const reloginAfterLogout = await send(env, '/api/auth/login', {
     method: 'POST',
-    body: { username: 'nostafa.director', password: 'NewPrivatePassword#2026' },
+    body: { username: 'nostafa.director', password: 'NewPrivatePassword#2026', schoolId: director.schoolId },
   });
   assert.equal(reloginAfterLogout.status, 200);
   const staleUsernameLogin = await send(env, '/api/auth/login', {
     method: 'POST',
-    body: { username: 'new.director', password: 'NewPrivatePassword#2026' },
+    body: { username: 'new.director', password: 'NewPrivatePassword#2026', schoolId: director.schoolId },
   });
   assert.equal(staleUsernameLogin.status, 401);
   const oldPhoneAfterPasswordChange = await send(env, '/api/auth/login', {
     method: 'POST',
-    body: { username: 'nostafa.director', password: '+961 70 123 456' },
+    body: { username: 'nostafa.director', password: '+961 70 123 456', schoolId: director.schoolId },
   });
   assert.equal(oldPhoneAfterPasswordChange.status, 401);
 
@@ -1065,7 +1065,7 @@ test('Owner creates a one-year Director school with phone initial password; Dire
 
   const blockedDirectorLogin = await send(env, '/api/auth/login', {
     method: 'POST',
-    body: { username: 'nostafa.director', password: 'NewPrivatePassword#2026' },
+    body: { username: 'nostafa.director', password: 'NewPrivatePassword#2026', schoolId: director.schoolId },
   });
   assert.equal(blockedDirectorLogin.status, 403);
   assert.match((await blockedDirectorLogin.json()).error, /Director account is inactive/i);
@@ -1080,7 +1080,7 @@ test('Owner creates a one-year Director school with phone initial password; Dire
   assert.equal(restored.status, 200);
   const restoredLogin = await send(env, '/api/auth/login', {
     method: 'POST',
-    body: { username: 'nostafa.director', password: 'NewPrivatePassword#2026' },
+    body: { username: 'nostafa.director', password: 'NewPrivatePassword#2026', schoolId: director.schoolId },
   });
   assert.equal(restoredLogin.status, 200);
 });
