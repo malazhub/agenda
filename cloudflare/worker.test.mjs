@@ -303,6 +303,27 @@ function fakeEnvironment() {
         if (school && (!this.values[2] || school.director_id === this.values[2])) school.name = this.values[0];
         return { meta: { changes: school ? 1 : 0 } };
       }
+      if (this.sql.startsWith('UPDATE accounts SET registered_session_id = ? WHERE id = ? AND school_id = ? AND role = \'educator\'')) {
+        const [registered_session_id, id, school_id] = this.values;
+        const account = accounts.get(id);
+        if (!account || account.school_id !== school_id || account.role !== 'educator') return { meta: { changes: 0 } };
+        account.registered_session_id = registered_session_id;
+        return { meta: { changes: 1 } };
+      }
+      if (this.sql.startsWith('UPDATE accounts SET registered_educator_id = ?, registered_session_id = ?, grade_id = ? WHERE id = ?')) {
+        const [registered_educator_id, registered_session_id, grade_id, id] = this.values;
+        const account = accounts.get(id);
+        if (!account || account.role !== 'student') return { meta: { changes: 0 } };
+        Object.assign(account, { registered_educator_id, registered_session_id, grade_id });
+        return { meta: { changes: 1 } };
+      }
+      if (this.sql.startsWith('UPDATE accounts SET registered_session_id = ? WHERE id = ? AND school_id = ? AND role = \'educator\'')) {
+        const [registered_session_id, id, school_id] = this.values;
+        const account = accounts.get(id);
+        if (!account || account.school_id !== school_id || account.role !== 'educator') return { meta: { changes: 0 } };
+        account.registered_session_id = registered_session_id;
+        return { meta: { changes: 1 } };
+      }
       if (this.sql.startsWith('UPDATE accounts SET password_hash = ?, password_must_change = 1, phone_password_disabled_at = NULL')) {
         const [password_hash, id] = this.values;
         const account = accounts.get(id);
@@ -644,6 +665,7 @@ test('grade registration loads available grades and grants grade-scoped live acc
       phone: '+1 555 0100',
       schoolOrSubject: 'Grade 8',
       gradeId: 'eb8',
+      registeredEducatorId: '00000000-0000-4000-8000-000000000001',
       registeredSessionId: 'test-registration-session',
     },
   });
@@ -651,7 +673,9 @@ test('grade registration loads available grades and grants grade-scoped live acc
   const { account, token } = await registration.json();
   assert.equal(account.gradeId, 'eb8');
   assert.equal(account.registeredSessionId, 'test-registration-session');
+  assert.equal(account.registeredEducatorId, '00000000-0000-4000-8000-000000000001');
   assert.equal(accounts.get(account.id).grade_id, 'eb8');
+  assert.equal(accounts.get(account.id).registered_educator_id, '00000000-0000-4000-8000-000000000001');
 
   const directorLogin = await send(env, '/api/auth/login', {
     method: 'POST',
@@ -687,12 +711,72 @@ test('grade registration loads available grades and grants grade-scoped live acc
       phone: '+961 70 123 456',
       schoolOrSubject: 'Life Sciences',
       gradeId: 'bac_sv',
+      className: 'Life Sciences Class 12',
     },
   });
   assert.equal(firstEducator.status, 201, JSON.stringify(await firstEducator.clone().json()));
   const firstEducatorResult = await firstEducator.json();
   assert.equal(firstEducatorResult.account.gradeId, 'bac_sv');
   assert.equal(firstEducatorResult.account.role, 'educator');
+  assert.ok(firstEducatorResult.account.registeredSessionId);
+  assert.equal(sessions.get(firstEducatorResult.account.registeredSessionId).title, 'Life Sciences Class 12');
+});
+
+test('Director can batch-save grades, payment, activation, and educator assignments', async () => {
+  const { env, accounts } = fakeEnvironment();
+  const educator = accounts.get('00000000-0000-4000-8000-000000000001');
+  educator.grade_id = 'bac_sv';
+  educator.registered_session_id = null;
+  const student = {
+    id: '00000000-0000-4000-8000-000000000099',
+    username: 'batch.student',
+    password_hash: hashPassword('BatchStudentPassword#2026'),
+    role: 'student',
+    school_id: 'default-agenda-school',
+    full_name: 'Batch Student',
+    email: 'batch.student@example.com',
+    phone: '',
+    school_or_subject: '',
+    grade_id: 'eb8',
+    registered_session_id: null,
+    registered_educator_id: null,
+    created_at: '2026-11-18 08:00:00',
+    expires_at: '2026-12-18 08:00:00',
+    activated: 0,
+    paid: 0,
+  };
+  accounts.set(student.id, student);
+
+  const directorLogin = await send(env, '/api/auth/login', {
+    method: 'POST',
+    body: { username: 'director', password: 'DirectorPassword#2026' },
+  });
+  assert.equal(directorLogin.status, 200);
+  const { token } = await directorLogin.json();
+
+  const save = await send(env, '/api/director/accounts/status', {
+    method: 'PATCH',
+    token,
+    body: {
+      updates: [{
+        id: student.id,
+        activated: true,
+        paid: true,
+        gradeId: 'bac_sv',
+        registeredSessionId: null,
+        registeredEducatorId: educator.id,
+      }],
+    },
+  });
+  assert.equal(save.status, 200, JSON.stringify(await save.clone().json()));
+  const result = await save.json();
+  assert.equal(result.updated, 1);
+  assert.equal(result.accounts[0].registeredEducatorId, educator.id);
+  assert.equal(result.accounts[0].gradeId, 'bac_sv');
+  assert.equal(result.accounts[0].registeredSessionId, null);
+  assert.equal(result.accounts[0].activated, true);
+  assert.equal(result.accounts[0].paid, true);
+  assert.equal(student.registered_educator_id, educator.id);
 });
 
 test('Owner creates a one-year Director school with phone initial password; Director chooses username and changes password after sign-in', async () => {
