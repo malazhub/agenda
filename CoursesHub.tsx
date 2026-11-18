@@ -12,6 +12,7 @@ import {
   getRegistrationSessions,
   loginAccount,
   updateDirectorAccount,
+  saveDirectorAccountUpdates,
   deleteDirectorAccount,
   getDirectorLiveStream,
   getDirectorPayment,
@@ -93,6 +94,8 @@ export const CoursesHub: React.FC<CoursesHubProps> = ({
   const [studentRows, setStudentRows] = useState<DirectorRow[]>([]);
   const [educatorRows, setEducatorRows] = useState<DirectorRow[]>([]);
   const [registrationSessions, setRegistrationSessions] = useState<RegistrationSession[]>([]);
+  const [pendingDirectorUpdates, setPendingDirectorUpdates] = useState<Record<string, DirectorAccountUpdate>>({});
+  const [savingDirectorUpdates, setSavingDirectorUpdates] = useState(false);
   const [directorLoading, setDirectorLoading] = useState(false);
   const [directorDataError, setDirectorDataError] = useState('');
   const [directorMessage, setDirectorMessage] = useState('');
@@ -360,6 +363,64 @@ export const CoursesHub: React.FC<CoursesHubProps> = ({
   };
 
 
+const directorAccountDefaults = (row: DirectorRow): DirectorAccountUpdate => ({
+  id: row.id,
+  activated: row.activated,
+  paid: row.paid,
+  gradeId: row.gradeId || '',
+  registeredSessionId: row.registeredSessionId || null,
+  registeredEducatorId: row.registeredEducatorId || null,
+});
+
+const stagedDirectorAccount = (row: DirectorRow): DirectorAccountUpdate =>
+  pendingDirectorUpdates[row.id] || directorAccountDefaults(row);
+
+const stageDirectorAccountUpdate = (
+  row: DirectorRow,
+  change: Partial<Omit<DirectorAccountUpdate, 'id'>>
+) => {
+  setPendingDirectorUpdates((current) => ({
+    ...current,
+    [row.id]: { ...(current[row.id] || directorAccountDefaults(row)), ...change, id: row.id },
+  }));
+  setDirectorDataError('');
+  setDirectorMessage('');
+};
+
+const saveAllDirectorAccountUpdates = async () => {
+  const updates = Object.values(pendingDirectorUpdates);
+  if (!directorToken || !updates.length) return;
+  setSavingDirectorUpdates(true);
+  setDirectorDataError('');
+  setDirectorMessage('');
+  try {
+    const result = await saveDirectorAccountUpdates(directorToken, updates);
+    const savedById = new Map(result.accounts.map((account) => [account.id, account]));
+    setStudentRows((rows) => rows.map((row) => savedById.get(row.id) || row));
+    setEducatorRows((rows) => rows.map((row) => savedById.get(row.id) || row));
+    setPendingDirectorUpdates({});
+    const { sessions } = await getRegistrationSessions(directorSchoolId);
+    setRegistrationSessions(sessions);
+    setDirectorMessage(
+      currentLang === 'ar' ? 'تم حفظ جميع تعديلات الحسابات بنجاح.' :
+      currentLang === 'fr' ? 'Toutes les modifications des comptes ont été enregistrées.' :
+      currentLang === 'es' ? 'Se guardaron todos los cambios de las cuentas.' :
+      currentLang === 'it' ? 'Tutte le modifiche agli account sono state salvate.' :
+      'All account changes were saved successfully.'
+    );
+  } catch (error) {
+    setDirectorDataError(
+      currentLang === 'ar' ? 'تعذر حفظ التعديلات. لم يتم تأكيد حفظ جميع التغييرات.' :
+      currentLang === 'fr' ? 'Impossible d’enregistrer les modifications. La sauvegarde complète n’a pas été confirmée.' :
+      currentLang === 'es' ? 'No se pudieron guardar los cambios. No se confirmó el guardado completo.' :
+      currentLang === 'it' ? 'Impossibile salvare le modifiche. Il salvataggio completo non è stato confirmado.' :
+      error instanceof Error ? error.message : 'Unable to save all account changes.'
+    );
+  } finally {
+    setSavingDirectorUpdates(false);
+  }
+};
+
 const updateAccount = async (
   account: DirectorRow,
     update: {
@@ -562,44 +623,25 @@ const updateAccount = async (
                             {showEducatorColumn && (
                 <td className="px-3 py-3 text-slate-700">
                   <select
-  aria-label={`${row.fullName} educator`}
-  value={
-    educatorRows.find(
-      (educator) =>
-        educator.registeredSessionId === row.registeredSessionId &&
-        Boolean(educator.registeredSessionId)
-    )?.id || '__assignment_not_found__'
-  }
-  onChange={(event) =>
-    void updateAccount(row, {
-      educatorId: event.target.value
-    })
-  }
-  className="min-w-40 max-w-56 rounded border border-slate-300 bg-white p-2 text-xs"
->
-  {!educatorRows.some(
-    (educator) =>
-      educator.registeredSessionId === row.registeredSessionId &&
-      Boolean(educator.registeredSessionId)
-  ) && (
-    <option value="__assignment_not_found__" disabled>
-      {currentLang === 'ar' ? 'لم يتم العثور على المعلّم المسجّل' : currentLang === 'fr' ? 'Éducateur inscrit introuvable' : currentLang === 'es' ? 'No se encontró el educador registrado' : currentLang === 'it' ? 'Educatore registrato non trovato' : 'Registered educator not found'}
-    </option>
-  )}
-
-  {educatorRows.map((educator) => (
-    <option
-      key={educator.id}
-      value={educator.id}
-      disabled={!educator.registeredSessionId}
-    >
-      {educator.fullName}
-      {!educator.registeredSessionId
-        ? (currentLang === 'ar' ? ' — لا يوجد صف مخصص' : currentLang === 'fr' ? ' — aucune classe attribuée' : currentLang === 'es' ? ' — aula no asignada' : currentLang === 'it' ? ' — nessuna classe assegnata' : ' — no classroom assigned')
-        : ''}
-    </option>
-  ))}
-</select>
+                    aria-label={row.fullName + ' educator'}
+                    value={stagedDirectorAccount(row).registeredEducatorId || ''}
+                    onChange={(event) => {
+                      const selected = educatorRows.find((educator) => educator.id === event.target.value);
+                      stageDirectorAccountUpdate(row, {
+                        registeredEducatorId: selected?.id || null,
+                        registeredSessionId: selected?.registeredSessionId || null,
+                        gradeId: selected?.gradeId || stagedDirectorAccount(row).gradeId,
+                      });
+                    }}
+                    className="min-w-40 max-w-56 rounded border border-slate-300 bg-white p-2 text-xs"
+                  >
+                    <option value="">{currentLang === 'ar' ? 'بدون أستاذ — يمكن تعيينه لاحقاً' : currentLang === 'fr' ? 'Aucun éducateur — attribution ultérieure' : currentLang === 'es' ? 'Sin educador — asignar más tarde' : currentLang === 'it' ? 'Nessun educatore — assegnare dopo' : 'No educator — assign later'}</option>
+                    {educatorRows.map((educator) => (
+                      <option key={educator.id} value={educator.id}>
+                        {educator.fullName}{educator.gradeId ? ' · ' + educator.gradeId.toUpperCase() : ''}
+                      </option>
+                    ))}
+                  </select>
                 </td>
               )}
               <td className="px-3 py-3 text-slate-700">
@@ -617,47 +659,44 @@ const updateAccount = async (
               <td className="px-3 py-3 text-slate-700">{row.schoolOrSubject || '—'}</td>
               
 <td className="px-3 py-3 text-slate-700">
-  <div className="flex flex-col items-start gap-2">
+  <div className="flex min-w-56 flex-col items-start gap-2">
     <select
-      aria-label={`${row.fullName} ${t.registeredSessionLabel}`}
-      value={row.registeredSessionId || ''}
-      onChange={(event) =>
-        void updateAccount(row, {
-          registeredSessionId: event.target.value
-        })
-      }
-      className="max-w-64 rounded border border-slate-300 bg-white p-1.5 text-[10px]"
+      aria-label={row.fullName + ' ' + t.registeredSessionLabel}
+      value={stagedDirectorAccount(row).registeredSessionId || ''}
+      onChange={(event) => {
+        const selected = registrationSessions.find((session) => session.id === event.target.value);
+        stageDirectorAccountUpdate(row, {
+          registeredSessionId: selected?.id || null,
+          ...(selected ? { gradeId: selected.gradeId } : {}),
+        });
+      }}
+      className="w-full max-w-64 rounded border border-slate-300 bg-white p-1.5 text-[10px]"
     >
-      <option value="">
-        {t.registrationChooseSession}
-      </option>
-
+      <option value="">{currentLang === 'ar' ? 'بدون حصة مخصصة' : currentLang === 'fr' ? 'Aucune classe attribuée' : currentLang === 'es' ? 'Sin sesión asignada' : currentLang === 'it' ? 'Nessuna lezione assegnata' : 'No session assigned'}</option>
       {registrationSessions.map((session) => (
-        <option key={session.id} value={session.id}>
-          {session.gradeId.toUpperCase()}
-          {' · '}
-          {session.subject}
-          {' · '}
-          {session.teacherName || (currentLang === 'ar' ? 'حصة غير مخصصة' : currentLang === 'fr' ? 'Cours non attribué' : currentLang === 'es' ? 'Sesión sin asignar' : currentLang === 'it' ? 'Lezione non assegnata' : 'Unassigned lesson')}
-          {' · '}
-          {session.title}
-        </option>
+        <option key={session.id} value={session.id}>{session.gradeId.toUpperCase()} · {session.subject} · {session.title}</option>
       ))}
     </select>
-
-    {row.role === 'educator' && row.registeredSessionId && (
-      <button
-        type="button"
-        onClick={() =>
-          void updateAccount(row, {
-            registeredSessionId: row.registeredSessionId!
-          })
-        }
-        className="text-[10px] font-bold text-indigo-700 underline"
-      >
-        {currentLang === 'ar' ? 'فصل الصف' : currentLang === 'fr' ? 'Dissocier la classe' : currentLang === 'es' ? 'Desvincular aula' : currentLang === 'it' ? 'Scollega aula' : 'Separate classroom'}
-      </button>
-    )}
+    <select
+      aria-label={row.fullName + ' grade'}
+      value={stagedDirectorAccount(row).gradeId || ''}
+      onChange={(event) => stageDirectorAccountUpdate(row, { gradeId: event.target.value })}
+      className="w-full max-w-64 rounded border border-slate-300 bg-white p-1.5 text-[10px]"
+    >
+      {LEBANESE_GRADE_LEVELS.map((grade) => (
+        <option key={grade.id} value={grade.id}>{grade.name[currentLang] || grade.name.en}</option>
+      ))}
+      {!LEBANESE_GRADE_LEVELS.some((grade) => grade.id === stagedDirectorAccount(row).gradeId) && stagedDirectorAccount(row).gradeId && (
+        <option value={stagedDirectorAccount(row).gradeId}>{stagedDirectorAccount(row).gradeId.toUpperCase()}</option>
+      )}
+    </select>
+    <input
+      aria-label={row.fullName + ' custom grade'}
+      value={LEBANESE_GRADE_LEVELS.some((grade) => grade.id === stagedDirectorAccount(row).gradeId) ? '' : stagedDirectorAccount(row).gradeId}
+      onChange={(event) => stageDirectorAccountUpdate(row, { gradeId: event.target.value.trim().toLowerCase().replace(/[^a-z0-9_-]/g, '_').slice(0, 40) })}
+      placeholder={currentLang === 'ar' ? 'أو اكتب صفاً جديداً' : currentLang === 'fr' ? 'Ou saisir une nouvelle classe' : currentLang === 'es' ? 'O escribe un nuevo curso' : currentLang === 'it' ? 'Oppure inserisci una nuova classe' : 'Or enter a new grade'}
+      className="w-full max-w-64 rounded border border-slate-300 bg-white p-1.5 text-[10px]"
+    />
   </div>
 </td>
 
@@ -669,8 +708,8 @@ const updateAccount = async (
               <td className="px-3 py-3">
                 <input
                   type="checkbox"
-                  checked={row.activated}
-                  onChange={() => void updateAccount(row, { activated: !row.activated })}
+                  checked={stagedDirectorAccount(row).activated}
+                  onChange={() => stageDirectorAccountUpdate(row, { activated: !stagedDirectorAccount(row).activated })}
                   aria-label={currentLang === 'ar' ? `تفعيل ${row.fullName}` : currentLang === 'fr' ? `Compte activé : ${row.fullName}` : currentLang === 'es' ? `Cuenta activada: ${row.fullName}` : currentLang === 'it' ? `Account attivato: ${row.fullName}` : `${row.fullName} activated`}
                   className="w-4 h-4 accent-indigo-600 cursor-pointer"
                 />
@@ -678,8 +717,8 @@ const updateAccount = async (
               <td className="px-3 py-3">
                 <input
                   type="checkbox"
-                  checked={row.paid}
-                  onChange={() => void updateAccount(row, { paid: !row.paid })}
+                  checked={stagedDirectorAccount(row).paid}
+                  onChange={() => stageDirectorAccountUpdate(row, { paid: !stagedDirectorAccount(row).paid })}
                   aria-label={currentLang === 'ar' ? `حالة الدفع لـ ${row.fullName}` : currentLang === 'fr' ? `Compte payé : ${row.fullName}` : currentLang === 'es' ? `Cuenta pagada: ${row.fullName}` : currentLang === 'it' ? `Account pagato: ${row.fullName}` : `${row.fullName} paid`}
                   className="w-4 h-4 accent-indigo-600 cursor-pointer"
                 />
@@ -977,6 +1016,18 @@ const updateAccount = async (
               currentLang === 'ar' ? 'المعلمون' : currentLang === 'fr' ? 'Éducateurs' : currentLang === 'es' ? 'Educadores' : currentLang === 'it' ? 'Educatori' : 'Educators',
               educatorRows
             )}
+            <div className="sticky bottom-3 z-20 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-indigo-200 bg-white/95 p-4 shadow-lg backdrop-blur">
+              <span className="text-xs font-bold text-slate-700">
+                {Object.keys(pendingDirectorUpdates).length
+                  ? (currentLang === 'ar' ? Object.keys(pendingDirectorUpdates).length + ' تعديلات غير محفوظة' : currentLang === 'fr' ? Object.keys(pendingDirectorUpdates).length + ' modifications non enregistrées' : currentLang === 'es' ? Object.keys(pendingDirectorUpdates).length + ' cambios sin guardar' : currentLang === 'it' ? Object.keys(pendingDirectorUpdates).length + ' modifiche non salvate' : Object.keys(pendingDirectorUpdates).length + ' unsaved account changes')
+                  : (currentLang === 'ar' ? 'جميع التعديلات محفوظة' : currentLang === 'fr' ? 'Toutes les modifications sont enregistrées' : currentLang === 'es' ? 'Todos los cambios están guardados' : currentLang === 'it' ? 'Tutte le modifiche sono salvate' : 'All changes are saved')}
+              </span>
+              <button type="button" disabled={!Object.keys(pendingDirectorUpdates).length || savingDirectorUpdates} onClick={() => void saveAllDirectorAccountUpdates()} className="rounded-xl bg-indigo-700 px-6 py-3 text-sm font-black text-white shadow-sm transition hover:bg-indigo-800 disabled:cursor-not-allowed disabled:opacity-40">
+                {savingDirectorUpdates
+                  ? (currentLang === 'ar' ? 'جارٍ الحفظ...' : currentLang === 'fr' ? 'Enregistrement...' : currentLang === 'es' ? 'Guardando...' : currentLang === 'it' ? 'Salvataggio...' : 'Saving...')
+                  : (currentLang === 'ar' ? 'حفظ' : currentLang === 'fr' ? 'Enregistrer' : currentLang === 'es' ? 'Guardar' : currentLang === 'it' ? 'Salva' : 'Save')}
+              </button>
+            </div>
           </div>
         )}
       </div>
