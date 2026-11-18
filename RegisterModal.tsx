@@ -7,6 +7,7 @@ import {
   getSchoolPayment,
   getRegistrationGrades,
   getRegistrationEducators,
+  getRegistrationSessions,
   loginAccount,
   registerAccount,
 } from '../services/cloudflareApi';
@@ -14,6 +15,7 @@ import {
 import type {
   CloudflareAccount,
   RegistrationEducator,
+  RegistrationSession,
 } from '../services/cloudflareApi';
 
 interface RegisterModalProps {
@@ -41,6 +43,9 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
   const [schoolOrSubject, setSchoolOrSubject] = useState('');
   const [registeredGradeId, setRegisteredGradeId] = useState('');
   const [selectedEducatorId, setSelectedEducatorId] = useState<string>('');
+  const [educatorSessionId, setEducatorSessionId] = useState('');
+  const [newClassName, setNewClassName] = useState('');
+  const [registrationSessions, setRegistrationSessions] = useState<RegistrationSession[]>([]);
   const [registrationGrades, setRegistrationGrades] = useState<string[]>(
     LEBANESE_GRADE_LEVELS.map((grade) => grade.id)
   );
@@ -130,20 +135,22 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
     if (!isOpen) return;
     let active = true;
     setIsLoadingGrades(true);
-    // Populate the full Lebanese grade list immediately; then merge any
-    // server-provided IDs without ever leaving the selector empty.
     setRegistrationGrades(LEBANESE_GRADE_LEVELS.map((grade) => grade.id));
-    getRegistrationGrades(schoolId)
-      .then(({ grades }) => {
+    Promise.all([
+      getRegistrationGrades(schoolId),
+      getRegistrationSessions(schoolId),
+    ])
+      .then(([{ grades }, { sessions }]) => {
         if (!active) return;
         const available = new Set([
           ...LEBANESE_GRADE_LEVELS.map((grade) => grade.id),
           ...(Array.isArray(grades) ? grades : []),
         ]);
         setRegistrationGrades([...available]);
+        setRegistrationSessions(Array.isArray(sessions) ? sessions : []);
       })
       .catch((gradeError) => {
-        console.warn('Using the built-in Lebanese grade catalogue:', gradeError);
+        console.warn('Using built-in grades and available sessions:', gradeError);
         if (active) setRegistrationGrades(LEBANESE_GRADE_LEVELS.map((grade) => grade.id));
       })
       .finally(() => {
@@ -152,7 +159,7 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
     return () => {
       active = false;
     };
-  }, [isOpen, schoolId, t.registrationServiceUnavailable]);
+  }, [isOpen, schoolId]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -184,21 +191,15 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
     const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!isLogin && role === 'student') {
-      if (!selectedEducator || !selectedEducator.hasAssignedClassroom) {
-        setError(
-          currentLang === 'ar'
-            ? 'يرجى اختيار أستاذ لديه صف دراسي معين من الإدارة.'
-            : currentLang === 'fr'
-              ? 'Veuillez choisir un éducateur auquel le Directeur a attribué une classe.'
-              : currentLang === 'es'
-                ? 'Selecciona un educador al que el Director haya asignado un aula.'
-                : currentLang === 'it'
-                  ? 'Seleziona un educatore a cui il Direttore ha assegnato una classe.'
-                  : 'Please select an educator who has a classroom assigned by the Director.'
-        );
-        return;
-      }
+    if (!isLogin && role === 'student' && !selectedEducatorId) {
+      setError(
+        currentLang === 'ar' ? 'يرجى اختيار الأستاذ الذي ترغب بالتسجيل معه.' :
+        currentLang === 'fr' ? 'Veuillez choisir votre éducateur.' :
+        currentLang === 'es' ? 'Selecciona tu educador.' :
+        currentLang === 'it' ? 'Seleziona il tuo educatore.' :
+        'Please select the educator you want to register with.'
+      );
+      return;
     }
 
     if (!isLogin && role === 'educator' && !registeredGradeId) {
@@ -226,13 +227,14 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
             gradeId:
               role === 'student'
                 ? selectedEducator!.gradeId
-                : registeredGradeId,
+                : (registrationSessions.find((session) => session.id === educatorSessionId)?.gradeId || registeredGradeId),
 
-            // This is the actual Director-assigned classroom ID.
-            registeredSessionId:
-              role === 'student'
-                ? selectedEducator!.registeredSessionId || undefined
-                : undefined,
+            // Persist the exact educator choice even before a classroom exists.
+            registeredEducatorId: role === 'student' ? selectedEducatorId : undefined,
+            registeredSessionId: role === 'student'
+              ? selectedEducator!.registeredSessionId || undefined
+              : educatorSessionId || undefined,
+            className: role === 'educator' ? newClassName.trim() || undefined : undefined,
           });
       onRegisterSuccess(account, token);
       handleClose();
@@ -425,6 +427,36 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
             </select>
           </div>}
 
+          {!isLogin && role === 'educator' && (
+            <div className="space-y-2">
+              <label className="block text-xs font-bold text-slate-700">
+                {currentLang === 'ar' ? 'اختر حصة / صفاً موجوداً (اختياري)' : currentLang === 'fr' ? 'Choisir une classe existante (facultatif)' : currentLang === 'es' ? 'Elegir una clase existente (opcional)' : currentLang === 'it' ? 'Scegli una classe esistente (facoltativo)' : 'Choose an existing class/session (optional)'}
+                <select
+                  value={educatorSessionId}
+                  onChange={(event) => setEducatorSessionId(event.target.value)}
+                  className="mt-1 w-full text-xs p-2.5 bg-slate-50 border border-slate-200 rounded-lg font-medium"
+                >
+                  <option value="">{currentLang === 'ar' ? '— دون اختيار —' : currentLang === 'fr' ? '— Aucun —' : currentLang === 'es' ? '— Ninguna —' : currentLang === 'it' ? '— Nessuna —' : '— None —'}</option>
+                  {registrationSessions.map((session) => (
+                    <option key={session.id} value={session.id}>
+                      {gradeLabel(session.gradeId)} · {session.subject} · {session.title}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="block text-xs font-bold text-slate-700">
+                {currentLang === 'ar' ? 'أو اكتب اسم صفك / حصتك الجديدة' : currentLang === 'fr' ? 'Ou nommez votre nouvelle classe / séance' : currentLang === 'es' ? 'O escribe el nombre de tu nueva clase / sesión' : currentLang === 'it' ? 'Oppure inserisci il nome della tua nuova classe / lezione' : 'Or enter your new class/session name'}
+                <input
+                  value={newClassName}
+                  onChange={(event) => setNewClassName(event.target.value)}
+                  maxLength={160}
+                  placeholder={currentLang === 'ar' ? 'مثال: صف الرياضيات - EB8' : currentLang === 'fr' ? 'Ex. : Classe de mathématiques - EB8' : currentLang === 'es' ? 'Ej.: Clase de matemáticas - EB8' : currentLang === 'it' ? 'Es.: Classe di matematica - EB8' : 'e.g. Mathematics Class - EB8'}
+                  className="mt-1 w-full text-xs p-2.5 bg-slate-50 border border-slate-200 rounded-lg font-medium"
+                />
+              </label>
+            </div>
+          )}
+
           {/* Full Name */}
           {!isLogin && <div>
             <label className="block text-xs font-bold text-slate-700 mb-1">
@@ -544,31 +576,21 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
                     const isSelected =
                       selectedEducatorId === educator.id;
 
-                    const canSelect =
-                      educator.hasAssignedClassroom &&
-                      Boolean(educator.registeredSessionId);
+                    const canSelect = true;
 
                     return (
                       <button
                         key={educator.id}
                         type="button"
-                        disabled={!canSelect}
                         onClick={() => {
-                          if (!canSelect) return;
-
                           setError(null);
                           setSelectedEducatorId(educator.id);
-
-                          // Keep the student's grade synchronized
-                          // with the educator's assigned classroom.
                           setRegisteredGradeId(educator.gradeId);
                         }}
                         className={`p-3 rounded-xl border text-start transition flex flex-col gap-1 ${
                           isSelected
                             ? 'bg-emerald-600 text-white border-emerald-600 ring-2 ring-emerald-300'
-                            : canSelect
-                              ? 'bg-white border-slate-200 text-slate-800 hover:border-indigo-400 hover:bg-indigo-50'
-                              : 'bg-slate-100 border-slate-200 text-slate-400 cursor-not-allowed'
+                            : 'bg-white border-slate-200 text-slate-800 hover:border-indigo-400 hover:bg-indigo-50'
                         }`}
                       >
                         <div className="flex items-center justify-between gap-2">
@@ -610,13 +632,9 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
                                 : 'text-amber-700'
                           }`}
                         >
-                          {canSelect
-                            ? currentLang === 'ar'
-                              ? 'صف دراسي معين — متاح للاختيار'
-                              : currentLang === 'fr' ? 'Classe attribuée — disponible' : currentLang === 'es' ? 'Aula asignada — disponible' : currentLang === 'it' ? 'Aula assegnata — disponibile' : 'Classroom assigned — available'
-                            : currentLang === 'ar'
-                              ? 'بانتظار تعيين صف من الإدارة'
-                              : currentLang === 'fr' ? 'En attente de l’attribution d’une classe par le Directeur' : currentLang === 'es' ? 'Esperando la asignación de aula del Director' : currentLang === 'it' ? 'In attesa dell’assegnazione dell’aula da parte del Direttore' : 'Waiting for Director classroom assignment'}
+                          {educator.hasAssignedClassroom
+                            ? currentLang === 'ar' ? 'صف محدد' : currentLang === 'fr' ? 'Classe attribuée' : currentLang === 'es' ? 'Clase asignada' : currentLang === 'it' ? 'Classe assegnata' : 'Classroom assigned'
+                            : currentLang === 'ar' ? 'سيتم تعيين الصف لاحقاً' : currentLang === 'fr' ? 'Classe à attribuer ultérieurement' : currentLang === 'es' ? 'Clase pendiente de asignación' : currentLang === 'it' ? 'Classe da assegnare' : 'Classroom to be assigned later'}
                         </span>
                       </button>
                     );
@@ -648,30 +666,11 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
           </div>
           <button
             type="button"
-            onClick={() => {
-              setIsLogin((value) => !value);
-              setError(null);
-            }}
-            className="w-full text-center text-xs font-bold text-indigo-700 underline"
-          >
-            {isLogin ? t.switchToRegister : t.signInPrompt}
-          </button>
-          <button
-            type="button"
             onClick={() => { setShowAccessChoice(true); setError(null); }}
             className="w-full text-center text-xs font-semibold text-slate-500 underline"
           >
             {currentLang === 'ar' ? 'العودة إلى الخيارات' : currentLang === 'fr' ? 'Retour aux options' : currentLang === 'es' ? 'Volver a las opciones' : currentLang === 'it' ? 'Torna alle opzioni' : 'Back to options'}
           </button>
-          <div className="flex justify-end">
-            <button
-              type="button"
-              onClick={() => setShowPayment(true)}
-              className="text-xs font-bold text-indigo-700 hover:text-indigo-900 underline cursor-pointer"
-            >
-              {t.paymentBtn}
-            </button>
-          </div>
         </form>
         )}
       </div>
