@@ -406,18 +406,19 @@ async function handleRegister(request, env) {
       return json({ error: "Choose a valid grade before registering." }, 400);
     }
     if (registeredSessionId) {
-      selectedSession = await env.DB.prepare(
-        "SELECT * FROM sessions WHERE id = ? AND school_id = ?"
-      ).bind(registeredSessionId, schoolId).first();
-      if (!selectedSession) return json({ error: "Choose a valid session or enter a new class name." }, 400);
+      return json({ error: "Educators create and name their own classroom during registration." }, 400);
     }
+    if (className.length < 2) {
+      return json({ error: "Enter the name of your own class or session before creating the educator account." }, 400);
+    }
+    registeredSessionId = "";
   }
 
-  // Students inherit the educator's registered grade; educators may create a
-  // new named classroom during registration or select a session template.
+  // Students inherit the exact grade of their selected educator. Educators
+  // keep their selected grade and receive a dedicated classroom.
   const gradeId = role === "student"
     ? (selectedSession?.grade_id || selectedEducator.grade_id)
-    : (selectedSession?.grade_id || requestedGradeId);
+    : requestedGradeId;
   if (!gradeId || !/^[a-z0-9_-]{1,40}$/.test(gradeId)) {
     return json({ error: "Choose a valid grade before registering." }, 400);
   }
@@ -459,30 +460,29 @@ async function handleRegister(request, env) {
   }
 
   if (role === "educator") {
+    const classroomId = randomId();
+    const subject = schoolOrSubject || "General";
+    const roomUrl = "https://agenda.live/room/" + encodeURIComponent(gradeId);
     const lessonSlots = Array.from({ length: 10 }, (_, index) =>
       env.DB.prepare(
         "INSERT OR IGNORE INTO educator_lessons (id, school_id, educator_id, slot) VALUES (?, ?, ?, ?)"
       ).bind(randomId(), schoolId, id, index + 1)
     );
-    await env.DB.batch(lessonSlots);
-
-    if (className || selectedSession) {
-      const classroomId = randomId();
-      const sessionTitle = className || selectedSession.title;
-      const subject = schoolOrSubject || selectedSession?.subject || "General";
-      await env.DB.batch([
-        env.DB.prepare(
-          "INSERT INTO sessions (id, school_id, grade_id, subject, title, teacher_name, source_name, source_url, playback_url, media_key, is_live, live_starts_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, NULL)"
-        ).bind(
-          classroomId, schoolId, gradeId, subject, sessionTitle, fullName, fullName,
-          selectedSession?.source_url || "https://agenda.live/room/" + encodeURIComponent(gradeId),
-          selectedSession?.playback_url || selectedSession?.source_url || "https://agenda.live/room/" + encodeURIComponent(gradeId),
-          selectedSession?.media_key || null
-        ),
-        env.DB.prepare(
-          "UPDATE accounts SET registered_session_id = ? WHERE id = ? AND school_id = ? AND role = 'educator'"
-        ).bind(classroomId, id, schoolId),
-      ]);
+    // Create the classroom and assign its ID to this educator in one D1 batch.
+    await env.DB.batch([
+      ...lessonSlots,
+      env.DB.prepare(
+        "INSERT INTO sessions (id, school_id, grade_id, subject, title, teacher_name, source_name, source_url, playback_url, media_key, is_live, live_starts_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, 0, NULL)"
+      ).bind(classroomId, schoolId, gradeId, subject, className, fullName, fullName, roomUrl, roomUrl),
+      env.DB.prepare(
+        "UPDATE accounts SET registered_session_id = ? WHERE id = ? AND school_id = ? AND role = 'educator'"
+      ).bind(classroomId, id, schoolId),
+    ]);
+    const assignment = await env.DB.prepare(
+      "SELECT registered_session_id FROM accounts WHERE id = ? AND school_id = ? AND role = 'educator'"
+    ).bind(id, schoolId).first();
+    if (assignment?.registered_session_id !== classroomId) {
+      return json({ error: "Your classroom was created, but its educator assignment could not be verified. Please contact the school Director." }, 500);
     }
   }
 
@@ -547,6 +547,25 @@ async function existingRegistrationResponse(account, registration, env, selected
     ).bind(registration.registeredSessionId, selectedSession.grade_id, account.id).run();
     account.registered_session_id = registration.registeredSessionId;
     account.grade_id = selectedSession.grade_id;
+  }
+  if (registration.role === "educator" && !account.registered_session_id) {
+    const classroomId = randomId();
+    const roomUrl = "https://agenda.live/room/" + encodeURIComponent(registration.gradeId);
+    await env.DB.batch([
+      env.DB.prepare(
+        "INSERT INTO sessions (id, school_id, grade_id, subject, title, teacher_name, source_name, source_url, playback_url, media_key, is_live, live_starts_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, 0, NULL)"
+      ).bind(classroomId, registration.schoolId, registration.gradeId, registration.schoolOrSubject || "General", registration.className, registration.fullName, registration.fullName, roomUrl, roomUrl),
+      env.DB.prepare(
+        "UPDATE accounts SET registered_session_id = ? WHERE id = ? AND school_id = ? AND role = 'educator'"
+      ).bind(classroomId, account.id, registration.schoolId),
+    ]);
+    const assignment = await env.DB.prepare(
+      "SELECT registered_session_id FROM accounts WHERE id = ? AND school_id = ? AND role = 'educator'"
+    ).bind(account.id, registration.schoolId).first();
+    if (assignment?.registered_session_id !== classroomId) {
+      return json({ error: "Your classroom assignment could not be verified. Please contact the school Director." }, 500);
+    }
+    account.registered_session_id = classroomId;
   }
   const token = await signToken(
     { sub: account.id, role: account.role, username: account.username, exp: Math.floor(Date.now() / 1000) + SESSION_TTL_SECONDS },
@@ -907,6 +926,65 @@ async function ownerDirectors(request, env) {
   })) });
 }
 
+async function registerPublicDirectorSchool(request, env) {
+  const body = await requestJson(request);
+  const fullName = typeof body?.fullName === "string" ? body.fullName.trim() : "";
+  const schoolName = typeof body?.schoolName === "string" ? body.schoolName.trim() : "";
+  const email = typeof body?.email === "string" ? body.email.trim().toLowerCase() : "";
+  const phone = typeof body?.phone === "string" ? body.phone.trim() : "";
+
+  if (fullName.length < 2 || fullName.length > 120 ||
+      schoolName.length < 2 || schoolName.length > 160 ||
+      !/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email) ||
+      phone.length < 6 || phone.length > 40 ||
+      normalizePhoneCredential(phone).length < 6) {
+    return json({ error: "Enter a valid Director full name, school name, email address and phone number." }, 400);
+  }
+
+  const accountId = randomId();
+  const username = "pending-" + randomId().replace(/-/g, "").slice(0, 20);
+  const schoolId = "school-" + randomId();
+  const setupToken = createSetupToken();
+  const setupTokenHash = await hashSetupToken(setupToken);
+  const initialPasswordHash = await hashPassword(phone);
+
+  try {
+    await env.DB.batch([
+      env.DB.prepare(
+        "INSERT INTO accounts (id, username, password_hash, role, school_id, full_name, email, phone, school_or_subject, grade_id, registered_session_id, registered_educator_id, expires_at, activated, paid, password_must_change, phone_password_disabled_at) VALUES (?, ?, ?, 'director', ?, ?, ?, ?, '', '', NULL, NULL, NULL, 0, 0, 1, NULL)"
+      ).bind(accountId, username, initialPasswordHash, schoolId, fullName, email, phone),
+      env.DB.prepare(
+        "INSERT INTO schools (id, name, director_id, license_expires_at, license_active) VALUES (?, ?, ?, NULL, 0)"
+      ).bind(schoolId, schoolName, accountId),
+      env.DB.prepare(
+        "INSERT INTO director_setup_tokens (token_hash, account_id, expires_at) VALUES (?, ?, datetime('now', '+7 days'))"
+      ).bind(setupTokenHash, accountId),
+    ]);
+  } catch (error) {
+    const detail = error instanceof Error ? error.message.toLowerCase() : "";
+    if (detail.includes("unique")) {
+      return json({ error: "A school with this name is already registered. Please contact the Owner." }, 409);
+    }
+    console.error("Unable to save public Director registration:", error);
+    return json({ error: "Your Director and school registration could not be saved. Please try again." }, 500);
+  }
+
+  return json({
+    registered: true,
+    director: {
+      id: accountId,
+      fullName,
+      schoolName,
+      email,
+      phone,
+      activated: false,
+      paid: false,
+      licenseActive: false,
+      setupPending: true,
+    },
+  }, 201);
+}
+
 async function createOwnerDirector(request, env) {
   const owner = await requireOwner(request, env);
   if (!owner) return json({ error: "Owner access required." }, 401);
@@ -1158,9 +1236,14 @@ async function saveOwnerDirectorStatuses(request, env) {
     const phone = typeof savedAccount.phone === "string" ? savedAccount.phone.trim() : "";
     const keepPhoneAsInitialPassword = savedAccount.phone_password_disabled_at == null &&
       normalizePhoneCredential(phone).length >= 6;
+    const approved = item.activated && item.paid;
     return [
-      env.DB.prepare("UPDATE accounts SET activated = ?, paid = ? WHERE id = ? AND role = 'director'")
-        .bind(item.activated ? 1 : 0, item.paid ? 1 : 0, item.id),
+      env.DB.prepare(
+        "UPDATE accounts SET activated = ?, paid = ?, expires_at = CASE WHEN ? = 1 AND ? = 1 AND (expires_at IS NULL OR expires_at <= datetime('now')) THEN datetime('now', '+1 year') ELSE expires_at END WHERE id = ? AND role = 'director'"
+      ).bind(Number(item.activated), Number(item.paid), Number(item.activated), Number(item.paid), item.id),
+      env.DB.prepare(
+        "UPDATE schools SET license_active = ?, license_expires_at = CASE WHEN ? = 1 AND (license_expires_at IS NULL OR license_expires_at <= datetime('now')) THEN datetime('now', '+1 year') ELSE license_expires_at END WHERE director_id = ?"
+      ).bind(Number(approved), Number(approved), item.id),
       // Keep the actual hash synchronized with the Owner-entered phone while
       // phone-login remains enabled. A stale hash must not leave first login broken.
       ...(keepPhoneAsInitialPassword ? [env.DB.prepare(
@@ -1172,7 +1255,8 @@ async function saveOwnerDirectorStatuses(request, env) {
   }))).flat();
   await env.DB.batch(statements);
   const savedRows = await env.DB.prepare(
-    `SELECT a.id, a.activated, a.paid, a.phone, a.password_hash, a.phone_password_disabled_at
+    `SELECT a.id, a.activated, a.paid, a.phone, a.password_hash, a.phone_password_disabled_at,
+            s.license_active, s.license_expires_at
      FROM accounts a
      INNER JOIN schools s ON s.director_id = a.id AND s.id = a.school_id
      WHERE a.role = 'director' AND a.id IN (${placeholders})`
@@ -1186,7 +1270,9 @@ async function saveOwnerDirectorStatuses(request, env) {
   })));
   if (statuses.length !== updates.length || updates.some((item) => {
     const saved = statuses.find((row) => row.id === item.id);
-    return !saved || saved.activated !== item.activated || saved.paid !== item.paid;
+    return !saved || saved.activated !== item.activated || saved.paid !== item.paid ||
+      Boolean(saved.license_active) !== (item.activated && item.paid) ||
+      ((item.activated && item.paid) && !saved.license_expires_at);
   })) {
     return json({ error: "The Director status changes could not be verified in the database. Refresh the list and try again." }, 500);
   }
@@ -3424,6 +3510,7 @@ async function handle(request, env) {
   if (request.method === "POST" && path === "/api/ai/generate") return generateWorkersAIResponse(request, env);
   if (request.method === "GET" && path === "/api/health") return json({ status: "ok" });
   if (request.method === "POST" && path === "/api/auth/register") return handleRegister(request, env);
+  if (request.method === "POST" && path === "/api/director/register") return registerPublicDirectorSchool(request, env);
   if (request.method === "POST" && path === "/api/auth/login") return handleLogin(request, env);
   if (request.method === "GET" && path === "/api/auth/me") return getCurrentAccount(request, env);
   if (request.method === "GET" && path === "/api/owner/directors") return ownerDirectors(request, env);
