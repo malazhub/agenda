@@ -994,6 +994,9 @@ async function registerPublicDirectorSchool(request, env) {
   return json({
     registered: true,
     loginEmail: email,
+    schoolId,
+    // Use the exact canonical school URL shown in the Owner Control Center.
+    directorLink: directorSchoolLink(schoolId),
     director: {
       id: accountId,
       fullName,
