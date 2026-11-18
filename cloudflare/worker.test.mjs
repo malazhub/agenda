@@ -319,7 +319,8 @@ function fakeEnvironment() {
         account.username = username;
         account.password_hash = password_hash;
         account.password_must_change = this.sql.includes('password_must_change = 1') ? 1 : 0;
-        account.phone_password_disabled_at = this.sql.includes('phone_password_disabled_at = datetime') ? '2026-11-17 12:00:00' : account.phone_password_disabled_at;
+        if (this.sql.includes('phone_password_disabled_at = NULL')) account.phone_password_disabled_at = null;
+        else if (this.sql.includes('phone_password_disabled_at = datetime')) account.phone_password_disabled_at = '2026-11-17 12:00:00';
         return { meta: { changes: 1 } };
       }
       if (this.sql.startsWith('UPDATE accounts SET') && this.sql.includes('WHERE id = ?') && !this.sql.includes('username = ?')) {
