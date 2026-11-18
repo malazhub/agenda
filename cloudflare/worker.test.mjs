@@ -277,13 +277,14 @@ function fakeEnvironment() {
         return { meta: { changes: 1 } };
       }
       if (this.sql.startsWith('INSERT INTO accounts')) {
-        const [id, username, password_hash, role, school_id, full_name, email, phone, school_or_subject, grade_id, registered_session_id, registered_educator_id] = this.values;
+        const [id, username, password_hash, role, school_id, full_name, email, phone, school_or_subject, grade_id, student_grade_label, registered_session_id, registered_educator_id] = this.values;
         if ([...accounts.values()].some((item) => item.username.toLowerCase() === username.toLowerCase())) {
           throw new Error('UNIQUE constraint failed: accounts.username');
         }
         const isDirectorCreation = this.sql.includes("datetime('now', '+1 year')");
         accounts.set(id, {
           id, username, password_hash, role, school_id, full_name, email, phone, school_or_subject, grade_id, registered_session_id,
+          student_grade_label: student_grade_label || '',
           registered_educator_id: registered_educator_id || null,
           created_at: '2026-11-03 10:00:00',
           expires_at: isDirectorCreation ? '2027-11-17 10:00:00' : '2026-12-03 10:00:00',
@@ -523,6 +524,8 @@ async function send(env, path, { method = 'GET', body, token, origin } = {}) {
   let requestPath = path;
   let requestBody = body;
   if (path === '/api/auth/register' && body && !body.schoolId) requestBody = { ...body, schoolId: 'default-agenda-school' };
+  if (path === '/api/auth/login' && requestBody && !requestBody.schoolId) requestBody = { ...requestBody, schoolId: 'default-agenda-school' };
+  if (path === '/api/auth/me' && !path.includes('schoolId=')) requestPath += '?schoolId=default-agenda-school';
   if ((path.startsWith('/api/registration/') || path.startsWith('/api/sessions?')) && !path.includes('schoolId=')) {
     requestPath += `${path.includes('?') ? '&' : '?'}schoolId=default-agenda-school`;
   }
@@ -676,6 +679,32 @@ test('registration hashes credentials and rejects duplicate usernames', async ()
   });
   assert.equal(sharedStream.status, 200);
   assert.equal((await sharedStream.json()).status, 'waiting');
+});
+
+test('Student registration saves their chosen custom grade label without changing the educator live-session grade', async () => {
+  const { env, accounts } = fakeEnvironment();
+  const response = await send(env, '/api/auth/register', {
+    method: 'POST',
+    body: {
+      schoolId: 'default-agenda-school',
+      username: 'student.custom',
+      password: 'x',
+      role: 'student',
+      fullName: 'Student Custom Class',
+      email: 'student.custom@example.com',
+      phone: '',
+      schoolOrSubject: '',
+      gradeId: 'eb8',
+      studentGradeLabel: 'My Special Class 7',
+      registeredEducatorId: '00000000-0000-4000-8000-000000000001',
+    },
+  });
+  assert.equal(response.status, 201, await response.clone().text());
+  const { account } = await response.json();
+  const stored = accounts.get(account.id);
+  assert.equal(stored.grade_id, 'eb8');
+  assert.equal(stored.student_grade_label, 'My Special Class 7');
+  assert.equal(account.studentGradeLabel, 'My Special Class 7');
 });
 
 test('grade registration loads available grades and grants grade-scoped live access', async () => {
@@ -1082,7 +1111,7 @@ test('Public Director registration saves chosen password and signs in by email a
   });
   const pendingLogin = await send(env, '/api/auth/login', {
     method: 'POST',
-    body: { username: ' DIRECTOR@NEWSCHOOL.EXAMPLE ', password: 'x' },
+    body: { username: ' DIRECTOR@NEWSCHOOL.EXAMPLE ', password: 'x', schoolId: created.schoolId },
   });
   assert.equal(pendingLogin.status, 403);
   assert.match((await pendingLogin.json()).error, /Director account is inactive/i);
@@ -1091,7 +1120,7 @@ test('Public Director registration saves chosen password and signs in by email a
   // Director can also enter their exact full name, with the same password.
   const fullNamePendingLogin = await send(env, '/api/auth/login', {
     method: 'POST',
-    body: { username: '  New School Director  ', password: 'x' },
+    body: { username: '  New School Director  ', password: 'x', schoolId: created.schoolId },
   });
   assert.equal(fullNamePendingLogin.status, 403);
   assert.match((await fullNamePendingLogin.json()).error, /Director account is inactive/i);
@@ -1116,17 +1145,77 @@ test('Public Director registration saves chosen password and signs in by email a
   }
   const approvedLogin = await send(env, '/api/auth/login', {
     method: 'POST',
-    body: { username: 'director@newschool.example', password: 'x' },
+    body: { username: 'director@newschool.example', password: 'x', schoolId: created.schoolId },
   });
   assert.equal(approvedLogin.status, 200);
   assert.equal((await approvedLogin.json()).account.role, 'director');
 
   const fullNameLogin = await send(env, '/api/auth/login', {
     method: 'POST',
-    body: { username: 'New School Director', password: 'x' },
+    body: { username: 'New School Director', password: 'x', schoolId: created.schoolId },
   });
   assert.equal(fullNameLogin.status, 200);
   assert.equal((await fullNameLogin.json()).account.role, 'director');
+});
+
+test('Student and educator accounts can only sign in and restore sessions on their own school link', async () => {
+  const { env, accounts, schools } = fakeEnvironment();
+  schools.set('school-two', {
+    id: 'school-two',
+    name: 'School Two',
+    director_id: 'school-two-director',
+    license_active: 1,
+  });
+  const passwordHash = hashPassword('student-pass');
+  accounts.set('school-two-student', {
+    id: 'school-two-student',
+    username: 'schooltwo.student',
+    password_hash: passwordHash,
+    role: 'student',
+    school_id: 'school-two',
+    full_name: 'School Two Student',
+    email: 'student@schooltwo.example',
+    phone: '',
+    school_or_subject: '',
+    grade_id: 'eb8',
+    student_grade_label: 'EB8',
+    registered_session_id: 'school-two-session',
+    registered_educator_id: null,
+    created_at: '2026-11-18 10:00:00',
+    expires_at: '2027-11-18 10:00:00',
+    activated: 1,
+    paid: 1,
+  });
+
+  const wrongSchoolLogin = await send(env, '/api/auth/login', {
+    method: 'POST',
+    body: { username: 'schooltwo.student', password: 'student-pass', schoolId: 'default-agenda-school' },
+  });
+  assert.equal(wrongSchoolLogin.status, 403);
+  assert.match((await wrongSchoolLogin.json()).error, /belongs to another school/i);
+
+  const correctSchoolLogin = await send(env, '/api/auth/login', {
+    method: 'POST',
+    body: { username: 'schooltwo.student', password: 'student-pass', schoolId: 'school-two' },
+  });
+  assert.equal(correctSchoolLogin.status, 200);
+  const { token } = await correctSchoolLogin.json();
+
+  const wrongSchoolRestore = await send(env, '/api/auth/me?schoolId=default-agenda-school', { token });
+  assert.equal(wrongSchoolRestore.status, 401);
+  const correctSchoolRestore = await send(env, '/api/auth/me?schoolId=school-two', { token });
+  assert.equal(correctSchoolRestore.status, 200);
+});
+
+test('A platform Owner can still sign in from the main Agenda context', async () => {
+  const { env, platformOwners } = fakeEnvironment();
+  platformOwners.add('director-account-0000000000000000');
+  const login = await send(env, '/api/auth/login', {
+    method: 'POST',
+    body: { username: 'director', password: 'DirectorPassword#2026', schoolId: 'school-two' },
+  });
+  assert.equal(login.status, 200);
+  assert.equal((await login.json()).account.role, 'owner');
 });
 
 test('Only the platform Owner can create Director schools', async () => {
