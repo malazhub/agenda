@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Language, GradeLevelDef } from '../types';
-import { deleteDirectorSession, getDirectorSessions, createDirectorSession, updateDirectorSessionLive, getDirectorGradePricing, updateDirectorGradePricing } from '../services/cloudflareApi';
-import type { SessionInput, StoredSessionRecord } from '../services/cloudflareApi';
+import { deleteDirectorSession, getDirectorSessions, createDirectorSession, updateDirectorSessionLive, getDirectorGradePricing, updateDirectorGradePricing, getDirectorAccounts } from '../services/cloudflareApi';
+import type { SessionInput, StoredSessionRecord, CloudflareAccount } from '../services/cloudflareApi';
 import { Plus, RefreshCw, Trash2, Eye } from 'lucide-react';
 
 interface DirectorSessionsPanelProps {
@@ -48,7 +48,9 @@ export const DirectorSessionsPanel: React.FC<DirectorSessionsPanelProps> = ({
     monitorAlert: currentLang === 'ar' ? (name: string) => `جارٍ الانضمام لمراقبة حصة الأستاذ: ${name}` : currentLang === 'fr' ? (name: string) => `Connexion pour surveiller le cours de ${name}` : currentLang === 'es' ? (name: string) => `Entrando para supervisar la sesión de ${name}` : currentLang === 'it' ? (name: string) => `Accesso per monitorare la lezione di ${name}` : (name: string) => `Joining to monitor ${name}’s session`,
   };
 
-  const [gradeId, setGradeId] = useState<string>(grades[0]?.id || 'g12_lh');
+  const [gradeId, setGradeId] = useState<string>(grades[0]?.id || 'eb8');
+  const [customGradeId, setCustomGradeId] = useState('');
+  const [educators, setEducators] = useState<CloudflareAccount[]>([]);
   const [sessions, setSessions] = useState<StoredSessionRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -59,7 +61,9 @@ export const DirectorSessionsPanel: React.FC<DirectorSessionsPanelProps> = ({
 
   // Form with ONLY: Grade, Educator Name, Subject, Maximum Students
   const [form, setForm] = useState({
+    educatorId: '',
     educatorName: '',
+    sessionName: '',
     subject: '',
     maxStudents: 5,
   });
@@ -68,11 +72,13 @@ export const DirectorSessionsPanel: React.FC<DirectorSessionsPanelProps> = ({
     setLoading(true);
     setError('');
     try {
-      const [{ sessions: loadedSessions }, { prices }] = await Promise.all([
+      const [{ sessions: loadedSessions }, { prices }, accounts] = await Promise.all([
         getDirectorSessions(token),
         getDirectorGradePricing(token),
+        getDirectorAccounts(token),
       ]);
       setSessions(loadedSessions);
+      setEducators(accounts.educators);
       const nextPrices = Object.fromEntries(prices.map((price) => [price.gradeId, price.monthlyRateUsd]));
       setPricesByGrade(nextPrices);
       setMonthlyRateUsd(nextPrices[gradeId] ?? 125);
@@ -92,32 +98,46 @@ export const DirectorSessionsPanel: React.FC<DirectorSessionsPanelProps> = ({
   // Save session assigned by Grade, Educator Name, Subject, Max Students
   const saveSession = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (!form.educatorName.trim() || !form.subject.trim()) return;
+    const selectedEducator = educators.find((educator) => educator.id === form.educatorId) || null;
+    const educatorName = selectedEducator?.fullName || form.educatorName.trim();
+    const resolvedGradeId = gradeId === '__custom__'
+      ? customGradeId.trim().toLowerCase().replace(/[^a-z0-9_-]/g, '_').slice(0, 40)
+      : gradeId;
+    const sessionName = form.sessionName.trim();
+    if (!resolvedGradeId || !/^[a-z0-9_-]{1,40}$/.test(resolvedGradeId) ||
+        !educatorName || !form.subject.trim() || !sessionName) {
+      setError(currentLang === 'ar' ? 'أدخل الصف واسم الحصة والأستاذ والمادة.' : currentLang === 'fr' ? 'Saisissez la classe, le nom du cours, l’éducateur et la matière.' : currentLang === 'es' ? 'Introduce el curso, nombre de sesión, educador y materia.' : currentLang === 'it' ? 'Inserisci classe, nome lezione, educatore e materia.' : 'Enter a grade, session name, educator and subject.');
+      return;
+    }
 
     setSaving(true);
     setError('');
     setMessage('');
 
     const newSessionInput: SessionInput = {
-      gradeId,
-      title: form.educatorName.trim(), // Stored as educator name
+      gradeId: resolvedGradeId,
+      title: sessionName,
       subject: form.subject.trim(),
-      sourceName: form.educatorName.trim(),
-      sourceUrl: `https://agenda.live/room/${gradeId}`,
+      sourceName: educatorName,
+      teacherName: educatorName,
+      educatorId: selectedEducator?.id,
+      sourceUrl: `https://agenda.live/room/${encodeURIComponent(resolvedGradeId)}`,
       playbackUrl: '',
       isLive: false,
     };
 
     try {
-      await updateDirectorGradePricing(token, gradeId, monthlyRateUsd);
+      await updateDirectorGradePricing(token, resolvedGradeId, monthlyRateUsd);
       await createDirectorSession(token, newSessionInput);
-      setPricesByGrade((current) => ({ ...current, [gradeId]: monthlyRateUsd }));
+      setGradeId(resolvedGradeId);
+      setPricesByGrade((current) => ({ ...current, [resolvedGradeId]: monthlyRateUsd }));
+      setCustomGradeId('');
       await loadSessions();
       setMessage(t.sessionSaved);
     } catch (saveError) {
       setError(currentLang === 'en' && saveError instanceof Error ? saveError.message : t.saveError);
     } finally {
-      setForm({ educatorName: '', subject: '', maxStudents: 5 });
+      setForm({ educatorId: '', educatorName: '', sessionName: '', subject: '', maxStudents: 5 });
       setSaving(false);
     }
   };
@@ -170,22 +190,59 @@ export const DirectorSessionsPanel: React.FC<DirectorSessionsPanelProps> = ({
             <select className={fieldClass} value={gradeId} onChange={(e) => { setGradeId(e.target.value); setMonthlyRateUsd(pricesByGrade[e.target.value] ?? 125); }} required>
               {grades.map((grade) => (
                 <option key={grade.id} value={grade.id}>
-                  {grade.name[currentLang]}
+                  {grade.name[currentLang] || grade.name.en}
                 </option>
               ))}
+              <option value="__custom__">{currentLang === 'ar' ? '+ صف جديد' : currentLang === 'fr' ? '+ Nouvelle classe' : currentLang === 'es' ? '+ Nuevo curso' : currentLang === 'it' ? '+ Nuova classe' : '+ New grade'}</option>
             </select>
+            {gradeId === '__custom__' && (
+              <input
+                className={fieldClass}
+                required
+                maxLength={40}
+                value={customGradeId}
+                onChange={(event) => setCustomGradeId(event.target.value.toLowerCase().replace(/[^a-z0-9_-]/g, '_'))}
+                placeholder={currentLang === 'ar' ? 'معرّف الصف الجديد، مثال eb10' : currentLang === 'fr' ? 'Identifiant de classe, ex. eb10' : currentLang === 'es' ? 'ID del curso, ej. eb10' : currentLang === 'it' ? 'ID classe, es. eb10' : 'New grade ID, e.g. eb10'}
+              />
+            )}
           </label>
 
-          {/* Educator Name (renamed from Title) */}
+          {/* Choose an educator already registered in this school or enter a new display name. */}
+          <div className="space-y-2 text-xs font-bold text-slate-700">
+            <label className="block">
+              {t.educatorName}
+              <select
+                className={fieldClass}
+                value={form.educatorId}
+                onChange={(event) => setForm({ ...form, educatorId: event.target.value, educatorName: '' })}
+              >
+                <option value="">{currentLang === 'ar' ? '— أستاذ مسجل أو اسم جديد أدناه —' : currentLang === 'fr' ? '— Éducateur inscrit ou nouveau nom ci-dessous —' : currentLang === 'es' ? '— Educador registrado o nombre nuevo abajo —' : currentLang === 'it' ? '— Educatore registrato o nuovo nome sotto —' : '— Registered educator or enter a new name below —'}</option>
+                {educators.map((educator) => (
+                  <option key={educator.id} value={educator.id}>{educator.fullName} · {educator.gradeId.toUpperCase()}</option>
+                ))}
+              </select>
+            </label>
+            {!form.educatorId && (
+              <input
+                className={fieldClass}
+                required
+                maxLength={100}
+                placeholder={t.educatorPlaceholder}
+                value={form.educatorName}
+                onChange={(event) => setForm({ ...form, educatorName: event.target.value })}
+              />
+            )}
+          </div>
+
           <label className="space-y-1 text-xs font-bold text-slate-700">
-            {t.educatorName}
+            {currentLang === 'ar' ? 'اسم الحصة / الصف' : currentLang === 'fr' ? 'Nom du cours / de la classe' : currentLang === 'es' ? 'Nombre de sesión / clase' : currentLang === 'it' ? 'Nome lezione / classe' : 'Session / class name'}
             <input
               className={fieldClass}
               required
-              maxLength={100}
-              placeholder={t.educatorPlaceholder}
-              value={form.educatorName}
-              onChange={(e) => setForm({ ...form, educatorName: e.target.value })}
+              maxLength={160}
+              value={form.sessionName}
+              onChange={(event) => setForm({ ...form, sessionName: event.target.value })}
+              placeholder={currentLang === 'ar' ? 'مثال: صف الرياضيات EB8' : currentLang === 'fr' ? 'Ex. : Classe de mathématiques EB8' : currentLang === 'es' ? 'Ej.: Clase de matemáticas EB8' : currentLang === 'it' ? 'Es.: Classe di matematica EB8' : 'e.g. EB8 Mathematics Class'}
             />
           </label>
 
