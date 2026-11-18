@@ -935,7 +935,7 @@ async function registerPublicDirectorSchool(request, env) {
 
   if (fullName.length < 2 || fullName.length > 120 ||
       schoolName.length < 2 || schoolName.length > 160 ||
-      !/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email) ||
+      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ||
       phone.length < 6 || phone.length > 40 ||
       normalizePhoneCredential(phone).length < 6) {
     return json({ error: "Enter a valid Director full name, school name, email address and phone number." }, 400);
