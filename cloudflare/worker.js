@@ -273,6 +273,7 @@ function publicAccount(account) {
     schoolOrSubject: account.school_or_subject,
     gradeId: account.grade_id,
     registeredSessionId: account.registered_session_id || null,
+    registeredEducatorId: account.registered_educator_id || null,
     createdAt: account.created_at,
     expiresAt: account.expires_at,
     activated: Boolean(account.activated),
@@ -354,7 +355,9 @@ async function handleRegister(request, env) {
   const phone = typeof body?.phone === "string" ? body.phone.trim() : "";
   const schoolOrSubject = typeof body?.schoolOrSubject === "string" ? body.schoolOrSubject.trim() : "";
   const requestedGradeId = typeof body?.gradeId === "string" ? body.gradeId.trim() : "";
-  const registeredSessionId = typeof body?.registeredSessionId === "string" ? body.registeredSessionId.trim() : "";
+  let registeredSessionId = typeof body?.registeredSessionId === "string" ? body.registeredSessionId.trim() : "";
+  let registeredEducatorId = typeof body?.registeredEducatorId === "string" ? body.registeredEducatorId.trim() : "";
+  const className = typeof body?.className === "string" ? body.className.trim() : "";
 
   if (!schoolId || !(await env.DB.prepare("SELECT id FROM schools WHERE id = ?").bind(schoolId).first())) {
     return json({ error: "Choose a valid school before registering." }, 400);
@@ -365,46 +368,57 @@ async function handleRegister(request, env) {
   if (!["student", "educator"].includes(role) || fullName.length < 2 || fullName.length > 120 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
     return json({ error: "Complete the required name, email, and account role fields." }, 400);
   }
-  if (phone.length > 40 || schoolOrSubject.length > 160 || registeredSessionId.length > 100) {
+  if (phone.length > 40 || schoolOrSubject.length > 160 ||
+      registeredSessionId.length > 100 || registeredEducatorId.length > 100 ||
+      className.length > 160) {
     return json({ error: "One or more profile fields are too long." }, 400);
   }
 
-    if (role === "student" && !registeredSessionId) {
-    return json({
-      error: "Please select your registered educator before registering."
-    }, 400);
+  let selectedEducator = null;
+  let selectedSession = null;
+
+  if (role === "student") {
+    // Student's educator selection is persisted directly. A classroom may be
+    // assigned later by the Director, so an educator without a session remains selectable.
+    if (!registeredEducatorId && registeredSessionId) {
+      const inferred = await env.DB.prepare(
+        "SELECT id FROM accounts WHERE role = 'educator' AND school_id = ? AND registered_session_id = ? ORDER BY created_at LIMIT 1"
+      ).bind(schoolId, registeredSessionId).first();
+      registeredEducatorId = inferred?.id || "";
+    }
+    if (!registeredEducatorId) {
+      return json({ error: "Please select your registered educator before registering." }, 400);
+    }
+    selectedEducator = await env.DB.prepare(
+      "SELECT id, grade_id, registered_session_id FROM accounts WHERE id = ? AND school_id = ? AND role = 'educator'"
+    ).bind(registeredEducatorId, schoolId).first();
+    if (!selectedEducator) {
+      return json({ error: "Choose an educator registered at this school." }, 400);
+    }
+    if (selectedEducator.registered_session_id) {
+      selectedSession = await env.DB.prepare(
+        "SELECT id, grade_id FROM sessions WHERE id = ? AND school_id = ?"
+      ).bind(selectedEducator.registered_session_id, schoolId).first();
+    }
+    registeredSessionId = selectedSession?.id || "";
+  } else {
+    if (!REGISTRATION_GRADE_ID_SET.has(requestedGradeId)) {
+      return json({ error: "Choose a valid grade before registering." }, 400);
+    }
+    if (registeredSessionId) {
+      selectedSession = await env.DB.prepare(
+        "SELECT * FROM sessions WHERE id = ? AND school_id = ?"
+      ).bind(registeredSessionId, schoolId).first();
+      if (!selectedSession) return json({ error: "Choose a valid session or enter a new class name." }, 400);
+    }
   }
 
-  const selectedSession = registeredSessionId
-    ? await env.DB.prepare(
-        `SELECT
-           s.id,
-           s.grade_id
-         FROM sessions s
-         INNER JOIN accounts educator
-           ON educator.registered_session_id = s.id
-           AND educator.role = 'educator'
-         WHERE s.id = ? AND s.school_id = ? AND educator.school_id = ?`
-      ).bind(registeredSessionId, schoolId, schoolId).first()
-    : null;
-
-  if (role === "student" && !selectedSession) {
-    return json({
-      error: "Choose a valid session: the selected educator does not have an assigned classroom."
-    }, 400);
-  }
-
-  if (registeredSessionId && !selectedSession) {
-    return json({
-      error: "Choose a valid educator classroom before registering."
-    }, 400);
-  }
-
-  // Students inherit the exact grade of their selected educator's assigned
-  // classroom. Educators may choose any supported Lebanese grade, even before
-  // a classroom/session has been created for that grade.
-  const gradeId = role === "student" ? selectedSession.grade_id : requestedGradeId;
-  if (!REGISTRATION_GRADE_ID_SET.has(gradeId)) {
+  // Students inherit the educator's registered grade; educators may create a
+  // new named classroom during registration or select a session template.
+  const gradeId = role === "student"
+    ? (selectedSession?.grade_id || selectedEducator.grade_id)
+    : (selectedSession?.grade_id || requestedGradeId);
+  if (!gradeId || !/^[a-z0-9_-]{1,40}$/.test(gradeId)) {
     return json({ error: "Choose a valid grade before registering." }, 400);
   }
 
@@ -421,15 +435,17 @@ async function handleRegister(request, env) {
     schoolOrSubject,
     gradeId,
     registeredSessionId,
+    registeredEducatorId,
+    className,
   };
-  if (existing) return existingRegistrationResponse(existing, registration, env, selectedSession);
+  if (existing) return existingRegistrationResponse(existing, registration, env, selectedSession, selectedEducator);
 
   const passwordHash = await hashPassword(password);
   const id = randomId();
   try {
     await env.DB.prepare(
-      "INSERT INTO accounts (id, username, password_hash, role, school_id, full_name, email, phone, school_or_subject, grade_id, registered_session_id, expires_at, activated) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now', '+1 month'), 0)",
-    ).bind(id, username, passwordHash, role, schoolId, fullName, email, phone, schoolOrSubject, gradeId, registeredSessionId || null).run();
+      "INSERT INTO accounts (id, username, password_hash, role, school_id, full_name, email, phone, school_or_subject, grade_id, registered_session_id, registered_educator_id, expires_at, activated) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now', '+1 month'), 0)",
+    ).bind(id, username, passwordHash, role, schoolId, fullName, email, phone, schoolOrSubject, gradeId, registeredSessionId || null, registeredEducatorId || null).run();
   } catch (error) {
     if (error instanceof Error && error.message.toLowerCase().includes("unique")) {
       const conflictingAccount = await env.DB.prepare("SELECT * FROM accounts WHERE username = ? COLLATE NOCASE")
@@ -449,6 +465,25 @@ async function handleRegister(request, env) {
       ).bind(randomId(), schoolId, id, index + 1)
     );
     await env.DB.batch(lessonSlots);
+
+    if (className || selectedSession) {
+      const classroomId = randomId();
+      const sessionTitle = className || selectedSession.title;
+      const subject = schoolOrSubject || selectedSession?.subject || "General";
+      await env.DB.batch([
+        env.DB.prepare(
+          "INSERT INTO sessions (id, school_id, grade_id, subject, title, teacher_name, source_name, source_url, playback_url, media_key, is_live, live_starts_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, NULL)"
+        ).bind(
+          classroomId, schoolId, gradeId, subject, sessionTitle, fullName, fullName,
+          selectedSession?.source_url || "https://agenda.live/room/" + encodeURIComponent(gradeId),
+          selectedSession?.playback_url || selectedSession?.source_url || "https://agenda.live/room/" + encodeURIComponent(gradeId),
+          selectedSession?.media_key || null
+        ),
+        env.DB.prepare(
+          "UPDATE accounts SET registered_session_id = ? WHERE id = ? AND school_id = ? AND role = 'educator'"
+        ).bind(classroomId, id, schoolId),
+      ]);
+    }
   }
 
   const account = await env.DB.prepare("SELECT * FROM accounts WHERE id = ?").bind(id).first();
@@ -459,7 +494,7 @@ async function handleRegister(request, env) {
   return json({ account: publicAccount(account), token }, 201);
 }
 
-async function existingRegistrationResponse(account, registration, env, selectedSession) {
+async function existingRegistrationResponse(account, registration, env, selectedSession, selectedEducator) {
   const matches = await verifyPassword(registration.password, account.password_hash);
   if (account.school_id !== registration.schoolId) return json({ error: "That username is already registered at another school." }, 409);
   if (!matches) return json({ error: "That username is already registered. Sign in or choose another username." }, 409);
@@ -473,7 +508,7 @@ async function existingRegistrationResponse(account, registration, env, selected
   if (!accountIsActive) {
     const registeredSessionId = registration.registeredSessionId || null;
     await env.DB.prepare(
-      "UPDATE accounts SET role = ?, school_id = ?, full_name = ?, email = ?, phone = ?, school_or_subject = ?, grade_id = ?, registered_session_id = ? WHERE id = ?",
+      "UPDATE accounts SET role = ?, school_id = ?, full_name = ?, email = ?, phone = ?, school_or_subject = ?, grade_id = ?, registered_session_id = ?, registered_educator_id = ? WHERE id = ?",
     ).bind(
       registration.role,
       registration.schoolId,
@@ -483,6 +518,7 @@ async function existingRegistrationResponse(account, registration, env, selected
       registration.schoolOrSubject,
       registration.gradeId,
       registeredSessionId,
+      registration.registeredEducatorId || null,
       account.id,
     ).run();
     account.role = registration.role;
@@ -493,6 +529,14 @@ async function existingRegistrationResponse(account, registration, env, selected
     account.school_or_subject = registration.schoolOrSubject;
     account.grade_id = registration.gradeId;
     account.registered_session_id = registeredSessionId;
+    account.registered_educator_id = registration.registeredEducatorId || null;
+  } else if (registration.role === "student" && registration.registeredEducatorId && account.registered_educator_id !== registration.registeredEducatorId) {
+    await env.DB.prepare(
+      "UPDATE accounts SET registered_educator_id = ?, registered_session_id = ?, grade_id = ? WHERE id = ?"
+    ).bind(registration.registeredEducatorId, registration.registeredSessionId || null, registration.gradeId, account.id).run();
+    account.registered_educator_id = registration.registeredEducatorId;
+    account.registered_session_id = registration.registeredSessionId || null;
+    account.grade_id = registration.gradeId;
   } else if (registration.registeredSessionId && account.registered_session_id !== registration.registeredSessionId) {
     if (account.registered_session_id) {
       return json({ error: "This account is already registered for another session." }, 409);
