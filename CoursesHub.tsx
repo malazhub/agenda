@@ -399,8 +399,12 @@ const saveAllDirectorAccountUpdates = async () => {
     setStudentRows((rows) => rows.map((row) => savedById.get(row.id) || row));
     setEducatorRows((rows) => rows.map((row) => savedById.get(row.id) || row));
     setPendingDirectorUpdates({});
-    const { sessions } = await getRegistrationSessions(directorSchoolId);
-    setRegistrationSessions(sessions);
+    try {
+      const { sessions } = await getRegistrationSessions(directorSchoolId);
+      setRegistrationSessions(sessions);
+    } catch (refreshError) {
+      console.warn('Accounts were saved, but the session list could not be refreshed:', refreshError);
+    }
     setDirectorMessage(
       currentLang === 'ar' ? 'تم حفظ جميع تعديلات الحسابات بنجاح.' :
       currentLang === 'fr' ? 'Toutes les modifications des comptes ont été enregistrées.' :
@@ -413,7 +417,7 @@ const saveAllDirectorAccountUpdates = async () => {
       currentLang === 'ar' ? 'تعذر حفظ التعديلات. لم يتم تأكيد حفظ جميع التغييرات.' :
       currentLang === 'fr' ? 'Impossible d’enregistrer les modifications. La sauvegarde complète n’a pas été confirmée.' :
       currentLang === 'es' ? 'No se pudieron guardar los cambios. No se confirmó el guardado completo.' :
-      currentLang === 'it' ? 'Impossibile salvare le modifiche. Il salvataggio completo non è stato confirmado.' :
+      currentLang === 'it' ? 'Impossibile salvare le modifiche. Il salvataggio completo non è stato confermato.' :
       error instanceof Error ? error.message : 'Unable to save all account changes.'
     );
   } finally {
