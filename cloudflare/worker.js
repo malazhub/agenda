@@ -261,17 +261,14 @@ async function requestJson(request) {
 }
 
 function deriveGradeIdFromClassName(className) {
-  const normalized = String(className || "")
-    .normalize("NFKD")
-    .replace(/[\\u0300-\\u036f]/g, "")
-    .toLowerCase();
-  const slug = normalized.replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 34);
+  // Use the entered class name as the fallback grade key.
+  const slug = String(className || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .slice(0, 34);
   if (slug) return `class_${slug}`.slice(0, 40);
-  const hex = Array.from(encoder.encode(String(className || "")))
-    .map((byte) => byte.toString(16).padStart(2, "0"))
-    .join("")
-    .slice(0, 32);
-  return `class_${hex || randomId().replace(/-/g, "").slice(0, 12)}`.slice(0, 40);
+  return `class_${randomId().replace(/-/g, "").slice(0, 12)}`.slice(0, 40);
 }
 
 function publicAccount(account) {
@@ -951,7 +948,7 @@ async function registerPublicDirectorSchool(request, env) {
 
   if (fullName.length < 2 || fullName.length > 120 ||
       schoolName.length < 2 || schoolName.length > 160 ||
-      !/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email) ||
+      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ||
       phone.length < 6 || phone.length > 40 ||
       normalizePhoneCredential(phone).length < 6 ||
       password.length === 0) {
