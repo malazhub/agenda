@@ -201,12 +201,18 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
           phone: phone.trim(),
           password,
         });
+        const loginEmailInstruction =
+          currentLang === 'ar' ? `يمكنك تسجيل الدخول باستخدام هذا البريد الإلكتروني: ${result.loginEmail}. سيبقى الحساب غير نشط وغير مدفوع حتى يوافق المالك.` :
+          currentLang === 'fr' ? `Connectez-vous avec cette adresse e-mail : ${result.loginEmail}. Le compte restera inactif et impayé jusqu’à l’approbation du propriétaire.` :
+          currentLang === 'es' ? `Inicia sesión con esta dirección de correo: ${result.loginEmail}. La cuenta permanecerá inactiva y sin pagar hasta que el propietario la apruebe.` :
+          currentLang === 'it' ? `Accedi con questo indirizzo e-mail: ${result.loginEmail}. L’account resterà inattivo e non pagato fino all’approvazione del proprietario.` :
+          `Sign in with this email address: ${result.loginEmail}. The account remains inactive and unpaid until the Owner approves it.`;
         setDirectorRequestSaved(
-          currentLang === 'ar' ? 'تم إرسال طلب تسجيل المدرسة بنجاح. سيظهر في مركز تحكم المالك، وسيبقى الحساب غير مفعّل وغير مدفوع حتى يوافق المالك.' :
-          currentLang === 'fr' ? 'La demande de création de l’école a été enregistrée. Elle apparaîtra dans le Centre de contrôle du propriétaire ; le compte restera inactif et impayé jusqu’à son approbation.' :
-          currentLang === 'es' ? 'La solicitud de registro de la escuela se guardó correctamente. Aparecerá en el Centro de control del propietario y permanecerá inactiva y sin pagar hasta su aprobación.' :
-          currentLang === 'it' ? 'La richiesta di registrazione della scuola è stata salvata. Apparirà nel Centro di controllo del proprietario e resterà inattiva e non pagata fino all’approvazione.' :
-          `Your school registration request was saved. Sign in with this email address: ${result.loginEmail}. The account remains inactive and unpaid until the Owner approves it.`
+          currentLang === 'ar' ? `تم حفظ طلب تسجيل المدرسة. ${loginEmailInstruction}` :
+          currentLang === 'fr' ? `La demande de création de l’école a été enregistrée. ${loginEmailInstruction}` :
+          currentLang === 'es' ? `La solicitud de registro de la escuela se guardó. ${loginEmailInstruction}` :
+          currentLang === 'it' ? `La richiesta di registrazione della scuola è stata salvata. ${loginEmailInstruction}` :
+          `Your school registration request was saved. ${loginEmailInstruction}`
         );
         setName('');
         setDirectorSchoolName('');
