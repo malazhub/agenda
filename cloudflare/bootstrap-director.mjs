@@ -86,8 +86,8 @@ if (!username || !/^[a-z0-9._-]{3,32}$/.test(username)) {
   console.error('Provide DIRECTOR_USERNAME or enter a 3–32 character username using letters, numbers, ".", "_" or "-".');
   process.exit(1);
 }
-if (!password || password.length < 12) {
-  console.error('Provide DIRECTOR_PASSWORD or enter a password with at least 12 characters.');
+if (password === undefined || password.length === 0) {
+  console.error('Provide DIRECTOR_PASSWORD or enter a non-empty password.');
   process.exit(1);
 }
 
