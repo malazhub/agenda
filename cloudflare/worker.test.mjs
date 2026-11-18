@@ -317,13 +317,6 @@ function fakeEnvironment() {
         Object.assign(account, { registered_educator_id, registered_session_id, grade_id });
         return { meta: { changes: 1 } };
       }
-      if (this.sql.startsWith('UPDATE accounts SET registered_session_id = ? WHERE id = ? AND school_id = ? AND role = \'educator\'')) {
-        const [registered_session_id, id, school_id] = this.values;
-        const account = accounts.get(id);
-        if (!account || account.school_id !== school_id || account.role !== 'educator') return { meta: { changes: 0 } };
-        account.registered_session_id = registered_session_id;
-        return { meta: { changes: 1 } };
-      }
       if (this.sql.startsWith('UPDATE accounts SET password_hash = ?, password_must_change = 1, phone_password_disabled_at = NULL')) {
         const [password_hash, id] = this.values;
         const account = accounts.get(id);
@@ -698,8 +691,32 @@ test('grade registration loads available grades and grants grade-scoped live acc
   const wrongGrade = await send(env, '/api/sessions?gradeId=eb7&live=true&sessionId=test-registration-session', { token });
   assert.equal(wrongGrade.status, 403);
 
-  // A school with no sessions must still be able to register its first educator.
+  // A student can select an educator before the Director has assigned a class.
   sessions.clear();
+  const assignedEducator = accounts.get('00000000-0000-4000-8000-000000000001');
+  assignedEducator.registered_session_id = null;
+  const pendingClassStudent = await send(env, '/api/auth/register', {
+    method: 'POST',
+    body: {
+      username: 'pending.class.student',
+      password: 'PendingClassStudent#2026',
+      role: 'student',
+      fullName: 'Pending Class Student',
+      email: 'pending.class.student@example.com',
+      phone: '+961 70 123 456',
+      schoolOrSubject: 'Life Sciences',
+      registeredEducatorId: assignedEducator.id,
+      gradeId: 'eb8',
+    },
+  });
+  assert.equal(pendingClassStudent.status, 201, JSON.stringify(await pendingClassStudent.clone().json()));
+  const pendingClassResult = await pendingClassStudent.json();
+  assert.equal(pendingClassResult.account.registeredEducatorId, assignedEducator.id);
+  assert.equal(pendingClassResult.account.registeredSessionId, null);
+  assert.equal(pendingClassResult.account.gradeId, 'eb8');
+  assert.equal(accounts.get(pendingClassResult.account.id).registered_educator_id, assignedEducator.id);
+
+  // A school with no sessions must still be able to register its first educator.
   const firstEducator = await send(env, '/api/auth/register', {
     method: 'POST',
     body: {
