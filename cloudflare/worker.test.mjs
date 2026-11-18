@@ -873,7 +873,7 @@ test('Owner creates a one-year Director school with phone initial password; Dire
     method: 'PATCH', token: ownerToken,
     body: { updates: [{ id: director.id, activated: true, paid: true }] },
   });
-  assert.equal(savedStatuses.status, 200);
+  assert.equal(savedStatuses.status, 200, await savedStatuses.clone().text());
   assert.equal(accounts.get(director.id).activated, 1);
   assert.equal(accounts.get(director.id).paid, 1);
   assert.equal(accounts.get(director.id).phone_password_disabled_at, null);
