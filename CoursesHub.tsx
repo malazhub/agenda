@@ -549,8 +549,8 @@ const updateAccount = async (
   const resetAccountPassword = (account: DirectorRow) => {
     const password = window.prompt(`${t.resetPassword} — ${account.username}`);
     if (password === null) return;
-    if (!password || password.length > 1024) {
-      setDirectorDataError(`${t.passwordLabel}: 1–1,024`);
+    if (password.length === 0) {
+      setDirectorDataError(t.passwordLabel);
       return;
     }
     void updateAccount(account, { password });
@@ -607,7 +607,7 @@ const updateAccount = async (
                 {currentLang === 'ar' ? 'المعلّم' : currentLang === 'fr' ? 'Éducateur' : currentLang === 'es' ? 'Educador' : currentLang === 'it' ? 'Educatore' : 'Educator'}
               </th>
             )}
-            <th className="px-3 py-3 text-left font-black text-slate-700">{t.usernameLabel}</th>
+            <th className="px-3 py-3 text-left font-black text-slate-700">{currentLang === 'ar' ? 'اسم المستخدم أو البريد الإلكتروني' : currentLang === 'fr' ? 'Nom d’utilisateur ou e-mail' : currentLang === 'es' ? 'Usuario o correo electrónico' : currentLang === 'it' ? 'Nome utente o e-mail' : 'Username or email address'}</th>
             <th className="px-3 py-3 text-left font-black text-slate-700">{t.passwordLabel}</th>
             <th className="px-3 py-3 text-left font-black text-slate-700">{t.emailLabel}</th>
             <th className="px-3 py-3 text-left font-black text-slate-700">{t.phoneNumber}</th>
@@ -817,22 +817,6 @@ const updateAccount = async (
           </button>
         </div>
 
-        <div role="note" className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
-          <p className="font-bold">
-            {currentLang === 'ar' ? 'كلمة المرور الأولية للمدير' : currentLang === 'fr' ? 'Mot de passe initial du directeur' : currentLang === 'es' ? 'Contraseña inicial del director' : currentLang === 'it' ? 'Password iniziale del direttore' : 'Director initial password'}
-          </p>
-          <p className="mt-1">
-            {currentLang === 'ar'
-              ? 'استخدم اسم المستخدم الحالي وكلمة المرور التي اخترتها. عند تسجيل الدخول لأول مرة فقط، استخدم رقم الهاتف الذي حفظه المالك؛ بعد تعيين كلمة مرور جديدة، استخدمها في كل مرة.'
-              : currentLang === 'fr'
-                ? 'Utilisez votre nom d’utilisateur actuel et votre mot de passe. Lors de la première connexion uniquement, utilisez le numéro de téléphone enregistré par le propriétaire ; après avoir choisi un nouveau mot de passe, utilisez celui-ci à chaque connexion.'
-                : currentLang === 'es'
-                  ? 'Usa tu nombre de usuario actual y tu contraseña. Solo en el primer inicio de sesión, usa el número de teléfono guardado por el propietario; después de crear una contraseña nueva, úsala siempre.'
-                  : currentLang === 'it'
-                    ? 'Usa il tuo nome utente attuale e la password che hai scelto. Solo al primo accesso, usa il numero di telefono salvato dal proprietario; dopo aver impostato una nuova password, usa sempre quella.'
-                    : 'Use your current username and password. For your first sign-in only, use the phone number saved by the Owner; after you set a new password, use that password every time.'}
-          </p>
-        </div>
         <form
           className="space-y-4"
           onSubmit={(event) => {
@@ -852,7 +836,7 @@ const updateAccount = async (
                 value={directorForm.username}
                 onChange={e => setDirectorForm(prev => ({ ...prev, username: e.target.value }))}
                 className="w-full pl-9 pr-3 py-2.5 border border-slate-200 rounded-xl text-sm text-slate-800 bg-slate-50 focus:outline-indigo-600"
-                placeholder={currentLang === 'ar' ? 'اسم المستخدم' : currentLang === 'fr' ? 'Nom d’utilisateur' : currentLang === 'es' ? 'Nombre de usuario' : currentLang === 'it' ? 'Nome utente' : 'Username'}
+                placeholder={currentLang === 'ar' ? 'اسم المستخدم أو البريد الإلكتروني' : currentLang === 'fr' ? 'Nom d’utilisateur ou e-mail' : currentLang === 'es' ? 'Usuario o correo electrónico' : currentLang === 'it' ? 'Nome utente o e-mail' : 'Username or email address'}
               />
             </div>
           </div>
@@ -958,7 +942,7 @@ const updateAccount = async (
               <p className="text-xs text-amber-900">{currentLang === 'ar' ? 'كلمة المرور الأولية هي رقم الهاتف الذي قدمته للمالك. اختر كلمة مرورك الخاصة هنا لتغييرها.' : 'Your initial password is the phone number you gave the Owner. Choose your own password here to replace it.'}</p>
               {directorPasswordNeedsChange && <p className="text-xs font-bold text-amber-900">{currentLang === 'ar' ? 'يجب تغيير كلمة المرور الأولية قبل متابعة استخدام لوحة المدير.' : 'Please replace your initial phone-number password before continuing to use the Director dashboard.'}</p>}
               <div className="grid sm:grid-cols-2 gap-3">
-                <label className="block text-xs font-bold text-slate-700">{currentLang === 'ar' ? 'كلمة المرور الجديدة' : 'New password'}<input type="password" autoComplete="new-password" maxLength={1024} required={directorPasswordNeedsChange} value={directorNewPassword} onChange={event=>setDirectorNewPassword(event.target.value)} className="mt-1 w-full rounded-lg border p-2.5 text-sm" placeholder={currentLang === 'ar' ? 'اختر كلمة مرورك' : 'Choose your password'}/></label>
+                <label className="block text-xs font-bold text-slate-700">{currentLang === 'ar' ? 'كلمة المرور الجديدة' : 'New password'}<input type="password" autoComplete="new-password"  required={directorPasswordNeedsChange} value={directorNewPassword} onChange={event=>setDirectorNewPassword(event.target.value)} className="mt-1 w-full rounded-lg border p-2.5 text-sm" placeholder={currentLang === 'ar' ? 'اختر كلمة مرورك' : 'Choose your password'}/></label>
                 <label className="block text-xs font-bold text-slate-700">{currentLang === 'ar' ? 'تأكيد كلمة المرور الجديدة' : 'Confirm new password'}<input type="password" autoComplete="new-password" maxLength={1024} required={directorPasswordNeedsChange} value={directorConfirmPassword} onChange={event=>setDirectorConfirmPassword(event.target.value)} className="mt-1 w-full rounded-lg border p-2.5 text-sm" placeholder={currentLang === 'ar' ? 'أعد كتابة كلمة المرور' : 'Enter it again'}/></label>
               </div>
               <p className="text-[11px] text-slate-500">{currentLang === 'ar' ? 'لا يوجد حد أدنى للطول؛ يمكن استخدام حرف واحد.' : 'No minimum password length; a single character is accepted.'}</p>
