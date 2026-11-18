@@ -296,6 +296,7 @@ function publicAccount(account) {
     phone: account.phone,
     schoolOrSubject: account.school_or_subject,
     gradeId: account.grade_id,
+    studentGradeLabel: account.student_grade_label || "",
     registeredSessionId: account.registered_session_id || null,
     registeredEducatorId: account.registered_educator_id || null,
     createdAt: account.created_at,
@@ -382,6 +383,7 @@ async function handleRegister(request, env) {
   let registeredSessionId = typeof body?.registeredSessionId === "string" ? body.registeredSessionId.trim() : "";
   let registeredEducatorId = typeof body?.registeredEducatorId === "string" ? body.registeredEducatorId.trim() : "";
   const className = typeof body?.className === "string" ? body.className.trim() : "";
+  const studentGradeLabel = typeof body?.studentGradeLabel === "string" ? body.studentGradeLabel.trim() : "";
 
   if (!schoolId || !(await env.DB.prepare("SELECT id FROM schools WHERE id = ?").bind(schoolId).first())) {
     return json({ error: "Choose a valid school before registering." }, 400);
@@ -394,7 +396,7 @@ async function handleRegister(request, env) {
   }
   if (phone.length > 40 || schoolOrSubject.length > 160 ||
       registeredSessionId.length > 100 || registeredEducatorId.length > 100 ||
-      className.length > 160) {
+      className.length > 160 || studentGradeLabel.length > 160) {
     return json({ error: "One or more profile fields are too long." }, 400);
   }
 
@@ -402,6 +404,12 @@ async function handleRegister(request, env) {
   let selectedSession = null;
 
   if (role === "student") {
+    // The selected grade/custom label is saved for the Director's roster display.
+    // Keep grade_id aligned with the selected educator's exact session so live
+    // classroom authorization continues to match the real educator session.
+    if (requestedGradeId && !REGISTRATION_GRADE_ID_SET.has(requestedGradeId)) {
+      return json({ error: "Choose a standard grade or enter your own class name in the grade field." }, 400);
+    }
     // Student's educator selection is persisted directly. A classroom may be
     // assigned later by the Director, so an educator without a session remains selectable.
     if (!registeredEducatorId && registeredSessionId) {
@@ -459,6 +467,7 @@ async function handleRegister(request, env) {
     phone,
     schoolOrSubject,
     gradeId,
+    studentGradeLabel: role === "student" ? (studentGradeLabel || requestedGradeId) : "",
     registeredSessionId,
     registeredEducatorId,
     className,
@@ -469,8 +478,8 @@ async function handleRegister(request, env) {
   const id = randomId();
   try {
     await env.DB.prepare(
-      "INSERT INTO accounts (id, username, password_hash, role, school_id, full_name, email, phone, school_or_subject, grade_id, registered_session_id, registered_educator_id, expires_at, activated) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now', '+1 month'), 0)",
-    ).bind(id, username, passwordHash, role, schoolId, fullName, email, phone, schoolOrSubject, gradeId, registeredSessionId || null, registeredEducatorId || null).run();
+      "INSERT INTO accounts (id, username, password_hash, role, school_id, full_name, email, phone, school_or_subject, grade_id, student_grade_label, registered_session_id, registered_educator_id, expires_at, activated) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now', '+1 month'), 0)",
+    ).bind(id, username, passwordHash, role, schoolId, fullName, email, phone, schoolOrSubject, gradeId, registration.studentGradeLabel, registeredSessionId || null, registeredEducatorId || null).run();
   } catch (error) {
     if (error instanceof Error && error.message.toLowerCase().includes("unique")) {
       const conflictingAccount = await env.DB.prepare("SELECT * FROM accounts WHERE username = ? COLLATE NOCASE")
@@ -532,7 +541,7 @@ async function existingRegistrationResponse(account, registration, env, selected
   if (!accountIsActive) {
     const registeredSessionId = registration.registeredSessionId || null;
     await env.DB.prepare(
-      "UPDATE accounts SET role = ?, school_id = ?, full_name = ?, email = ?, phone = ?, school_or_subject = ?, grade_id = ?, registered_session_id = ?, registered_educator_id = ? WHERE id = ?",
+      "UPDATE accounts SET role = ?, school_id = ?, full_name = ?, email = ?, phone = ?, school_or_subject = ?, grade_id = ?, student_grade_label = ?, registered_session_id = ?, registered_educator_id = ? WHERE id = ?",
     ).bind(
       registration.role,
       registration.schoolId,
@@ -541,6 +550,7 @@ async function existingRegistrationResponse(account, registration, env, selected
       registration.phone,
       registration.schoolOrSubject,
       registration.gradeId,
+      registration.studentGradeLabel || "",
       registeredSessionId,
       registration.registeredEducatorId || null,
       account.id,
@@ -552,6 +562,7 @@ async function existingRegistrationResponse(account, registration, env, selected
     account.phone = registration.phone;
     account.school_or_subject = registration.schoolOrSubject;
     account.grade_id = registration.gradeId;
+    account.student_grade_label = registration.studentGradeLabel || "";
     account.registered_session_id = registeredSessionId;
     account.registered_educator_id = registration.registeredEducatorId || null;
   } else if (registration.role === "student" && registration.registeredEducatorId && account.registered_educator_id !== registration.registeredEducatorId) {
@@ -705,6 +716,7 @@ async function handleLogin(request, env) {
     ? body.username.normalize("NFKC").trim().toLowerCase()
     : "";
   const password = typeof body?.password === "string" ? body.password : "";
+  const requestedSchoolId = typeof body?.schoolId === "string" ? body.schoolId.trim() : "";
   if (!username || password.length === 0) return json({ error: "Invalid username or password." }, 401);
 
   const recentAttempts = await env.DB.prepare(
@@ -759,6 +771,13 @@ async function handleLogin(request, env) {
     }
     return json({ error: "Invalid username or password." }, 401);
   }
+
+  // All non-owner accounts are tenant-bound. A valid credential is not enough
+  // to sign into a different school's URL or the shared Agenda landing school.
+  if (!isOwner && (!requestedSchoolId || account.school_id !== requestedSchoolId)) {
+    return json({ error: "This account belongs to another school. Open your own school's link to sign in." }, 403);
+  }
+
   const expiryTime = account.expires_at ? Date.parse(`${account.expires_at.replace(' ', 'T')}Z`) : null;
   const expired = expiryTime !== null && (!Number.isFinite(expiryTime) || expiryTime <= Date.now());
   if (!account.activated) {
@@ -813,6 +832,10 @@ async function getCurrentAccount(request, env) {
     return json({ account: publicAccount({ ...account, role: "owner" }) });
   }
   if (!account || account.role !== claims.role) return json({ error: "Account not found." }, 404);
+  const requestedSchoolId = new URL(request.url).searchParams.get("schoolId") || "";
+  if (!requestedSchoolId || account.school_id !== requestedSchoolId) {
+    return json({ error: "This account belongs to another school. Open your own school's link to continue." }, 401);
+  }
   return json({ account: publicAccount(account) });
 }
 
