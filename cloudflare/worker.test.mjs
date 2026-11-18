@@ -826,7 +826,7 @@ test('Owner creates a one-year Director school with phone initial password; Dire
 
   const blockedDirectorLogin = await send(env, '/api/auth/login', {
     method: 'POST',
-    body: { username: 'new.director', password: 'x' },
+    body: { username: 'nostafa.director', password: 'NewPrivatePassword#2026' },
   });
   assert.equal(blockedDirectorLogin.status, 403);
   assert.match((await blockedDirectorLogin.json()).error, /Director account is inactive/i);
@@ -841,7 +841,7 @@ test('Owner creates a one-year Director school with phone initial password; Dire
   assert.equal(restored.status, 200);
   const restoredLogin = await send(env, '/api/auth/login', {
     method: 'POST',
-    body: { username: 'new.director', password: 'x' },
+    body: { username: 'nostafa.director', password: 'NewPrivatePassword#2026' },
   });
   assert.equal(restoredLogin.status, 200);
 });
