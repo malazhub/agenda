@@ -958,8 +958,14 @@ async function claimDirectorSetup(request, env) {
     "UPDATE director_setup_tokens SET used_at = datetime('now') WHERE token_hash = ? AND used_at IS NULL AND expires_at > datetime('now')"
   ).bind(tokenHash).run();
   if (!consumed.meta?.changes) return json({ error: "This setup link has already been used." }, 409);
-  await env.DB.prepare("UPDATE accounts SET username = ?, password_hash = ?, password_must_change = 1 WHERE id = ? AND role = 'director'")
+  // A claimed setup link always starts a fresh initial-password lifecycle.
+  // Explicitly clear the disabled marker so stale state from older records
+  // cannot reject the Owner-saved phone number on the first login.
+  await env.DB.prepare("UPDATE accounts SET username = ?, password_hash = ?, password_must_change = 1, phone_password_disabled_at = NULL WHERE id = ? AND role = 'director'")
     .bind(username, await hashPassword(String(setup.phone)), setup.id).run();
+  // Remove any attempts against either the temporary or newly chosen username.
+  await env.DB.prepare("DELETE FROM login_attempts WHERE username = ? COLLATE NOCASE OR username = ? COLLATE NOCASE")
+    .bind(setup.username, username).run();
   const account = await env.DB.prepare("SELECT * FROM accounts WHERE id = ?").bind(setup.id).first();
   const authToken = await signToken(
     { sub: setup.id, role: "director", username, exp: Math.floor(Date.now() / 1000) + SESSION_TTL_SECONDS },
