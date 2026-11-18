@@ -697,11 +697,15 @@ async function handleLogin(request, env) {
   // must still work so an Owner can recover a Director after repeated tests.
   const throttled = Number(recentAttempts?.count || 0) >= 5;
 
-  // Publicly registered Directors use their email address to sign in.
-  // Owners, students and educators continue to use their chosen usernames.
-  const account = await env.DB.prepare(
-    "SELECT * FROM accounts WHERE username = ? COLLATE NOCASE OR (role = 'director' AND email = ? COLLATE NOCASE) LIMIT 1"
-  ).bind(username, username).first();
+  // Resolve a Director email first, then fall back to the chosen account
+  // username. Keeping these lookups separate guarantees that an unrelated
+  // account whose username resembles a Director email cannot shadow it.
+  const directorByEmail = await env.DB.prepare(
+    "SELECT * FROM accounts WHERE role = 'director' AND lower(trim(email)) = ? LIMIT 1"
+  ).bind(username).first();
+  const account = directorByEmail || await env.DB.prepare(
+    "SELECT * FROM accounts WHERE username = ? COLLATE NOCASE"
+  ).bind(username).first();
   const ownerRow = account ? await env.DB.prepare("SELECT account_id FROM platform_owners WHERE account_id = ?").bind(account.id).first() : null;
   const isOwner = Boolean(ownerRow);
   const phoneIsInitialPassword = Boolean(
