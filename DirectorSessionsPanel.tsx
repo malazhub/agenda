@@ -306,7 +306,7 @@ export const DirectorSessionsPanel: React.FC<DirectorSessionsPanelProps> = ({
       {/* 2. SESSIONS DISPLAYED BELOW WITH JOIN, LIVE/OFF, AND DELETE */}
       <div className="flex items-center justify-between">
         <h3 className="text-sm font-black text-slate-900 flex items-center gap-2">
-          <span>{grades.find((g) => g.id === gradeId)?.name[currentLang]}</span>
+          <span>{grades.find((g) => g.id === gradeId)?.name[currentLang] || gradeId.toUpperCase()}</span>
           <span className="text-xs font-bold bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full">
             {gradeSessions.length} {currentLang === 'ar' ? 'حصص مسجلة' : currentLang === 'fr' ? 'cours' : currentLang === 'es' ? 'sesiones' : currentLang === 'it' ? 'lezioni' : 'sessions'}
           </span>
