@@ -330,6 +330,13 @@ function fakeEnvironment() {
         if (school && (!this.values[2] || school.director_id === this.values[2])) school.name = this.values[0];
         return { meta: { changes: school ? 1 : 0 } };
       }
+      if (this.sql.startsWith('UPDATE accounts SET student_grade_label = ? WHERE id = ? AND school_id = ? AND role = \'student\'')) {
+        const [student_grade_label, id, school_id] = this.values;
+        const account = accounts.get(id);
+        if (!account || account.school_id !== school_id || account.role !== 'student') return { meta: { changes: 0 } };
+        account.student_grade_label = student_grade_label;
+        return { meta: { changes: 1 } };
+      }
       if (this.sql.startsWith('UPDATE accounts SET registered_session_id = ? WHERE id = ? AND school_id = ? AND role = \'educator\'')) {
         const [registered_session_id, id, school_id] = this.values;
         const account = accounts.get(id);
@@ -683,6 +690,25 @@ test('registration hashes credentials and rejects duplicate usernames', async ()
 
 test('Student registration saves their chosen custom grade label without changing the educator live-session grade', async () => {
   const { env, accounts } = fakeEnvironment();
+  accounts.set('00000000-0000-4000-8000-000000000001', {
+    id: '00000000-0000-4000-8000-000000000001',
+    username: 'registered.educator',
+    password_hash: hashPassword('educator-pass'),
+    role: 'educator',
+    school_id: 'default-agenda-school',
+    full_name: 'Registered Educator',
+    email: 'educator@agenda.example',
+    phone: '',
+    school_or_subject: 'Mathematics',
+    grade_id: 'eb8',
+    student_grade_label: '',
+    registered_session_id: 'test-registration-session',
+    registered_educator_id: null,
+    created_at: '2026-11-18 10:00:00',
+    expires_at: '2027-11-18 10:00:00',
+    activated: 1,
+    paid: 1,
+  });
   const response = await send(env, '/api/auth/register', {
     method: 'POST',
     body: {
@@ -1205,6 +1231,36 @@ test('Student and educator accounts can only sign in and restore sessions on the
   assert.equal(wrongSchoolRestore.status, 401);
   const correctSchoolRestore = await send(env, '/api/auth/me?schoolId=school-two', { token });
   assert.equal(correctSchoolRestore.status, 200);
+});
+
+test('Educators are also blocked from signing into a different school', async () => {
+  const { env, accounts, schools } = fakeEnvironment();
+  schools.set('school-three', { id: 'school-three', name: 'School Three', director_id: 'other-director' });
+  accounts.set('school-three-educator', {
+    id: 'school-three-educator',
+    username: 'schoolthree.educator',
+    password_hash: hashPassword('educator-pass'),
+    role: 'educator',
+    school_id: 'school-three',
+    full_name: 'School Three Educator',
+    email: 'educator@schoolthree.example',
+    phone: '',
+    school_or_subject: 'Science',
+    grade_id: 'eb8',
+    student_grade_label: '',
+    registered_session_id: null,
+    registered_educator_id: null,
+    created_at: '2026-11-18 10:00:00',
+    expires_at: '2027-11-18 10:00:00',
+    activated: 1,
+    paid: 1,
+  });
+  const response = await send(env, '/api/auth/login', {
+    method: 'POST',
+    body: { username: 'schoolthree.educator', password: 'educator-pass', schoolId: 'default-agenda-school' },
+  });
+  assert.equal(response.status, 403);
+  assert.match((await response.json()).error, /belongs to another school/i);
 });
 
 test('A platform Owner can still sign in from the main Agenda context', async () => {
