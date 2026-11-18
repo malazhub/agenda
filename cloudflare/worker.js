@@ -717,12 +717,13 @@ async function handleLogin(request, env) {
     normalizePhoneCredential(password).length >= 6 &&
     normalizePhoneCredential(password) === normalizePhoneCredential(account.phone)
   );
-  // Enforce the 15-minute server-side throttle without exposing a distinct
-  // lockout response. The temporary phone credential remains a recovery path.
-  if (throttled && !phoneIsInitialPassword) {
+  // Verify credentials before applying the failed-attempt throttle. A
+  // previously mistyped email/password must never lock out a Director who
+  // subsequently enters the correct saved password.
+  const valid = account ? (phoneIsInitialPassword || await verifyPassword(password, account.password_hash)) : false;
+  if (throttled && !valid) {
     return json({ error: "Invalid username or password." }, 401);
   }
-  const valid = account ? (phoneIsInitialPassword || await verifyPassword(password, account.password_hash)) : false;
   if (!account || !valid) {
     if (!throttled) {
       await env.DB.prepare("INSERT INTO login_attempts (username, succeeded) VALUES (?, 0)").bind(username).run();
