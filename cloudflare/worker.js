@@ -467,7 +467,7 @@ async function handleRegister(request, env) {
     phone,
     schoolOrSubject,
     gradeId,
-    studentGradeLabel: role === "student" ? (studentGradeLabel || requestedGradeId) : "",
+    studentGradeLabel: role === "student" ? studentGradeLabel : "",
     registeredSessionId,
     registeredEducatorId,
     className,
@@ -582,6 +582,13 @@ async function existingRegistrationResponse(account, registration, env, selected
     ).bind(registration.registeredSessionId, selectedSession.grade_id, account.id).run();
     account.registered_session_id = registration.registeredSessionId;
     account.grade_id = selectedSession.grade_id;
+  }
+  if (registration.role === "student" &&
+      String(account.student_grade_label || "") !== String(registration.studentGradeLabel || "")) {
+    await env.DB.prepare(
+      "UPDATE accounts SET student_grade_label = ? WHERE id = ? AND school_id = ? AND role = 'student'"
+    ).bind(registration.studentGradeLabel || "", account.id, registration.schoolId).run();
+    account.student_grade_label = registration.studentGradeLabel || "";
   }
   if (registration.role === "educator" && !account.registered_session_id) {
     const classroomId = randomId();
