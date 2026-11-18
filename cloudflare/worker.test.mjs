@@ -1181,8 +1181,9 @@ test('Public Director registration saves chosen password and signs in by email a
     body: { username: 'director@newschool.example', password: 'x', schoolId: created.schoolId },
   });
   assert.equal(approvedLogin.status, 200);
-  assert.equal((await approvedLogin.json()).account.role, 'director');
-  const approvedToken = (await approvedLogin.clone().json()).token;
+  const approvedLoginResult = await approvedLogin.json();
+  assert.equal(approvedLoginResult.account.role, 'director');
+  const approvedToken = approvedLoginResult.token;
   const directorSessionOnAgenda = await send(env, '/api/auth/me?schoolId=default-agenda-school', { token: approvedToken });
   assert.equal(directorSessionOnAgenda.status, 401);
 
