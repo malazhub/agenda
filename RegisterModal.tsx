@@ -576,8 +576,6 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
                     const isSelected =
                       selectedEducatorId === educator.id;
 
-                    const canSelect = true;
-
                     return (
                       <button
                         key={educator.id}
@@ -627,7 +625,7 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
                           className={`text-[10px] font-bold ${
                             isSelected
                               ? 'text-emerald-100'
-                              : canSelect
+                              : educator.hasAssignedClassroom
                                 ? 'text-emerald-700'
                                 : 'text-amber-700'
                           }`}
