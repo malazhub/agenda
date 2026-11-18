@@ -47,6 +47,7 @@ export interface PublicDirectorRegistrationInput {
 
 export interface PublicDirectorRegistrationResult {
   registered: boolean;
+  loginEmail: string;
   director: {
     id: string;
     fullName: string;
