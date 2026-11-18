@@ -7,15 +7,14 @@ import {
   getSchoolPayment,
   getRegistrationGrades,
   getRegistrationEducators,
-  getRegistrationSessions,
   loginAccount,
   registerAccount,
+  registerPublicDirectorSchool,
 } from '../services/cloudflareApi';
 
 import type {
   CloudflareAccount,
   RegistrationEducator,
-  RegistrationSession,
 } from '../services/cloudflareApi';
 
 interface RegisterModalProps {
@@ -33,7 +32,7 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
   onRegisterSuccess
 }) => {
   const t = translations[currentLang];
-  const [role, setRole] = useState<'student' | 'educator'>('student');
+  const [role, setRole] = useState<'student' | 'educator' | 'director'>('student');
   const [username, setUsername] = useState('');
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -41,11 +40,11 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [schoolOrSubject, setSchoolOrSubject] = useState('');
+  const [directorSchoolName, setDirectorSchoolName] = useState('');
+  const [directorRequestSaved, setDirectorRequestSaved] = useState('');
   const [registeredGradeId, setRegisteredGradeId] = useState('');
   const [selectedEducatorId, setSelectedEducatorId] = useState<string>('');
-  const [educatorSessionId, setEducatorSessionId] = useState('');
   const [newClassName, setNewClassName] = useState('');
-  const [registrationSessions, setRegistrationSessions] = useState<RegistrationSession[]>([]);
   const [registrationGrades, setRegistrationGrades] = useState<string[]>(
     LEBANESE_GRADE_LEVELS.map((grade) => grade.id)
   );
@@ -136,21 +135,17 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
     let active = true;
     setIsLoadingGrades(true);
     setRegistrationGrades(LEBANESE_GRADE_LEVELS.map((grade) => grade.id));
-    Promise.all([
-      getRegistrationGrades(schoolId),
-      getRegistrationSessions(schoolId),
-    ])
-      .then(([{ grades }, { sessions }]) => {
+    getRegistrationGrades(schoolId)
+      .then(({ grades }) => {
         if (!active) return;
         const available = new Set([
           ...LEBANESE_GRADE_LEVELS.map((grade) => grade.id),
           ...(Array.isArray(grades) ? grades : []),
         ]);
         setRegistrationGrades([...available]);
-        setRegistrationSessions(Array.isArray(sessions) ? sessions : []);
       })
       .catch((gradeError) => {
-        console.warn('Using built-in grades and available sessions:', gradeError);
+        console.warn('Using built-in grade catalogue:', gradeError);
         if (active) setRegistrationGrades(LEBANESE_GRADE_LEVELS.map((grade) => grade.id));
       })
       .finally(() => {
@@ -167,6 +162,8 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
     setShowPayment(false);
     setIsLogin(false);
     setError(null);
+    setDirectorRequestSaved('');
+    setRole('student');
   }, [isOpen]);
 
   const gradeLabel = (gradeId: string) => {
@@ -181,6 +178,7 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
     setShowAccessChoice(true);
     setIsLogin(false);
     setError(null);
+    setDirectorRequestSaved('');
     onClose();
   };
 
@@ -190,6 +188,36 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
 
     const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (!isLogin && role === 'director') {
+      setIsSubmitting(true);
+      setError(null);
+      setDirectorRequestSaved('');
+      try {
+        await registerPublicDirectorSchool({
+          fullName: name.trim(),
+          schoolName: directorSchoolName.trim(),
+          email: email.trim(),
+          phone: phone.trim(),
+        });
+        setDirectorRequestSaved(
+          currentLang === 'ar' ? 'تم إرسال طلب تسجيل المدرسة بنجاح. سيظهر في مركز تحكم المالك، وسيبقى الحساب غير مفعّل وغير مدفوع حتى يوافق المالك.' :
+          currentLang === 'fr' ? 'La demande de création de l’école a été enregistrée. Elle apparaîtra dans le Centre de contrôle du propriétaire ; le compte restera inactif et impayé jusqu’à son approbation.' :
+          currentLang === 'es' ? 'La solicitud de registro de la escuela se guardó correctamente. Aparecerá en el Centro de control del propietario y permanecerá inactiva y sin pagar hasta su aprobación.' :
+          currentLang === 'it' ? 'La richiesta di registrazione della scuola è stata salvata. Apparirà nel Centro di controllo del proprietario e resterà inattiva e non pagata fino all’approvazione.' :
+          'Your school registration request was saved. It will appear in the Owner Control Center and remain inactive and unpaid until the Owner approves it.'
+        );
+        setName('');
+        setDirectorSchoolName('');
+        setEmail('');
+        setPhone('');
+      } catch (requestError) {
+        setError(requestError instanceof Error ? requestError.message : t.registrationServiceUnavailable);
+      } finally {
+        setIsSubmitting(false);
+      }
+      return;
+    }
 
     if (!isLogin && role === 'student' && !selectedEducatorId) {
       setError(
@@ -204,6 +232,10 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
 
     if (!isLogin && role === 'educator' && !registeredGradeId) {
       setError(t.registrationChooseGrade);
+      return;
+    }
+    if (!isLogin && role === 'educator' && newClassName.trim().length < 2) {
+      setError(currentLang === 'ar' ? 'يرجى إدخال اسم الصف الذي ستدرّسه.' : currentLang === 'fr' ? 'Veuillez saisir le nom de la classe que vous enseignerez.' : currentLang === 'es' ? 'Introduce el nombre de la clase que impartirás.' : currentLang === 'it' ? 'Inserisci il nome della classe che insegnerai.' : 'Please enter the name of the class you will teach.');
       return;
     }
 
@@ -223,18 +255,12 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
             phone,
             schoolOrSubject,
 
-            // Students inherit the grade of their chosen educator.
-            gradeId:
-              role === 'student'
-                ? selectedEducator!.gradeId
-                : (registrationSessions.find((session) => session.id === educatorSessionId)?.gradeId || registeredGradeId),
-
-            // Persist the exact educator choice even before a classroom exists.
+            // Students inherit their selected educator's grade and current classroom.
+            gradeId: role === 'student' ? selectedEducator!.gradeId : registeredGradeId,
             registeredEducatorId: role === 'student' ? selectedEducatorId : undefined,
-            registeredSessionId: role === 'student'
-              ? selectedEducator!.registeredSessionId || undefined
-              : educatorSessionId || undefined,
-            className: role === 'educator' ? newClassName.trim() || undefined : undefined,
+            registeredSessionId: role === 'student' ? selectedEducator!.registeredSessionId || undefined : undefined,
+            // Every educator creates a dedicated class that the API assigns to the account.
+            className: role === 'educator' ? newClassName.trim() : undefined,
           });
       onRegisterSuccess(account, token);
       handleClose();
@@ -361,7 +387,7 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
             <label className="block text-xs font-bold text-slate-700 mb-1">
               {t.accountTypeLabel}
             </label>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-3 gap-2">
               <button
                 type="button"
                 onClick={() => setRole('student')}
@@ -384,9 +410,21 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
               >
                 {t.roleTeacher}
               </button>
+              <button
+                type="button"
+                onClick={() => { setRole('director'); setDirectorRequestSaved(''); setError(null); }}
+                className={`py-2 px-3 rounded-lg text-xs font-bold transition cursor-pointer border ${
+                  role === 'director'
+                    ? 'bg-slate-900 text-white border-slate-900'
+                    : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                }`}
+              >
+                {currentLang === 'ar' ? 'مدير' : currentLang === 'fr' ? 'Directeur' : currentLang === 'es' ? 'Director' : currentLang === 'it' ? 'Direttore' : 'Director'}
+              </button>
             </div>
           </div>}
 
+          {role !== 'director' && (
           <div>
             <label className="block text-xs font-bold text-slate-700 mb-1">
               {t.usernameLabel}
@@ -404,8 +442,9 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
               className="w-full text-xs p-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:outline-emerald-600 font-medium"
             />
           </div>
+          )}
 
-          {!isLogin && <div>
+          {!isLogin && role !== 'director' && <div>
             <label className="block text-xs font-bold text-slate-700 mb-1" htmlFor="registration-grade">
               {t.registeredGradeLabel}
             </label>
@@ -428,33 +467,21 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
           </div>}
 
           {!isLogin && role === 'educator' && (
-            <div className="space-y-2">
-              <label className="block text-xs font-bold text-slate-700">
-                {currentLang === 'ar' ? 'اختر حصة / صفاً موجوداً (اختياري)' : currentLang === 'fr' ? 'Choisir une classe existante (facultatif)' : currentLang === 'es' ? 'Elegir una clase existente (opcional)' : currentLang === 'it' ? 'Scegli una classe esistente (facoltativo)' : 'Choose an existing class/session (optional)'}
-                <select
-                  value={educatorSessionId}
-                  onChange={(event) => setEducatorSessionId(event.target.value)}
-                  className="mt-1 w-full text-xs p-2.5 bg-slate-50 border border-slate-200 rounded-lg font-medium"
-                >
-                  <option value="">{currentLang === 'ar' ? '— دون اختيار —' : currentLang === 'fr' ? '— Aucun —' : currentLang === 'es' ? '— Ninguna —' : currentLang === 'it' ? '— Nessuna —' : '— None —'}</option>
-                  {registrationSessions.map((session) => (
-                    <option key={session.id} value={session.id}>
-                      {gradeLabel(session.gradeId)} · {session.subject} · {session.title}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="block text-xs font-bold text-slate-700">
-                {currentLang === 'ar' ? 'أو اكتب اسم صفك / حصتك الجديدة' : currentLang === 'fr' ? 'Ou nommez votre nouvelle classe / séance' : currentLang === 'es' ? 'O escribe el nombre de tu nueva clase / sesión' : currentLang === 'it' ? 'Oppure inserisci il nome della tua nuova classe / lezione' : 'Or enter your new class/session name'}
-                <input
-                  value={newClassName}
-                  onChange={(event) => setNewClassName(event.target.value)}
-                  maxLength={160}
-                  placeholder={currentLang === 'ar' ? 'مثال: صف الرياضيات - EB8' : currentLang === 'fr' ? 'Ex. : Classe de mathématiques - EB8' : currentLang === 'es' ? 'Ej.: Clase de matemáticas - EB8' : currentLang === 'it' ? 'Es.: Classe di matematica - EB8' : 'e.g. Mathematics Class - EB8'}
-                  className="mt-1 w-full text-xs p-2.5 bg-slate-50 border border-slate-200 rounded-lg font-medium"
-                />
-              </label>
-            </div>
+            <label className="block text-xs font-bold text-slate-700">
+              {currentLang === 'ar' ? 'اسم الصف أو الحصة التي ستُنشئها' : currentLang === 'fr' ? 'Nom de votre nouvelle classe / séance' : currentLang === 'es' ? 'Nombre de tu nueva clase / sesión' : currentLang === 'it' ? 'Nome della tua nuova classe / lezione' : 'Your new class / session name'}
+              <input
+                required
+                minLength={2}
+                maxLength={160}
+                value={newClassName}
+                onChange={(event) => setNewClassName(event.target.value)}
+                placeholder={currentLang === 'ar' ? 'مثال: صف الرياضيات EB8' : currentLang === 'fr' ? 'Ex. : Classe de mathématiques EB8' : currentLang === 'es' ? 'Ej.: Clase de matemáticas EB8' : currentLang === 'it' ? 'Es.: Classe di matematica EB8' : 'e.g. Mathematics Class EB8'}
+                className="mt-1 w-full text-xs p-2.5 bg-slate-50 border border-slate-200 rounded-lg font-medium"
+              />
+              <span className="mt-1 block text-[10px] font-medium text-slate-500">
+                {currentLang === 'ar' ? 'سيُنشأ هذا الصف ويُربط بحسابك تلقائياً.' : currentLang === 'fr' ? 'Cette classe sera créée et attribuée automatiquement à votre compte.' : currentLang === 'es' ? 'Esta clase se creará y se asignará automáticamente a tu cuenta.' : currentLang === 'it' ? 'Questa classe verrà creata e assegnata automaticamente al tuo account.' : 'This class will be created and assigned to your account automatically.'}
+              </span>
+            </label>
           )}
 
           {/* Full Name */}
@@ -473,6 +500,23 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
           </div>}
 
           {/* Email / Phone */}
+          {!isLogin && role === 'director' && (
+            <div>
+              <label className="block text-xs font-bold text-slate-700 mb-1">
+                {currentLang === 'ar' ? 'اسم المدرسة' : currentLang === 'fr' ? 'Nom de l’école' : currentLang === 'es' ? 'Nombre de la escuela' : currentLang === 'it' ? 'Nome della scuola' : 'School name'}
+              </label>
+              <input
+                type="text"
+                required
+                minLength={2}
+                maxLength={160}
+                value={directorSchoolName}
+                onChange={(event) => setDirectorSchoolName(event.target.value)}
+                className="w-full text-xs p-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:outline-emerald-600 font-medium"
+              />
+            </div>
+          )}
+
           {!isLogin && <div className="grid grid-cols-2 gap-2">
             <div>
               <label className="block text-xs font-bold text-slate-700 mb-1">
@@ -493,6 +537,7 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
               </label>
               <input
                 type="tel"
+                required={!isLogin && role === 'director'}
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
                 placeholder={t.phonePlaceholder}
@@ -501,47 +546,47 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
             </div>
           </div>}
 
-          {/* Stream & School */}
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">
-                {t.passwordLabel}
-              </label>
-              <div className="relative">
-                <input
-                  type={showPassword ? 'text' : 'password'}
-                  required
-                  maxLength={1024}
-                  autoComplete={isLogin ? 'current-password' : 'new-password'}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder={t.passwordPlaceholder}
-                  className="w-full text-xs p-2.5 pr-8 bg-slate-50 border border-slate-200 rounded-lg focus:outline-emerald-600 font-medium"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 transition cursor-pointer"
-                  title={showPassword ? 'Hide password' : 'Show password'}
-                >
-                  {showPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                </button>
+          {role !== 'director' && (
+            <>
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">{t.passwordLabel}</label>
+                <div className="relative">
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    required
+                    maxLength={1024}
+                    autoComplete={isLogin ? 'current-password' : 'new-password'}
+                    value={password}
+                    onChange={(event) => setPassword(event.target.value)}
+                    placeholder={t.passwordPlaceholder}
+                    className="w-full text-xs p-2.5 pr-8 bg-slate-50 border border-slate-200 rounded-lg focus:outline-emerald-600 font-medium"
+                  />
+                  <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 transition cursor-pointer" title={showPassword ? 'Hide password' : 'Show password'}>
+                    {showPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                  </button>
+                </div>
               </div>
+              {!isLogin && (
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    {role === 'student' ? t.schoolOrGradeLabel : t.educatorSubjectLabel}
+                  </label>
+                  <input
+                    type="text"
+                    value={schoolOrSubject}
+                    onChange={(event) => setSchoolOrSubject(event.target.value)}
+                    placeholder={role === 'student' ? t.schoolPlaceholder : t.educatorSubjectPlaceholder}
+                    className="w-full text-xs p-2.5 bg-slate-50 border border-slate-200 rounded-lg font-medium"
+                  />
+                </div>
+              )}
+            </>
+          )}
+          {directorRequestSaved && (
+            <div role="status" className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-800">
+              {directorRequestSaved}
             </div>
-            {!isLogin && <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">
-                {role === 'student' ? t.schoolOrGradeLabel : t.educatorSubjectLabel}
-              </label>
-              <input
-                type="text"
-                value={schoolOrSubject}
-                onChange={(e) => setSchoolOrSubject(e.target.value)}
-                placeholder={role === 'student' ? t.schoolPlaceholder : t.educatorSubjectPlaceholder}
-                className="w-full text-xs p-2.5 bg-slate-50 border border-slate-200 rounded-lg font-medium"
-              />
-            </div>}
-          </div>
-
+          )}
           {error && (
             <div role="alert" className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-700">
               {error}
