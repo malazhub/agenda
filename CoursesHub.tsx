@@ -72,7 +72,9 @@ export const CoursesHub: React.FC<CoursesHubProps> = ({
     const [activeGradeForSessions, setActiveGradeForSessions] = useState<GradeLevelDef | null>(null);
   const [activeGradeTab, setActiveGradeTab] = useState<'stored' | 'live'>('stored');
   const [autoOpenLiveClassroom, setAutoOpenLiveClassroom] = useState(false);
-  const [directorScreen, setDirectorScreen] = useState<'home' | 'login' | 'dashboard'>('home');
+  const [directorScreen, setDirectorScreen] = useState<'home' | 'login' | 'dashboard'>(() =>
+    typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('directorLogin') === '1' ? 'login' : 'home'
+  );
   const [directorForm, setDirectorForm] = useState({ username: '', password: '' });
   const [showDirectorPassword, setShowDirectorPassword] = useState(false);
   const [directorError, setDirectorError] = useState('');
