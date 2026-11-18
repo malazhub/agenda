@@ -48,6 +48,8 @@ export interface PublicDirectorRegistrationInput {
 export interface PublicDirectorRegistrationResult {
   registered: boolean;
   loginEmail: string;
+  schoolId: string;
+  directorLink: string;
   director: {
     id: string;
     fullName: string;
