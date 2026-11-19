@@ -2170,7 +2170,7 @@ async function registeredLiveSession(request, env, sessionId) {
 const sessionQuery =
   claims.role === "educator"
     ? "SELECT * FROM sessions WHERE id = ? AND school_id = ?"
-    : "SELECT * FROM sessions WHERE id = ? AND school_id = ? AND is_live = 1";
+    : "SELECT * FROM sessions WHERE id = ? AND school_id = ? AND is_live = 1 AND live_heartbeat_at >= datetime('now', '-90 seconds')";
 
 const session = await env.DB.prepare(sessionQuery)
   .bind(sessionId, account.school_id)

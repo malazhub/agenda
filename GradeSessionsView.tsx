@@ -2272,7 +2272,9 @@ const handleClearChatMessages = async () => {
                 : (isEducator ? (connectedStudentParticipants.find((participant) => participant.userId === message.senderId)?.name || message.senderId) : (activeCallSession?.educatorName || educatorName));
               const attribution = isEducator
                 ? (ownMessage ? `${senderName} → ${chatAllStudents ? classroomLabel('جميع الطلاب', 'Tous les élèves', 'All students') : recipientName}` : `${senderName} → ${educatorName}`)
-                : `${senderName} → ${registeredAccount?.fullName || classroomLabel('أنت', 'Vous', 'You')}`;
+                : ownMessage
+                    ? `${senderName} → ${activeCallSession?.educatorName || educatorName}`
+                    : `${senderName} → ${registeredAccount?.fullName || classroomLabel('أنت', 'Vous', 'You')}`;
 
               return (
                 <div

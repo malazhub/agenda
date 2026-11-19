@@ -324,7 +324,7 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
       }
       if (account.role !== 'owner' && account.schoolId && account.schoolId !== schoolId) {
         sessionStorage.setItem('agenda-session-token', token);
-        const targetUrl = new URL(window.location.href);
+        const targetUrl = new URL('https://agenda.mycamp.workers.dev/');
         targetUrl.searchParams.set('schoolId', account.schoolId);
         window.location.replace(targetUrl.toString());
         return;
