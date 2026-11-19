@@ -112,7 +112,7 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
       if (!active) return;
       const options = Array.isArray(schools) ? schools : [];
       setAvailableSchools(options);
-      setSelectedSchoolId(options.some((school) => school.id === schoolId) ? schoolId : (options.some((school) => school.id === activeSchoolId) ? activeSchoolId : 'default-agenda-school'));
+      setSelectedSchoolId(options.some((school) => school.id === schoolId) ? schoolId : (options.some((school) => school.id === activeSchoolId) ? (activeSchoolId || 'default-agenda-school') : 'default-agenda-school'));
     }).catch((error) => {
       console.error('Unable to load approved schools:', error);
       if (active) setAvailableSchools([{ id: 'default-agenda-school', name: 'Agenda' }]);

@@ -80,6 +80,18 @@ export const CoursesHub: React.FC<CoursesHubProps> = ({
   useEffect(() => {
     if (initialDirectorLogin) setDirectorScreen('login');
   }, [initialDirectorLogin]);
+
+
+    const [activeGradeForSessions, setActiveGradeForSessions] = useState<GradeLevelDef | null>(null);
+  const [activeGradeTab, setActiveGradeTab] = useState<'stored' | 'live'>('stored');
+  const [autoOpenLiveClassroom, setAutoOpenLiveClassroom] = useState(false);
+  const [directorScreen, setDirectorScreen] = useState<'home' | 'login' | 'dashboard'>(() =>
+    typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('directorLogin') === '1' ? 'login' : 'home'
+  );
+  const [directorForm, setDirectorForm] = useState({ username: '', password: '' });
+  const [directorLoginSchools, setDirectorLoginSchools] = useState<SchoolRecord[]>([]);
+  const [directorLoginSchoolId, setDirectorLoginSchoolId] = useState('default-agenda-school');
+
   useEffect(() => {
     if (directorScreen !== 'login') return;
     let active = true;
@@ -96,16 +108,6 @@ export const CoursesHub: React.FC<CoursesHubProps> = ({
     return () => { active = false; };
   }, [directorScreen, schoolId]);
 
-
-    const [activeGradeForSessions, setActiveGradeForSessions] = useState<GradeLevelDef | null>(null);
-  const [activeGradeTab, setActiveGradeTab] = useState<'stored' | 'live'>('stored');
-  const [autoOpenLiveClassroom, setAutoOpenLiveClassroom] = useState(false);
-  const [directorScreen, setDirectorScreen] = useState<'home' | 'login' | 'dashboard'>(() =>
-    typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('directorLogin') === '1' ? 'login' : 'home'
-  );
-  const [directorForm, setDirectorForm] = useState({ username: '', password: '' });
-  const [directorLoginSchools, setDirectorLoginSchools] = useState<SchoolRecord[]>([]);
-  const [directorLoginSchoolId, setDirectorLoginSchoolId] = useState('default-agenda-school');
 
   const [showDirectorPassword, setShowDirectorPassword] = useState(false);
   const [directorError, setDirectorError] = useState('');
