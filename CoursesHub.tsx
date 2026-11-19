@@ -311,14 +311,14 @@ export const CoursesHub: React.FC<CoursesHubProps> = ({
       if (account.role !== 'director') {
         throw new Error(currentLang === 'ar' ? 'هذا الحساب لا يملك صلاحية المدير.' : currentLang === 'fr' ? 'Ce compte ne dispose pas des droits de Directeur.' : currentLang === 'es' ? 'Esta cuenta no tiene permisos de Director.' : currentLang === 'it' ? 'Questo account non dispone dei permessi di Direttore.' : 'This account does not have Director access.');
       }
-      // From the shared Agenda / Owner entry page, send every Director
-      // directly to their own canonical school URL. sessionStorage survives
-      // this same-origin navigation, so the Director arrives already signed in.
-      if (directorLink) {
+      // Always replace the currently open school with the authenticated
+      // Director's own school, regardless of which school entry URL was open.
+      if (account.role === 'director') {
         sessionStorage.setItem('agenda-director-token', token);
         sessionStorage.setItem('agenda-session-token', token);
         onDirectorRedirect?.();
-        window.location.replace(directorLink);
+        const destination = directorLink || `https://agenda.mycamp.workers.dev/?schoolId=${encodeURIComponent(account.schoolId)}`;
+        window.location.replace(destination);
         return;
       }
       sessionStorage.setItem('agenda-director-token', token);

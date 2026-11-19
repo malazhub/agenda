@@ -316,10 +316,11 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
             className: role === 'educator' ? newClassName.trim() : undefined,
           });
       const { account, token, directorLink } = authResult;
-      if (isLogin && account.role === 'director' && directorLink) {
+      if (isLogin && account.role === 'director') {
         sessionStorage.setItem('agenda-director-token', token);
         sessionStorage.setItem('agenda-session-token', token);
-        window.location.replace(directorLink);
+        const destination = directorLink || `https://agenda.mycamp.workers.dev/?schoolId=${encodeURIComponent(account.schoolId)}`;
+        window.location.replace(destination);
         return;
       }
       if (account.role !== 'owner' && account.schoolId && account.schoolId !== schoolId) {

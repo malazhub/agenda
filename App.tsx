@@ -154,12 +154,21 @@ const registerSignOutCleanup = useCallback(
     let active = true;
     const refreshAccount = async () => {
       try {
-        const { account } = await getCurrentAccount(sessionToken, activeSchoolId);
+        const { account, directorLink, schoolSwitchRequired } = await getCurrentAccount(sessionToken, activeSchoolId);
         if (!active) return;
         if (account.role === 'owner') { setOwnerAccount(account); setOwnerToken(sessionToken); return; }
         if (account.role === 'director') {
           sessionStorage.setItem('agenda-director-token', sessionToken);
+          sessionStorage.setItem('agenda-session-token', sessionToken);
           setDirectorAccessToken(sessionToken);
+          if (directorLink && schoolSwitchRequired) {
+            // Replace the currently open school (A) with the Director's own
+            // school (B) in this same tab. The token survives same-origin
+            // navigation because sessionStorage is origin-scoped.
+            window.location.replace(directorLink);
+            return;
+          }
+          setActiveSchoolId(account.schoolId);
           setRegisteredAccount(account);
           return;
         }

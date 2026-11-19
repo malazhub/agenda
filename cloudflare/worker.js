@@ -865,6 +865,19 @@ async function getCurrentAccount(request, env) {
     return json({ account: publicAccount({ ...account, role: "owner" }) });
   }
   if (!account || account.role !== claims.role) return json({ error: "Account not found." }, 404);
+  if (claims.role === "director") {
+    // A Director session is portable across school entry pages: always return
+    // the canonical school destination so the current tab can switch tenants.
+    const school = await env.DB.prepare(
+      "SELECT id, name FROM schools WHERE id = ? AND director_id = ?"
+    ).bind(account.school_id, account.id).first();
+    if (!school) return json({ error: "Director school profile not found." }, 404);
+    return json({
+      account: publicAccount(account),
+      directorLink: directorSchoolLink(env, school.id, school.name),
+      schoolSwitchRequired: new URL(request.url).searchParams.get("schoolId") !== school.id,
+    });
+  }
   const requestedSchoolId = new URL(request.url).searchParams.get("schoolId") || "";
   if (!requestedSchoolId || account.school_id !== requestedSchoolId) {
     return json({ error: "This account belongs to another school. Open your own school's link to continue." }, 401);

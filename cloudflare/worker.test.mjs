@@ -1221,15 +1221,31 @@ test('Public Director registration saves chosen password and signs in by email a
     `https://agenda.mycamp.workers.dev/new-school?schoolId=${encodeURIComponent(created.schoolId)}`
   );
   const approvedToken = approvedLoginResult.token;
+  // If a Director's token is present while the current tab still shows
+  // Agenda (or a different school A), session restore returns the canonical
+  // school B link so the frontend can replace the current tab immediately.
   const directorSessionOnAgenda = await send(env, '/api/auth/me?schoolId=default-agenda-school', { token: approvedToken });
-  assert.equal(directorSessionOnAgenda.status, 401);
+  assert.equal(directorSessionOnAgenda.status, 200);
+  const agendaRestore = await directorSessionOnAgenda.json();
+  assert.equal(agendaRestore.account.schoolId, created.schoolId);
+  assert.equal(agendaRestore.schoolSwitchRequired, true);
+  assert.equal(
+    agendaRestore.directorLink,
+    `https://agenda.mycamp.workers.dev/new-school?schoolId=${encodeURIComponent(created.schoolId)}`
+  );
   const directorSessionOnSchool = await send(
     env,
     `/api/auth/me?schoolId=${encodeURIComponent(created.schoolId)}`,
     { token: approvedToken },
   );
   assert.equal(directorSessionOnSchool.status, 200);
-  assert.equal((await directorSessionOnSchool.json()).account.schoolId, created.schoolId);
+  const ownSchoolRestore = await directorSessionOnSchool.json();
+  assert.equal(ownSchoolRestore.account.schoolId, created.schoolId);
+  assert.equal(ownSchoolRestore.schoolSwitchRequired, false);
+
+  const directorRestoreWithoutSchool = await send(env, '/api/auth/me', { token: approvedToken });
+  assert.equal(directorRestoreWithoutSchool.status, 200);
+  assert.equal((await directorRestoreWithoutSchool.json()).account.schoolId, created.schoolId);
 
   const fullNameLogin = await send(env, '/api/auth/login', {
     method: 'POST',
