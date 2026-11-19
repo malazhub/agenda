@@ -87,7 +87,7 @@ export const CoursesHub: React.FC<CoursesHubProps> = ({
       if (!active) return;
       const options = schools || [];
       setDirectorLoginSchools(options);
-      setDirectorLoginSchoolId(options.some((school) => school.id === schoolId) ? schoolId : (preferred || 'default-agenda-school'));
+      setDirectorLoginSchoolId(options.some((school) => school.id === 'default-agenda-school') ? 'default-agenda-school' : (preferred || options[0]?.id || 'default-agenda-school'));
     }).catch(() => {
       if (!active) return;
       setDirectorLoginSchools([{ id: 'default-agenda-school', name: 'Agenda' }]);
@@ -105,7 +105,7 @@ export const CoursesHub: React.FC<CoursesHubProps> = ({
   );
   const [directorForm, setDirectorForm] = useState({ username: '', password: '' });
   const [directorLoginSchools, setDirectorLoginSchools] = useState<SchoolRecord[]>([]);
-  const [directorLoginSchoolId, setDirectorLoginSchoolId] = useState(schoolId);
+  const [directorLoginSchoolId, setDirectorLoginSchoolId] = useState('default-agenda-school');
 
   const [showDirectorPassword, setShowDirectorPassword] = useState(false);
   const [directorError, setDirectorError] = useState('');

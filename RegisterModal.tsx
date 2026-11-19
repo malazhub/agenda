@@ -416,7 +416,7 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
             </button>
             <button
               type="button"
-              onClick={() => { setIsLogin(true); setShowAccessChoice(false); setError(null); }}
+              onClick={() => { setIsLogin(true); setSelectedSchoolId('default-agenda-school'); setShowAccessChoice(false); setError(null); }}
               className="w-full rounded-xl border border-slate-300 bg-white hover:bg-slate-50 px-4 py-3 text-sm font-black text-slate-800 transition"
             >
               {t.signInLabel}

@@ -122,7 +122,9 @@ export const Header: React.FC<HeaderProps> = ({
             <button
               type="button"
               onClick={async () => {
-                const shareUrl = `https://malazhub.github.io/agenda/?schoolId=${encodeURIComponent(schoolId)}`;
+                const shareUrl = schoolId === 'default-agenda-school'
+                  ? 'https://agenda.mycamp.workers.dev/'
+                  : `https://agenda.mycamp.workers.dev/?schoolId=${encodeURIComponent(schoolId)}`;
                 const shareData = {
                   title: schoolName || 'Agenda',
                   text: currentLang === 'ar' ? `منصة ${schoolName || 'Agenda'} للتعليم والدروس الخصوصية` : currentLang === 'fr' ? `Plateforme éducative ${schoolName || 'Agenda'}` : currentLang === 'es' ? `Plataforma educativa ${schoolName || 'Agenda'}` : currentLang === 'it' ? `Piattaforma educativa ${schoolName || 'Agenda'}` : `${schoolName || 'Agenda'} Educational Platform`,
