@@ -75,7 +75,8 @@ export default function App() {
     try { return decodeURIComponent(segment).replace(/[-_]+/g, ' ').trim(); }
     catch { return segment.replace(/[-_]+/g, ' ').trim(); }
   })();
-  const activeSchoolName = schools.find((school) => school.id === activeSchoolId)?.name || '';
+  const activeSchoolName = schools.find((school) => school.id === activeSchoolId)?.name ||
+    (activeSchoolId === 'default-agenda-school' ? 'Agenda' : (schoolPathTitle || 'School'));
   const signOutCleanupRef = useRef<(() => Promise<void>) | null>(null);
 
 const registerSignOutCleanup = useCallback(
@@ -111,31 +112,28 @@ const registerSignOutCleanup = useCallback(
     document.title = 'Agenda';
   }, []);
 
+  // The active school belongs to this browser tab and comes from its own URL.
+  // Directory refreshes are read-only with respect to that selection: another
+  // user's login, this tab receiving focus, or the 30-second refresh must never
+  // switch the tab back to Agenda or to whichever school happens to sort first.
   useEffect(() => {
     let active = true;
-    void getSchools(activeSchoolId).then(({ schools: records }) => {
-      if (!active) return;
-      setSchools(records);
-      if (!records.some((school) => school.id === activeSchoolId)) {
-        setActiveSchoolId('default-agenda-school');
-      }
-    }).catch((error) => console.error('Unable to load schools.', error));
-    return () => { active = false; };
-  }, [activeSchoolId]);
-
-  // Keep the public school title in sync when a Director changes it from another device.
-  useEffect(() => {
-    const refreshSchoolBrand = () => {
+    const refreshSchoolDirectory = () => {
       void getSchools(activeSchoolId).then(({ schools: records }) => {
-        setSchools(records);
-        if (records[0]?.id) setActiveSchoolId(records[0].id);
-      }).catch((error) => console.error('Unable to refresh school branding.', error));
+        if (!active) return;
+        setSchools(Array.isArray(records) ? records : []);
+      }).catch((error) => {
+        if (active) console.error('Unable to refresh school branding.', error);
+      });
     };
-    const intervalId = window.setInterval(refreshSchoolBrand, 30_000);
-    window.addEventListener('focus', refreshSchoolBrand);
+
+    refreshSchoolDirectory();
+    const intervalId = window.setInterval(refreshSchoolDirectory, 30_000);
+    window.addEventListener('focus', refreshSchoolDirectory);
     return () => {
+      active = false;
       window.clearInterval(intervalId);
-      window.removeEventListener('focus', refreshSchoolBrand);
+      window.removeEventListener('focus', refreshSchoolDirectory);
     };
   }, [activeSchoolId]);
 
@@ -350,7 +348,6 @@ const registerSignOutCleanup = useCallback(
         currentLang={currentLang}
         onLanguageChange={setCurrentLang}
         activeTab="tutors"
-        onTabChange={() => setIsClassroomActive(false)}
         userProfile={userProfile}
         onRoleChange={(role) => setUserProfile(prev => ({ ...prev, role }))}
         onOpenRegister={() => setIsRegisterOpen(true)}

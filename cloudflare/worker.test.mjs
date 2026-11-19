@@ -1304,6 +1304,73 @@ test('Student and educator accounts can only sign in and restore sessions on the
   assert.equal(correctSchoolRestore.status, 200);
 });
 
+test('Two users in the same school can stay signed in at the same time', async () => {
+  const { env, accounts, schools } = fakeEnvironment();
+  schools.set('shared-school', {
+    id: 'shared-school',
+    name: 'Shared School',
+    director_id: 'shared-school-director',
+    license_active: 1,
+  });
+
+  const commonPassword = 'shared-school-password';
+  const passwordHash = hashPassword(commonPassword);
+  for (const [id, username, fullName] of [
+    ['shared-student-one', 'student.one', 'Student One'],
+    ['shared-student-two', 'student.two', 'Student Two'],
+  ]) {
+    accounts.set(id, {
+      id,
+      username,
+      password_hash: passwordHash,
+      role: 'student',
+      school_id: 'shared-school',
+      full_name: fullName,
+      email: `${username}@shared-school.example`,
+      phone: '',
+      school_or_subject: 'Shared School',
+      grade_id: 'eb8',
+      student_grade_label: 'EB8',
+      registered_session_id: 'shared-school-session',
+      registered_educator_id: null,
+      created_at: '2026-11-19 08:00:00',
+      expires_at: '2027-11-19 08:00:00',
+      activated: 1,
+      paid: 1,
+    });
+  }
+
+  const [firstLogin, secondLogin] = await Promise.all([
+    send(env, '/api/auth/login', {
+      method: 'POST',
+      body: { username: 'student.one', password: commonPassword, schoolId: 'shared-school' },
+    }),
+    send(env, '/api/auth/login', {
+      method: 'POST',
+      body: { username: 'student.two', password: commonPassword, schoolId: 'shared-school' },
+    }),
+  ]);
+
+  assert.equal(firstLogin.status, 200);
+  assert.equal(secondLogin.status, 200);
+  const [{ token: firstToken }, { token: secondToken }] = await Promise.all([
+    firstLogin.json(),
+    secondLogin.json(),
+  ]);
+  assert.notEqual(firstToken, secondToken);
+
+  // Signing in the second account must not replace/revoke the first account's
+  // independent session. Both browsers can restore their own identity.
+  const [firstRestore, secondRestore] = await Promise.all([
+    send(env, '/api/auth/me?schoolId=shared-school', { token: firstToken }),
+    send(env, '/api/auth/me?schoolId=shared-school', { token: secondToken }),
+  ]);
+  assert.equal(firstRestore.status, 200);
+  assert.equal(secondRestore.status, 200);
+  assert.equal((await firstRestore.json()).account.id, 'shared-student-one');
+  assert.equal((await secondRestore.json()).account.id, 'shared-student-two');
+});
+
 test('Educators are also blocked from signing into a different school', async () => {
   const { env, accounts, schools } = fakeEnvironment();
   schools.set('school-three', { id: 'school-three', name: 'School Three', director_id: 'other-director' });

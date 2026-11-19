@@ -7,7 +7,6 @@ interface HeaderProps {
   currentLang: Language;
   onLanguageChange: (lang: Language) => void;
   activeTab: 'agenda' | 'tutors' | 'archive' | 'classroom' | 'guide';
-  onTabChange: (tab: 'agenda' | 'tutors' | 'archive' | 'classroom' | 'guide') => void;
   userProfile: UserProfile;
   onRoleChange: (role: 'student' | 'teacher') => void;
   onOpenRegister: () => void;
@@ -23,7 +22,6 @@ interface HeaderProps {
 export const Header: React.FC<HeaderProps> = ({
   currentLang,
   onLanguageChange,
-  onTabChange,
   onOpenRegister,
   signedInName,
   schoolName,
@@ -70,10 +68,7 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
 
           {/* Middle of Top Bar: Agenda without 'A' logo and without dot, with 'التعليم والدروس الخصوصية' in RED, YELLOW, BLUE */}
-          <div 
-            onClick={() => onTabChange('tutors')}
-            className="flex items-center justify-center cursor-pointer order-1 md:order-2"
-          >
+          <div className="flex items-center justify-center order-1 md:order-2">
             <div className="text-center">
               <span className="text-2xl font-black tracking-tight text-slate-900 block leading-tight">
                 {schoolName || 'Agenda'}
