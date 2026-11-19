@@ -202,10 +202,10 @@ jobs:
             headers: { "Cache-Control": "no-cache", "Pragma": "no-cache" }
           });
           const html = await page.text();
-          if (!page.ok || !/<title>Agenda<\\/title>/i.test(html)) {
+          if (!page.ok || !html.includes("<title>Agenda</title>")) {
             console.error("Frontend Worker did not serve the expected Agenda page title.", {
               status: page.status,
-              title: html.match(/<title[^>]*>[\\s\\S]*?<\\/title>/i)?.[0] || "missing"
+              title: html.split("<title>")[1]?.split("</title>")[0] || "missing"
             });
             process.exit(1);
           }
