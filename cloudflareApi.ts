@@ -151,6 +151,7 @@ export interface ClassroomMessage {
   senderId: string;
   message: string;
   createdAt: string;
+  studentId?: string;
   attachmentUrl?: string | null;
   attachmentName?: string | null;
   attachmentType?: string | null;
@@ -661,6 +662,10 @@ export function clearClassroomMessages(
     }),
   });
 }
+export function getEducatorAssignedSession(token: string): Promise<{ session: StoredSessionRecord }> {
+  return request('/api/educator/assigned-session', { headers: authHeaders(token) });
+}
+
 export function setEducatorLiveSession(
   token: string,
   isLive: boolean,

@@ -707,7 +707,8 @@ async function liveEducators(request, env, schoolId) {
      INNER JOIN accounts a
        ON a.registered_session_id = s.id
        AND a.role = 'educator'
-     WHERE s.is_live = 1 AND s.school_id = ? AND a.school_id = ?
+     WHERE s.is_live = 1 AND s.live_heartbeat_at >= datetime('now', '-90 seconds')
+       AND s.school_id = ? AND a.school_id = ?
      ORDER BY s.live_starts_at DESC, a.full_name COLLATE NOCASE`
   ).bind(schoolId, schoolId).all();
 
@@ -946,6 +947,20 @@ async function updateDirectorProfile(request, env) {
   return json({ profile: { schoolId: account.school_id, schoolName, username }, token });
 }
 
+async function educatorAssignedSession(request, env) {
+  const educator = await authenticate(request, env, "educator");
+  if (!educator) return json({ error: "Educator authentication required." }, 401);
+  const account = await env.DB.prepare(
+    "SELECT id, school_id, registered_session_id FROM accounts WHERE id = ? AND role = 'educator'"
+  ).bind(educator.sub).first();
+  if (!account?.registered_session_id) return json({ error: "No classroom is assigned to this educator." }, 404);
+  const session = await env.DB.prepare(
+    "SELECT * FROM sessions WHERE id = ? AND school_id = ?"
+  ).bind(account.registered_session_id, account.school_id).first();
+  if (!session) return json({ error: "The assigned classroom was not found." }, 404);
+  return json({ session: publicSession(session) });
+}
+
 async function getDirectorGradePricing(request, env) {
   const director = await authenticate(request, env, "director");
   if (!director) return json({ error: "Director authentication required." }, 401);
@@ -996,7 +1011,7 @@ async function ownerDirectors(request, env) {
   const result = await env.DB.prepare(`
     SELECT a.id, a.username, a.full_name, a.email, a.phone, a.created_at,
            a.activated, a.paid, a.expires_at, a.password_must_change, a.phone_password_disabled_at,
-           s.id AS school_id, s.name AS school_name, s.license_expires_at,
+           s.id AS school_id, s.name AS school_name, COALESCE(s.license_expires_at, a.expires_at, datetime(a.created_at, '+1 year')) AS license_expires_at,
            s.license_active, s.payment_method, s.payment_value,
            EXISTS(SELECT 1 FROM director_setup_tokens t
                   WHERE t.account_id = a.id AND t.used_at IS NULL) AS setup_pending,
@@ -1060,10 +1075,10 @@ async function registerPublicDirectorSchool(request, env) {
     }
     await env.DB.batch([
       env.DB.prepare(
-        "INSERT INTO accounts (id, username, password_hash, role, school_id, full_name, email, phone, school_or_subject, grade_id, registered_session_id, registered_educator_id, expires_at, activated, paid, password_must_change, phone_password_disabled_at) VALUES (?, ?, ?, 'director', ?, ?, ?, ?, '', '', NULL, NULL, NULL, 0, 0, 0, datetime('now'))"
+        "INSERT INTO accounts (id, username, password_hash, role, school_id, full_name, email, phone, school_or_subject, grade_id, registered_session_id, registered_educator_id, expires_at, activated, paid, password_must_change, phone_password_disabled_at) VALUES (?, ?, ?, 'director', ?, ?, ?, ?, '', '', NULL, NULL, datetime('now', '+1 year'), 0, 0, 0, datetime('now'))"
       ).bind(accountId, username, passwordHash, schoolId, fullName, email, phone),
       env.DB.prepare(
-        "INSERT INTO schools (id, name, director_id, license_expires_at, license_active) VALUES (?, ?, ?, NULL, 0)"
+        "INSERT INTO schools (id, name, director_id, license_expires_at, license_active) VALUES (?, ?, ?, datetime('now', '+1 year'), 0)"
       ).bind(schoolId, schoolName, accountId),
     ]);
   } catch (error) {
@@ -1490,7 +1505,11 @@ async function schoolPublicContext(env, schoolId) {
     schoolId: school.id,
     schoolName: school.name,
     defaultMonthlyRateUsd: 125,
-    prices: grades.map((gradeId) => ({ gradeId, monthlyRateUsd: priceMap.get(gradeId) ?? 125 })),
+    // Only configured rows override the platform's legacy USD 125/session guidance.
+    prices: (prices.results || []).map((row) => ({
+      gradeId: row.grade_id,
+      monthlyRateUsd: Number(row.monthly_rate_usd),
+    })),
     sessions: (sessions.results || []).map((row) => ({
       gradeId: row.grade_id,
       subject: row.subject,
@@ -1937,7 +1956,7 @@ async function updateDirectorSessionLive(request, env, sessionId) {
   const body = await requestJson(request);
   if (typeof body?.isLive !== "boolean") return json({ error: "isLive must be a boolean." }, 400);
   const result = await env.DB.prepare(
-    "UPDATE sessions SET is_live = ?, live_starts_at = CASE WHEN ? = 1 THEN datetime('now') ELSE NULL END WHERE id = ? AND school_id = ?"
+    "UPDATE sessions SET is_live = ?, live_starts_at = CASE WHEN ? = 1 THEN datetime('now') ELSE NULL END, live_heartbeat_at = NULL WHERE id = ? AND school_id = ?"
   ).bind(Number(body.isLive), Number(body.isLive), sessionId, schoolId).run();
   if (!result.meta.changes) return json({ error: "Session not found." }, 404);
   const session = await env.DB.prepare("SELECT * FROM sessions WHERE id = ? AND school_id = ?").bind(sessionId, schoolId).first();
@@ -2206,10 +2225,10 @@ async function setEducatorLiveSession(request, env) {
   }
 
   const session = await env.DB.prepare(
-  `SELECT id, grade_id
-   FROM sessions
-   WHERE id = ?`
-).bind(account.registered_session_id).first();
+    `SELECT id, grade_id, school_id
+     FROM sessions
+     WHERE id = ? AND school_id = (SELECT school_id FROM accounts WHERE id = ?)`
+  ).bind(account.registered_session_id, account.id).first();
 
   if (!session) {
     return json({
@@ -2248,12 +2267,16 @@ async function setEducatorLiveSession(request, env) {
 
   await env.DB.prepare(
     `UPDATE sessions
-     SET is_live = ?, live_starts_at = ?
-     WHERE id = ?`
+     SET is_live = ?,
+         live_starts_at = CASE WHEN ? = 1 THEN COALESCE(live_starts_at, datetime('now')) ELSE NULL END,
+         live_heartbeat_at = CASE WHEN ? = 1 THEN datetime('now') ELSE NULL END
+     WHERE id = ? AND school_id = ?`
   ).bind(
     Number(body.isLive),
-    body.isLive ? new Date().toISOString() : null,
-    session.id
+    Number(body.isLive),
+    Number(body.isLive),
+    session.id,
+    session.school_id,
   ).run();
 
   return json({
@@ -3652,9 +3675,28 @@ async function handle(request, env) {
   if (lessonWriteMatch && request.method === "DELETE") return updateEducatorLesson(request, env, lessonWriteMatch[1], true);
   if (request.method === "GET" && path === "/api/schools") {
     const requestedSchoolId = url.searchParams.get("schoolId") || "default-agenda-school";
-    const school = await env.DB.prepare("SELECT id, name FROM schools WHERE id = ?").bind(requestedSchoolId).first();
-    if (!school) return json({ error: "School not found." }, 404);
-    return json({ schools: [school], activeSchoolId: school.id });
+    const result = await env.DB.prepare(
+      `SELECT s.id, s.name
+       FROM schools s
+       WHERE s.id = 'default-agenda-school'
+          OR (
+            s.director_id IS NOT NULL
+            AND s.license_active = 1
+            AND (s.license_expires_at IS NULL OR s.license_expires_at > datetime('now'))
+            AND EXISTS (
+              SELECT 1 FROM accounts a
+              WHERE a.id = s.director_id AND a.school_id = s.id
+                AND a.role = 'director' AND a.activated = 1 AND a.paid = 1
+                AND (a.expires_at IS NULL OR a.expires_at > datetime('now'))
+            )
+          )
+       ORDER BY CASE WHEN s.id = 'default-agenda-school' THEN 0 ELSE 1 END, s.name COLLATE NOCASE`
+    ).all();
+    const schools = result.results || [];
+    const activeSchoolId = schools.some((school) => school.id === requestedSchoolId)
+      ? requestedSchoolId
+      : "default-agenda-school";
+    return json({ schools, activeSchoolId });
   }
   if (request.method === "GET" && path === "/api/school-context") {
     return schoolPublicContext(env, url.searchParams.get("schoolId") || "");
@@ -3670,6 +3712,7 @@ async function handle(request, env) {
   ) {
     return createGuestLiveStream(request, env);
   }
+  if (request.method === "GET" && path === "/api/educator/assigned-session") return educatorAssignedSession(request, env);
   if (request.method === "GET" && path === "/api/director/profile") return directorProfile(request, env);
   if (request.method === "PATCH" && path === "/api/director/profile") return updateDirectorProfile(request, env);
   if (request.method === "GET" && path === "/api/director/pricing") return getDirectorGradePricing(request, env);

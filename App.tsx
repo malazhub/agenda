@@ -29,7 +29,10 @@ import {
 } from 'lucide-react';
 
 export default function App() {
-  const [currentLang, setCurrentLang] = useState<Language>('ar');
+  const [currentLang, setCurrentLang] = useState<Language>(() => {
+    const saved = window.localStorage.getItem('agenda-language');
+    return saved === 'ar' || saved === 'en' || saved === 'fr' || saved === 'es' || saved === 'it' ? saved : 'en';
+  });
   const [isClassroomActive, setIsClassroomActive] = useState(false);
 
   // User Profile: Student & Educator only
@@ -97,6 +100,9 @@ const registerSignOutCleanup = useCallback(
     document.documentElement.dir = isRTL ? 'rtl' : 'ltr';
     document.documentElement.lang = currentLang;
   }, [currentLang, isRTL]);
+  useEffect(() => {
+    window.localStorage.setItem('agenda-language', currentLang);
+  }, [currentLang]);
 
   useEffect(() => {
     // Chrome's "Create a shortcut to this page" uses the live document title.
@@ -110,7 +116,9 @@ const registerSignOutCleanup = useCallback(
     void getSchools(activeSchoolId).then(({ schools: records }) => {
       if (!active) return;
       setSchools(records);
-      setActiveSchoolId(records[0]?.id || activeSchoolId);
+      if (!records.some((school) => school.id === activeSchoolId)) {
+        setActiveSchoolId('default-agenda-school');
+      }
     }).catch((error) => console.error('Unable to load schools.', error));
     return () => { active = false; };
   }, [activeSchoolId]);
