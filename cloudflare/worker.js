@@ -788,13 +788,12 @@ async function handleLogin(request, env) {
     return json({ error: "Invalid username or password." }, 401);
   }
 
-  // The main Agenda / Owner entry page is a trusted discovery point for
-  // Directors: they may authenticate there only to be redirected to the
-  // canonical URL of the school they own. Students and Educators remain
-  // strictly tenant-bound, and a Director on a school's page must match it.
+  // Director credentials are accepted from the shared Agenda entry, the Owner
+  // Control Center, or any school's entry page. Always route a non-Owner
+  // Director to the canonical link for the school they own in this same tab.
+  // Students and Educators remain strictly tenant-bound to their school ID.
   const redirectDirectorToSchool = Boolean(
-    account.role === "director" && !isOwner &&
-    requestedSchoolId === "default-agenda-school"
+    account.role === "director" && !isOwner
   );
   if (!isOwner && !redirectDirectorToSchool &&
       (!requestedSchoolId || account.school_id !== requestedSchoolId)) {

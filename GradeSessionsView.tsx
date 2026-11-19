@@ -263,6 +263,8 @@ const [guestUserId, setGuestUserId] = useState('');
 const [isFullscreen, setIsFullscreen] = useState(false);
 const [isStudentPreviewExpanded, setIsStudentPreviewExpanded] =
   useState(false);
+const [studentCameraDirection, setStudentCameraDirection] =
+  useState<'front' | 'back' | null>(null);
 const [cameraError, setCameraError] = useState<string | null>(null);
 const [chatMessages, setChatMessages] =
   useState<ClassroomMessage[]>([]);
@@ -1231,6 +1233,7 @@ const startStudentSelfCam = async () => {
       throw new Error('The front camera did not become enabled.');
     }
 
+    setStudentCameraDirection('front');
     setCameraError(null);
     } catch (error) {
     // Keep the technical error in the browser console only.
@@ -1287,6 +1290,7 @@ const flipStudentCamera = async () => {
       throw new Error('The selected camera did not become enabled.');
     }
 
+    setStudentCameraDirection(nextDirection);
     setCameraError(null);
     } catch (error) {
     // Keep the technical error in the browser console only.
@@ -1320,12 +1324,14 @@ const toggleVideoTrack = async () => {
     if (cameraWasOn) {
       await call.camera.disable();
       setIsVideoOn(false);
+      setStudentCameraDirection(null);
       setIsStudentPreviewExpanded(false);
     } else {
       if (isStudent || isGuestMode) {
         await call.camera.selectDirection('front', {
           enableCamera: false,
         });
+        setStudentCameraDirection('front');
       }
 
       await call.camera.enable();
@@ -2172,6 +2178,15 @@ const handleClearChatMessages = async () => {
                     sessionId={studentOwnParticipant.sessionId}
                     muted={true}
                   />
+                  {!isStudentPreviewExpanded && (
+                    <span className="pointer-events-none absolute inset-x-1 bottom-1 rounded-md bg-black/80 px-1.5 py-1 text-center text-[8px] font-bold leading-tight text-white shadow sm:text-[9px]">
+                      {classroomLabel(
+                        'اضغط لتكبير الكاميرا',
+                        'Cliquer pour agrandir',
+                        'Click to enlarge camera'
+                      )}
+                    </span>
+                  )}
                 </div>
               </button>
             )}
@@ -2573,7 +2588,12 @@ const handleClearChatMessages = async () => {
                       <button
                         type="button"
                         onClick={() => void startStudentSelfCam()}
-                        className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition cursor-pointer"
+                        aria-pressed={studentCameraDirection === 'front'}
+                        className={`flex items-center gap-2 px-3 py-2.5 rounded-xl text-white text-xs font-bold transition cursor-pointer ${
+                          studentCameraDirection === 'front'
+                            ? 'bg-emerald-600 hover:bg-emerald-500 ring-2 ring-emerald-300'
+                            : 'bg-slate-700 hover:bg-slate-600'
+                        }`}
                       >
                         <Camera className="w-4 h-4" />
                         {classroomLabel(
@@ -2586,7 +2606,12 @@ const handleClearChatMessages = async () => {
                       <button
                         type="button"
                         onClick={() => void flipStudentCamera()}
-                        className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-slate-700 hover:bg-slate-600 text-white text-xs font-bold transition cursor-pointer"
+                        aria-pressed={studentCameraDirection === 'back'}
+                        className={`flex items-center gap-2 px-3 py-2.5 rounded-xl text-white text-xs font-bold transition cursor-pointer ${
+                          studentCameraDirection === 'back'
+                            ? 'bg-sky-600 hover:bg-sky-500 ring-2 ring-sky-300'
+                            : 'bg-slate-700 hover:bg-slate-600'
+                        }`}
                       >
                         <Camera className="w-4 h-4" />
                         {classroomLabel(

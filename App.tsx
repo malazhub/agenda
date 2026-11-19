@@ -99,10 +99,12 @@ const registerSignOutCleanup = useCallback(
   }, [currentLang, isRTL]);
 
   useEffect(() => {
-    // Set a branded tab title immediately from the school URL, then replace
-    // it with the authoritative database school name when it loads.
-    document.title = activeSchoolName || schoolPathTitle || 'Agenda';
-  }, [activeSchoolName, schoolPathTitle]);
+    // The platform's own home/shortcut name is always "Agenda". A school-specific
+    // link may still use its school's name in the browser tab.
+    document.title = activeSchoolId === 'default-agenda-school'
+      ? 'Agenda'
+      : activeSchoolName || schoolPathTitle || 'Agenda';
+  }, [activeSchoolId, activeSchoolName, schoolPathTitle]);
 
   useEffect(() => {
     let active = true;
@@ -189,6 +191,21 @@ const registerSignOutCleanup = useCallback(
     }, 4000);
   };
 
+  const handleOwnerLogin = (account: CloudflareAccount, token: string) => {
+    sessionStorage.setItem('agenda-owner-token', token);
+    sessionStorage.removeItem('agenda-session-token');
+    sessionStorage.removeItem('agenda-director-token');
+    setSessionToken('');
+    setDirectorAccessToken('');
+    setRegisteredAccount(null);
+    setOwnerAccount(account);
+    setOwnerToken(token);
+    setOwnerSchoolMode(false);
+    setOwnerDirectorLoginMode(false);
+    setIsClassroomActive(false);
+    showToast(`${account.fullName}: ${currentLang === 'ar' ? 'تم تسجيل دخول المالك.' : 'Owner signed in successfully.'}`);
+  };
+
   const handleSelectQuestionForBooking = (question: ExamQuestion, exam: OfficialExam) => {
     setSelectedQuestionForBooking({ question, exam });
     setSelectedTeacherForBooking(MOCK_TEACHERS[0]);
@@ -229,6 +246,10 @@ const registerSignOutCleanup = useCallback(
   };
 
   const handleRegisterSuccess = (account: CloudflareAccount, token: string) => {
+    if (account.role === 'owner') {
+      handleOwnerLogin(account, token);
+      return;
+    }
     if (account.role === 'director') {
       sessionStorage.setItem('agenda-director-token', token);
       sessionStorage.setItem('agenda-session-token', token);
@@ -352,6 +373,7 @@ const registerSignOutCleanup = useCallback(
             schoolId="default-agenda-school"
             sessionToken=""
             initialDirectorLogin
+            onOwnerLogin={handleOwnerLogin}
             onDirectorRedirect={() => {
               sessionStorage.removeItem('agenda-owner-token');
               setOwnerAccount(null);
@@ -438,7 +460,7 @@ const registerSignOutCleanup = useCallback(
                     <CoursesHub
             currentLang={currentLang}
             registeredAccount={registeredAccount}
-            onOwnerLogin={(account, token) => { sessionStorage.setItem('agenda-owner-token', token); sessionStorage.removeItem('agenda-session-token'); setSessionToken(''); setOwnerAccount(account); setOwnerToken(token); setRegisteredAccount(null); }}
+            onOwnerLogin={handleOwnerLogin}
             schoolId={registeredAccount?.schoolId || activeSchoolId}
             sessionToken={sessionToken}
             directorAccessToken={directorAccessToken}

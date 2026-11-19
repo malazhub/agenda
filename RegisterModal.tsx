@@ -250,7 +250,7 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
     setError(null);
 
     try {
-      const { account, token } = isLogin
+      const authResult = isLogin
         ? await loginAccount(username, password, schoolId)
         : await registerAccount({
             schoolId,
@@ -271,6 +271,13 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
             // Every educator creates a dedicated class that the API assigns to the account.
             className: role === 'educator' ? newClassName.trim() : undefined,
           });
+      const { account, token, directorLink } = authResult;
+      if (isLogin && account.role === 'director' && directorLink) {
+        sessionStorage.setItem('agenda-director-token', token);
+        sessionStorage.setItem('agenda-session-token', token);
+        window.location.replace(directorLink);
+        return;
+      }
       onRegisterSuccess(account, token);
       handleClose();
     } catch (requestError) {

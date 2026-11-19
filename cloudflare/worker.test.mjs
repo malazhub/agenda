@@ -1186,7 +1186,20 @@ test('Public Director registration saves chosen password and signs in by email a
   assert.equal(approvedLogin.status, 200);
   const approvedLoginResult = await approvedLogin.json();
   assert.equal(approvedLoginResult.account.role, 'director');
-  assert.equal(approvedLoginResult.directorLink, undefined);
+  assert.equal(
+    approvedLoginResult.directorLink,
+    `https://agenda.mycamp.workers.dev/new-school?schoolId=${encodeURIComponent(created.schoolId)}`
+  );
+
+  const differentSchoolEntryLogin = await send(env, '/api/auth/login', {
+    method: 'POST',
+    body: { username: 'director@newschool.example', password: 'x', schoolId: 'another-school-entry' },
+  });
+  assert.equal(differentSchoolEntryLogin.status, 200);
+  assert.equal(
+    (await differentSchoolEntryLogin.json()).directorLink,
+    `https://agenda.mycamp.workers.dev/new-school?schoolId=${encodeURIComponent(created.schoolId)}`
+  );
 
   const agendaEntryLogin = await send(env, '/api/auth/login', {
     method: 'POST',
@@ -1296,7 +1309,7 @@ test('Educators are also blocked from signing into a different school', async ()
   assert.match((await response.json()).error, /belongs to another school/i);
 });
 
-test('A platform Owner can still sign in from the main Agenda context', async () => {
+test('A platform Owner can sign in and restore Owner access from any school context', async () => {
   const { env, platformOwners } = fakeEnvironment();
   platformOwners.add('director-account-0000000000000000');
   const login = await send(env, '/api/auth/login', {
@@ -1304,7 +1317,15 @@ test('A platform Owner can still sign in from the main Agenda context', async ()
     body: { username: 'director', password: 'DirectorPassword#2026', schoolId: 'school-two' },
   });
   assert.equal(login.status, 200);
-  assert.equal((await login.json()).account.role, 'owner');
+  const { account, token } = await login.json();
+  assert.equal(account.role, 'owner');
+
+  const restored = await send(env, '/api/auth/me?schoolId=school-two', { token });
+  assert.equal(restored.status, 200);
+  assert.equal((await restored.json()).account.role, 'owner');
+
+  const ownerDashboard = await send(env, '/api/owner/directors', { token });
+  assert.equal(ownerDashboard.status, 200);
 });
 
 test('Only the platform Owner can create Director schools', async () => {
