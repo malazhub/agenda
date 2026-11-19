@@ -282,7 +282,7 @@ function fakeEnvironment() {
         if ([...accounts.values()].some((item) => item.username.toLowerCase() === username.toLowerCase())) {
           throw new Error('UNIQUE constraint failed: accounts.username');
         }
-        const isDirectorCreation = this.sql.includes("datetime('now', '+1 year')");
+        const isDirectorCreation = this.sql.includes("datetime('now', '+1 year'), 1, 1, 1");
         accounts.set(id, {
           id, username, password_hash, role, school_id, full_name, email, phone, school_or_subject, grade_id, registered_session_id,
           student_grade_label: student_grade_label || '',
@@ -320,10 +320,15 @@ function fakeEnvironment() {
         pricing.set(`${this.values[0]}:${this.values[1]}`, { school_id: this.values[0], grade_id: this.values[1], monthly_rate_usd: this.values[2] });
         return { meta: { changes: 1 } };
       }
+      if (this.sql.startsWith('DELETE FROM school_grade_pricing')) {
+        const [schoolId, gradeId] = this.values;
+        const existed = pricing.delete(`${schoolId}:${gradeId}`);
+        return { meta: { changes: existed ? 1 : 0 } };
+      }
       if (this.sql.startsWith('INSERT INTO schools')) {
         const [id, name, director_id] = this.values;
-        const inactive = this.sql.includes('license_expires_at, license_active) VALUES (?, ?, ?, NULL, 0)');
-        schools.set(id, { id, name, director_id, license_expires_at: inactive ? null : '2027-11-17 10:00:00', license_active: inactive ? 0 : 1 });
+        const inactive = this.sql.includes('license_expires_at, license_active) VALUES (?, ?, ?, NULL, 0)') || this.sql.includes("license_expires_at, license_active) VALUES (?, ?, ?, datetime('now', '+1 year'), 0)");
+        schools.set(id, { id, name, director_id, license_expires_at: inactive ? (this.sql.includes("datetime('now', '+1 year')") ? '2027-11-18 10:00:00' : null) : '2027-11-17 10:00:00', license_active: inactive ? 0 : 1 });
         return { meta: { changes: 1 } };
       }
       if (this.sql.startsWith('UPDATE schools SET name')) {
@@ -382,10 +387,14 @@ function fakeEnvironment() {
         return { meta: { changes: 1 } };
       }
       if (this.sql.startsWith('UPDATE accounts SET activated = ?, paid = ?, grade_id = ?, registered_session_id = ?, registered_educator_id = ?')) {
-        const [activated, paid, grade_id, registered_session_id, registered_educator_id, id, school_id] = this.values;
+        const hasSchoolOrSubject = this.sql.includes('school_or_subject = ?');
+        const [activated, paid, grade_id, registered_session_id, registered_educator_id, schoolOrSubject, idOrLegacyId, schoolOrLegacySchoolId] = this.values;
+        const id = hasSchoolOrSubject ? idOrLegacyId : schoolOrSubject;
+        const school_id = hasSchoolOrSubject ? schoolOrLegacySchoolId : idOrLegacyId;
         const account = accounts.get(id);
         if (!account || account.school_id !== school_id || !['student', 'educator'].includes(account.role)) return { meta: { changes: 0 } };
         Object.assign(account, { activated, paid, grade_id, registered_session_id, registered_educator_id });
+        if (hasSchoolOrSubject) account.school_or_subject = schoolOrSubject;
         return { meta: { changes: 1 } };
       }
       if (this.sql.startsWith('UPDATE accounts SET') && this.sql.includes('WHERE id = ?') && !this.sql.includes('username = ?')) {
