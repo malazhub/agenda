@@ -464,6 +464,13 @@ export function updateDirectorGradePricing(
   });
 }
 
+export function deleteDirectorGradePricing(token: string, gradeId: string): Promise<{ deleted: boolean; changes: number }> {
+  return request('/api/director/pricing/' + encodeURIComponent(gradeId), {
+    method: 'DELETE',
+    headers: authHeaders(token),
+  });
+}
+
 export function getDirectorLiveStream(token: string, sessionId: string): Promise<LiveStreamStatus> {
   const query = new URLSearchParams({ sessionId });
   return request(`/api/director/live-stream?${query.toString()}`, {
@@ -477,6 +484,7 @@ export type DirectorAccountUpdate = {
   gradeId: string;
   registeredSessionId: string | null;
   registeredEducatorId: string | null;
+  schoolOrSubject?: string;
 };
 
 export function saveDirectorAccountUpdates(

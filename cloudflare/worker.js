@@ -998,6 +998,18 @@ async function updateDirectorGradePricing(request, env) {
 }
 
 
+async function deleteDirectorGradePricing(request, env, gradeId) {
+  const director = await authenticate(request, env, "director");
+  if (!director) return json({ error: "Director authentication required." }, 401);
+  const schoolId = await getDirectorSchoolId(env, director);
+  if (!schoolId) return json({ error: "Director school is not configured." }, 403);
+  if (!/^[a-z0-9_-]{1,40}$/.test(gradeId || "")) return json({ error: "Choose a valid grade." }, 400);
+  const result = await env.DB.prepare(
+    "DELETE FROM school_grade_pricing WHERE school_id = ? AND grade_id = ?"
+  ).bind(schoolId, gradeId).run();
+  return json({ deleted: true, changes: Number(result.meta?.changes || 0) });
+}
+
 async function requireOwner(request, env) {
   const claims = await authenticate(request, env, "owner");
   if (!claims) return null;
@@ -1609,7 +1621,7 @@ async function saveDirectorAccountUpdates(request, env) {
     }
     seen.add(id);
     const account = await env.DB.prepare(
-      "SELECT id, role, full_name, grade_id, registered_session_id, registered_educator_id FROM accounts WHERE id = ? AND school_id = ? AND role IN ('student', 'educator')"
+      "SELECT id, role, full_name, school_or_subject, grade_id, registered_session_id, registered_educator_id FROM accounts WHERE id = ? AND school_id = ? AND role IN ('student', 'educator')"
     ).bind(id, schoolId).first();
     if (!account) return json({ error: "One or more accounts do not belong to this school. No changes were saved." }, 404);
 
@@ -1654,13 +1666,16 @@ async function saveDirectorAccountUpdates(request, env) {
     }
 
     if (account.role === "educator") educatorId = null;
-    prepared.push({ id, activated: item.activated, paid: item.paid, gradeId, sessionId: sessionId || null, educatorId: educatorId || null });
+    const schoolOrSubject = account.role === "educator" && Object.prototype.hasOwnProperty.call(item, "schoolOrSubject")
+      ? (typeof item.schoolOrSubject === "string" ? item.schoolOrSubject.trim().slice(0, 160) : "")
+      : String(account.school_or_subject || "");
+    prepared.push({ id, activated: item.activated, paid: item.paid, gradeId, sessionId: sessionId || null, educatorId: educatorId || null, schoolOrSubject });
   }
 
   for (const item of prepared) {
     statements.push(env.DB.prepare(
-      "UPDATE accounts SET activated = ?, paid = ?, grade_id = ?, registered_session_id = ?, registered_educator_id = ? WHERE id = ? AND school_id = ? AND role IN ('student', 'educator')"
-    ).bind(Number(item.activated), Number(item.paid), item.gradeId, item.sessionId, item.educatorId, item.id, schoolId));
+      "UPDATE accounts SET activated = ?, paid = ?, grade_id = ?, registered_session_id = ?, registered_educator_id = ?, school_or_subject = ? WHERE id = ? AND school_id = ? AND role IN ('student', 'educator')"
+    ).bind(Number(item.activated), Number(item.paid), item.gradeId, item.sessionId, item.educatorId, item.schoolOrSubject, item.id, schoolId));
   }
   await env.DB.batch(statements);
   const accounts = [];
@@ -1669,7 +1684,8 @@ async function saveDirectorAccountUpdates(request, env) {
     if (!saved || Boolean(saved.activated) !== item.activated || Boolean(saved.paid) !== item.paid ||
         String(saved.grade_id || "") !== item.gradeId ||
         String(saved.registered_session_id || "") !== String(item.sessionId || "") ||
-        String(saved.registered_educator_id || "") !== String(item.educatorId || "")) {
+        String(saved.registered_educator_id || "") !== String(item.educatorId || "") ||
+        String(saved.school_or_subject || "") !== String(item.schoolOrSubject || "")) {
       return json({ error: "The account changes could not be verified after saving. Refresh and try again." }, 500);
     }
     accounts.push(publicAccount(saved));
@@ -3717,6 +3733,8 @@ async function handle(request, env) {
   if (request.method === "PATCH" && path === "/api/director/profile") return updateDirectorProfile(request, env);
   if (request.method === "GET" && path === "/api/director/pricing") return getDirectorGradePricing(request, env);
   if (request.method === "PUT" && path === "/api/director/pricing") return updateDirectorGradePricing(request, env);
+  const directorPricingDelete = path.match(/^\/api\/director\/pricing\/([a-z0-9_-]{1,40})$/);
+  if (request.method === "DELETE" && directorPricingDelete) return deleteDirectorGradePricing(request, env, directorPricingDelete[1]);
   if (request.method === "GET" && path === "/api/director/live-stream") return getDirectorLiveStream(request, env);
   if (request.method === "GET" && path === "/api/director/accounts") return directorAccounts(request, env);
   if (request.method === "PATCH" && path === "/api/director/accounts/status") return saveDirectorAccountUpdates(request, env);
