@@ -113,6 +113,26 @@ export const HeroSearch: React.FC<HeroSearchProps> = ({
         </div>
       </div>
 
+
+      <section aria-label="Explore academic subjects" className="relative overflow-hidden rounded-3xl border border-slate-200 bg-gradient-to-br from-slate-950 via-indigo-950 to-slate-900 p-5 sm:p-7 shadow-xl">
+        <div className="pointer-events-none absolute -right-12 -top-12 h-48 w-48 rounded-full bg-cyan-400/15 blur-3xl"/>
+        <div className="pointer-events-none absolute -bottom-16 -left-10 h-56 w-56 rounded-full bg-fuchsia-400/15 blur-3xl"/>
+        <div className="relative z-10 mb-4 flex flex-wrap items-end justify-between gap-2">
+          <div>
+            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-cyan-300">{currentLang === 'ar' ? 'عالم من الاكتشاف' : currentLang === 'fr' ? 'Le monde de la découverte' : currentLang === 'es' ? 'Un mundo de descubrimiento' : currentLang === 'it' ? 'Un mondo da scoprire' : 'A world of discovery'}</p>
+            <h2 className="mt-1 text-lg font-black text-white sm:text-xl">{currentLang === 'ar' ? 'كل فكرة تفتح باباً جديداً' : currentLang === 'fr' ? 'Chaque idée ouvre une nouvelle porte' : currentLang === 'es' ? 'Cada idea abre una nueva puerta' : currentLang === 'it' ? 'Ogni idea apre una nuova porta' : 'Every idea opens a new door'}</h2>
+          </div>
+          <span className="text-[10px] font-bold text-slate-300">MATH · SCIENCE · WORLD</span>
+        </div>
+        <div className="relative z-10 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
+          <div className="rotate-[-1deg] rounded-2xl border border-blue-300/30 bg-gradient-to-br from-blue-500/30 to-indigo-700/40 p-3 text-white shadow-lg"><span className="text-[10px] font-black uppercase text-blue-200">Mathematics</span><div className="my-3 text-center text-xl font-black sm:text-2xl">∫ x² dx</div><p className="text-[10px] text-blue-100">E = mc² · π · √49</p></div>
+          <div className="translate-y-2 rotate-[1.5deg] rounded-2xl border border-emerald-300/30 bg-gradient-to-br from-emerald-500/30 to-teal-700/40 p-3 text-white shadow-lg"><span className="text-[10px] font-black uppercase text-emerald-200">Biology</span><div className="my-3 text-center text-xl font-black sm:text-2xl">DNA ↗</div><p className="text-[10px] text-emerald-100">A · T · C · G / cells</p></div>
+          <div className="rotate-[-1.5deg] rounded-2xl border border-fuchsia-300/30 bg-gradient-to-br from-fuchsia-500/30 to-purple-800/40 p-3 text-white shadow-lg"><span className="text-[10px] font-black uppercase text-fuchsia-200">Chemistry</span><div className="my-3 text-center text-xl font-black sm:text-2xl">H₂O</div><p className="text-[10px] text-fuchsia-100">NaCl · CO₂ · O₂</p></div>
+          <div className="translate-y-1 rotate-[1deg] rounded-2xl border border-amber-300/30 bg-gradient-to-br from-amber-500/30 to-orange-700/40 p-3 text-white shadow-lg"><span className="text-[10px] font-black uppercase text-amber-200">Physics</span><div className="my-3 text-center text-xl font-black sm:text-2xl">F = ma</div><p className="text-[10px] text-amber-100">v = d / t · λ</p></div>
+          <div className="col-span-2 rotate-[-0.5deg] rounded-2xl border border-cyan-300/30 bg-gradient-to-br from-cyan-500/30 to-sky-800/40 p-3 text-white shadow-lg sm:col-span-1"><span className="text-[10px] font-black uppercase text-cyan-200">Geography</span><div className="my-3 text-center text-xl font-black sm:text-2xl">🌍 40° N</div><p className="text-[10px] text-cyan-100">Latitude · climate · maps</p></div>
+        </div>
+      </section>
+
       {/* Visual Collage of Learners & Educational Offerings */}
       <div className="space-y-4">
         <div className="flex items-center justify-between">

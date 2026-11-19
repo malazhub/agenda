@@ -17,8 +17,12 @@ import {
   getDirectorLiveStream,
   getDirectorPayment,
   updateDirectorPayment,
+  getSchools,
+  getDirectorGradePricing,
+  updateDirectorGradePricing,
+  deleteDirectorGradePricing,
 } from '../services/cloudflareApi';
-import type { CloudflareAccount, RegistrationSession, StoredSessionRecord, LiveStreamStatus, DirectorPaymentMethod, DirectorAccountUpdate } from '../services/cloudflareApi';
+import type { CloudflareAccount, RegistrationSession, StoredSessionRecord, LiveStreamStatus, DirectorPaymentMethod, DirectorAccountUpdate, SchoolRecord } from '../services/cloudflareApi';
 import {
   Clock,
   ShieldCheck,
@@ -76,6 +80,22 @@ export const CoursesHub: React.FC<CoursesHubProps> = ({
   useEffect(() => {
     if (initialDirectorLogin) setDirectorScreen('login');
   }, [initialDirectorLogin]);
+  useEffect(() => {
+    if (directorScreen !== 'login') return;
+    let active = true;
+    getSchools(schoolId).then(({ schools, activeSchoolId: preferred }) => {
+      if (!active) return;
+      const options = schools || [];
+      setDirectorLoginSchools(options);
+      setDirectorLoginSchoolId(options.some((school) => school.id === schoolId) ? schoolId : (preferred || 'default-agenda-school'));
+    }).catch(() => {
+      if (!active) return;
+      setDirectorLoginSchools([{ id: 'default-agenda-school', name: 'Agenda' }]);
+      setDirectorLoginSchoolId('default-agenda-school');
+    });
+    return () => { active = false; };
+  }, [directorScreen, schoolId]);
+
 
     const [activeGradeForSessions, setActiveGradeForSessions] = useState<GradeLevelDef | null>(null);
   const [activeGradeTab, setActiveGradeTab] = useState<'stored' | 'live'>('stored');
@@ -84,6 +104,9 @@ export const CoursesHub: React.FC<CoursesHubProps> = ({
     typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('directorLogin') === '1' ? 'login' : 'home'
   );
   const [directorForm, setDirectorForm] = useState({ username: '', password: '' });
+  const [directorLoginSchools, setDirectorLoginSchools] = useState<SchoolRecord[]>([]);
+  const [directorLoginSchoolId, setDirectorLoginSchoolId] = useState(schoolId);
+
   const [showDirectorPassword, setShowDirectorPassword] = useState(false);
   const [directorError, setDirectorError] = useState('');
   const [directorToken, setDirectorToken] = useState(() =>
@@ -98,6 +121,9 @@ export const CoursesHub: React.FC<CoursesHubProps> = ({
   const [directorPaymentMethod, setDirectorPaymentMethod] = useState<DirectorPaymentMethod>('unset');
   const [directorPaymentValue, setDirectorPaymentValue] = useState('');
   const [directorPaymentSaving, setDirectorPaymentSaving] = useState(false);
+  const [gradePricingRows, setGradePricingRows] = useState<Array<{ gradeId: string; amount: string }>>([]);
+  const [gradePricingSaving, setGradePricingSaving] = useState(false);
+
   const [schoolNameSaving, setSchoolNameSaving] = useState(false);
   const [studentRows, setStudentRows] = useState<DirectorRow[]>([]);
   const [educatorRows, setEducatorRows] = useState<DirectorRow[]>([]);
@@ -162,6 +188,18 @@ export const CoursesHub: React.FC<CoursesHubProps> = ({
     });
     return () => { active = false; };
   }, [directorToken]);
+  useEffect(() => {
+    if (!directorToken) { setGradePricingRows([]); return; }
+    let active = true;
+    getDirectorGradePricing(directorToken).then(({ prices }) => {
+      if (!active) return;
+      setGradePricingRows((prices || []).map((price) => ({ gradeId: price.gradeId, amount: String(price.monthlyRateUsd) })));
+    }).catch((error) => {
+      if (active) setDirectorDataError(error instanceof Error ? error.message : 'Unable to load grade fees.');
+    });
+    return () => { active = false; };
+  }, [directorToken]);
+
 
   const saveDirectorPayment = async () => {
     if (!directorToken) return;
@@ -266,7 +304,7 @@ export const CoursesHub: React.FC<CoursesHubProps> = ({
   const handleDirectorLogin = async () => {
     setDirectorError('');
     try {
-      const { account, token, directorLink } = await loginAccount(directorForm.username, directorForm.password, schoolId);
+      const { account, token, directorLink } = await loginAccount(directorForm.username, directorForm.password, directorLoginSchoolId || schoolId);
       if (account.role === 'owner') { onOwnerLogin?.(account, token); setDirectorForm({ username: '', password: '' }); return; }
       if (account.role !== 'director') {
         throw new Error(currentLang === 'ar' ? 'هذا الحساب لا يملك صلاحية المدير.' : currentLang === 'fr' ? 'Ce compte ne dispose pas des droits de Directeur.' : currentLang === 'es' ? 'Esta cuenta no tiene permisos de Director.' : currentLang === 'it' ? 'Questo account non dispone dei permessi di Direttore.' : 'This account does not have Director access.');
@@ -347,6 +385,35 @@ export const CoursesHub: React.FC<CoursesHubProps> = ({
     }
   };
 
+  const saveGradePricing = async () => {
+    if (!directorToken) return;
+    const normalized = gradePricingRows.map((row) => ({
+      gradeId: row.gradeId.trim().toLowerCase().replace(/[^a-z0-9_-]/g, '_').slice(0, 40),
+      monthlyRateUsd: Number(row.amount),
+    }));
+    if (normalized.some((row) => !row.gradeId || !Number.isFinite(row.monthlyRateUsd) || row.monthlyRateUsd < 0 || row.monthlyRateUsd > 1000000)) {
+      setDirectorDataError('Enter a valid grade and a fee from 0 to USD 1,000,000.');
+      return;
+    }
+    if (new Set(normalized.map((row) => row.gradeId)).size !== normalized.length) {
+      setDirectorDataError('Each grade can appear only once.');
+      return;
+    }
+    setGradePricingSaving(true); setDirectorDataError(''); setDirectorMessage('');
+    try {
+      const existing = await getDirectorGradePricing(directorToken);
+      const keep = new Set(normalized.map((row) => row.gradeId));
+      await Promise.all([
+        ...normalized.map((row) => updateDirectorGradePricing(directorToken, row.gradeId, row.monthlyRateUsd)),
+        ...(existing.prices || []).filter((row) => !keep.has(row.gradeId)).map((row) => deleteDirectorGradePricing(directorToken, row.gradeId)),
+      ]);
+      setGradePricingRows(normalized.map((row) => ({ gradeId: row.gradeId, amount: String(row.monthlyRateUsd) })));
+      setDirectorMessage(currentLang === 'ar' ? 'تم حفظ رسوم الصفوف.' : currentLang === 'fr' ? 'Les tarifs par niveau ont été enregistrés.' : currentLang === 'es' ? 'Se guardaron las tarifas por grado.' : currentLang === 'it' ? 'Le tariffe per classe sono state salvate.' : 'Grade fees saved.');
+    } catch (error) {
+      setDirectorDataError(error instanceof Error ? error.message : 'Unable to save grade fees.');
+    } finally { setGradePricingSaving(false); }
+  };
+
   const handleMonitorSession = async (session: StoredSessionRecord) => {
     if (!directorToken) return;
     setMonitorLoading(true);
@@ -371,6 +438,7 @@ const directorAccountDefaults = (row: DirectorRow): DirectorAccountUpdate => ({
   gradeId: row.gradeId || '',
   registeredSessionId: row.registeredSessionId || null,
   registeredEducatorId: row.registeredEducatorId || null,
+  schoolOrSubject: row.schoolOrSubject || '',
 });
 
 const stagedDirectorAccount = (row: DirectorRow): DirectorAccountUpdate =>
@@ -661,7 +729,14 @@ const updateAccount = async (
               </td>
               <td className="px-3 py-3 text-slate-700">{row.email}</td>
               <td className="px-3 py-3 text-slate-700">{row.phone || '—'}</td>
-              <td className="px-3 py-3 text-slate-700">{row.schoolOrSubject || '—'}</td>
+              <td className="px-3 py-3 text-slate-700">
+                {row.role === 'educator' ? (
+                  <input aria-label={row.fullName + ' school/subject'} value={stagedDirectorAccount(row).schoolOrSubject || ''}
+                    onChange={(event) => stageDirectorAccountUpdate(row, { schoolOrSubject: event.target.value.slice(0, 160) })}
+                    placeholder={currentLang === 'ar' ? 'المدرسة / المادة' : currentLang === 'fr' ? 'École / matière' : currentLang === 'es' ? 'Escuela / materia' : currentLang === 'it' ? 'Scuola / materia' : 'School / subject'}
+                    className="min-w-40 w-full rounded border border-slate-300 bg-white p-2 text-xs"/>
+                ) : (row.schoolOrSubject || '—')}
+              </td>
               
 <td className="px-3 py-3 text-slate-700">
   <div className="flex min-w-56 flex-col items-start gap-2">
@@ -678,7 +753,6 @@ const updateAccount = async (
         }}
         className="w-full max-w-64 rounded border border-slate-300 bg-white p-1.5 text-[10px]"
       >
-        <option value="">{currentLang === 'ar' ? 'بدون حصة مخصصة' : currentLang === 'fr' ? 'Aucune classe attribuée' : currentLang === 'es' ? 'Sin sesión asignada' : currentLang === 'it' ? 'Nessuna lezione assegnata' : 'No session assigned'}</option>
         {registrationSessions.map((session) => (
           <option key={session.id} value={session.id}>{session.gradeId.toUpperCase()} · {session.subject} · {session.title}</option>
         ))}
@@ -875,6 +949,13 @@ const updateAccount = async (
               </button>
             </div>
           </div>
+          <div>
+            <label className="block text-[11px] font-bold text-slate-700 mb-1">${currentLang === 'ar' ? 'المدرسة' : currentLang === 'fr' ? 'École' : currentLang === 'es' ? 'Escuela' : currentLang === 'it' ? 'Scuola' : 'School'}</label>
+            <select value={directorLoginSchoolId} onChange={(event) => setDirectorLoginSchoolId(event.target.value)}
+              className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-800">
+              {directorLoginSchools.map((school) => <option key={school.id} value={school.id}>{school.name}</option>)}
+            </select>
+          </div>
 
           {directorError && (
             <div className="rounded-xl border border-red-200 bg-red-50 text-red-700 text-xs font-semibold px-3 py-2">
@@ -974,6 +1055,29 @@ const updateAccount = async (
             </div>
             <button type="submit" disabled={directorPaymentSaving || (directorPaymentMethod !== 'unset' && !directorPaymentValue.trim())} className="rounded-lg bg-indigo-700 px-4 py-2 text-xs font-bold text-white disabled:opacity-50">{directorPaymentSaving ? '…' : currentLang === 'ar' ? 'حفظ وجهة الدفع' : 'Save destination'}</button>
           </form>
+        )}
+
+
+        {directorTab === 'accounts' && directorToken && (
+          <section className="rounded-xl border border-indigo-200 bg-indigo-50/40 p-4 space-y-3">
+            <div>
+              <h3 className="text-sm font-black text-slate-900">{currentLang === 'ar' ? 'رسوم كل صف دراسي' : currentLang === 'fr' ? 'Tarif par niveau scolaire' : currentLang === 'es' ? 'Tarifa por grado escolar' : currentLang === 'it' ? 'Tariffa per classe' : 'Fee for each grade'}</h3>
+              <p className="mt-1 text-xs text-slate-600">{currentLang === 'ar' ? 'أدخل المبلغ بالدولار لكل حصة. أضف أو احذف الصفوف؛ ستظهر الرسوم للطلاب في صفحة الدفع.' : currentLang === 'fr' ? 'Saisissez le montant en USD par séance. Ajoutez ou supprimez des niveaux ; les tarifs seront affichés aux élèves.' : currentLang === 'es' ? 'Introduzca el importe en USD por sesión. Añada o elimine grados; los precios se mostrarán a los estudiantes.' : currentLang === 'it' ? 'Inserisci l’importo in USD per lezione. Aggiungi o rimuovi classi; le tariffe saranno mostrate agli studenti.' : 'Set the USD fee per session for each grade. Add or remove grades; configured prices appear on the student payment screen.'}</p>
+            </div>
+            <div className="space-y-2">
+              {gradePricingRows.map((row, index) => (
+                <div key={index} className="grid grid-cols-[minmax(0,1fr)_minmax(0,0.8fr)_auto] gap-2 items-center">
+                  <input aria-label="Grade name" value={row.gradeId} onChange={(event) => setGradePricingRows((current) => current.map((item, i) => i === index ? { ...item, gradeId: event.target.value } : item))} placeholder="Grade name or ID" maxLength={40} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm"/>
+                  <input aria-label="USD per session" type="number" min="0" max="1000000" step="0.01" value={row.amount} onChange={(event) => setGradePricingRows((current) => current.map((item, i) => i === index ? { ...item, amount: event.target.value } : item))} placeholder="USD / session" className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm"/>
+                  <button type="button" onClick={() => setGradePricingRows((current) => current.filter((_, i) => i !== index))} aria-label="Remove grade fee" className="rounded-lg border border-rose-200 bg-white px-3 py-2 text-sm font-bold text-rose-700">×</button>
+                </div>
+              ))}
+            </div>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <button type="button" onClick={() => setGradePricingRows((current) => [...current, { gradeId: '', amount: '' }])} className="rounded-lg border border-indigo-300 bg-white px-3 py-2 text-xs font-bold text-indigo-800">+ Add grade and fee</button>
+              <button type="button" onClick={() => void saveGradePricing()} disabled={gradePricingSaving} className="rounded-lg bg-indigo-700 px-4 py-2 text-xs font-black text-white disabled:opacity-50">{gradePricingSaving ? '…' : 'Save grade fees'}</button>
+            </div>
+          </section>
         )}
 
         {directorDataError && (

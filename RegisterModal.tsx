@@ -5,6 +5,8 @@ import { LEBANESE_GRADE_LEVELS } from '../data/mockGradesAndSessions';
 import { UserPlus, X, CheckCircle2, CreditCard, ArrowLeft, ArrowRight, Eye, EyeOff } from 'lucide-react';
 import {
   getSchoolPayment,
+  getSchools,
+  getSchoolPublicContext,
   getRegistrationGrades,
   getRegistrationEducators,
   loginAccount,
@@ -15,6 +17,8 @@ import {
 import type {
   CloudflareAccount,
   RegistrationEducator,
+  SchoolRecord,
+  SchoolPublicContext,
 } from '../services/cloudflareApi';
 
 interface RegisterModalProps {
@@ -57,6 +61,11 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [schoolPayment, setSchoolPayment] = useState({paymentMethod:'unset',paymentValue:''});
+  const [availableSchools, setAvailableSchools] = useState<SchoolRecord[]>([]);
+  const [selectedSchoolId, setSelectedSchoolId] = useState(schoolId);
+  const [schoolContext, setSchoolContext] = useState<SchoolPublicContext | null>(null);
+  const selectedSchool = availableSchools.find((school) => school.id === selectedSchoolId) || null;
+
 
     // All registered educators are loaded from the Cloudflare database.
   const [educatorsList, setEducatorsList] = useState<RegistrationEducator[]>([]);
@@ -96,48 +105,41 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
     return list;
   };
 
-    useEffect(() => {
+  useEffect(() => {
     if (!isOpen) return;
-
     let active = true;
+    getSchools(schoolId).then(({ schools, activeSchoolId }) => {
+      if (!active) return;
+      const options = Array.isArray(schools) ? schools : [];
+      setAvailableSchools(options);
+      setSelectedSchoolId(options.some((school) => school.id === schoolId) ? schoolId : (options.some((school) => school.id === activeSchoolId) ? activeSchoolId : 'default-agenda-school'));
+    }).catch((error) => {
+      console.error('Unable to load approved schools:', error);
+      if (active) setAvailableSchools([{ id: 'default-agenda-school', name: 'Agenda' }]);
+    });
+    return () => { active = false; };
+  }, [isOpen, schoolId]);
 
+  useEffect(() => {
+    if (!isOpen) return;
+    let active = true;
     setIsLoadingEducators(true);
-
-    getRegistrationEducators(schoolId)
-      .then(({ educators }) => {
-        if (active) {
-          setEducatorsList(educators || []);
-        }
+    getRegistrationEducators(selectedSchoolId)
+      .then(({ educators }) => { if (active) setEducatorsList(educators || []); })
+      .catch((error) => {
+        console.error('Unable to load registered educators:', error);
+        if (active) setEducatorsList([]);
       })
-      .catch((requestError) => {
-        console.error(
-          'Unable to load registered educators:',
-          requestError
-        );
-
-        if (active) {
-          // Educator registration must remain available even when this school
-          // has no educators yet. Students see the empty-state guidance below.
-          setEducatorsList([]);
-        }
-      })
-      .finally(() => {
-        if (active) {
-          setIsLoadingEducators(false);
-        }
-      });
-
-    return () => {
-      active = false;
-    };
-  }, [isOpen, schoolId, t.registrationServiceUnavailable]);
+      .finally(() => { if (active) setIsLoadingEducators(false); });
+    return () => { active = false; };
+  }, [isOpen, selectedSchoolId, t.registrationServiceUnavailable]);
 
   useEffect(() => {
     if (!isOpen) return;
     let active = true;
     setIsLoadingGrades(true);
     setRegistrationGrades(LEBANESE_GRADE_LEVELS.map((grade) => grade.id));
-    getRegistrationGrades(schoolId)
+    getRegistrationGrades(selectedSchoolId)
       .then(({ grades }) => {
         if (!active) return;
         const available = new Set([
@@ -156,7 +158,7 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
     return () => {
       active = false;
     };
-  }, [isOpen, schoolId]);
+  }, [isOpen, selectedSchoolId]);
 
   useEffect(() => {
     if (!canRegisterDirector && role === 'director') setRole('student');
@@ -188,7 +190,49 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
     onClose();
   };
 
-  useEffect(() => { if (!isOpen || !showPayment) return; getSchoolPayment(schoolId).then(setSchoolPayment).catch(() => setSchoolPayment({paymentMethod:'unset',paymentValue:''})); }, [isOpen, showPayment, schoolId]);
+  useEffect(() => {
+    if (!isOpen || !showPayment) return;
+    let active = true;
+    Promise.all([getSchoolPayment(selectedSchoolId), getSchoolPublicContext(selectedSchoolId)])
+      .then(([payment, context]) => {
+        if (!active) return;
+        setSchoolPayment(payment);
+        setSchoolContext(context);
+      })
+      .catch(() => {
+        if (!active) return;
+        setSchoolPayment({ paymentMethod: 'unset', paymentValue: '' });
+        setSchoolContext(null);
+      });
+    return () => { active = false; };
+  }, [isOpen, showPayment, selectedSchoolId]);
+
+  const paymentFeeDescription = (() => {
+    const prices = schoolContext?.prices || [];
+    if (!prices.length) return t.paymentDescription;
+    const director = currentLang === 'ar'
+      ? 'المدير: 150 دولاراً أمريكياً مرة واحدة لشراء هوية مدرستك ومساحتها المستقلة.'
+      : currentLang === 'fr'
+        ? 'Directeur : 150 USD une seule fois pour obtenir votre identité et votre espace scolaire indépendant.'
+        : currentLang === 'es'
+          ? 'Director: USD 150 una sola vez para obtener la identidad y el espacio independiente de su escuela.'
+          : currentLang === 'it'
+            ? 'Direttore: 150 USD una tantum per ottenere l’identità e lo spazio indipendente della scuola.'
+            : 'Director: USD 150 one time to purchase your own school identity and independent school space.';
+    const student = currentLang === 'ar'
+      ? 'الطالب: الرسوم التي حددها المدير لكل صف ولكل حصة:'
+      : currentLang === 'fr'
+        ? 'Élève : tarifs fixés par le Directeur selon le niveau et par séance :'
+        : currentLang === 'es'
+          ? 'Estudiante: tarifas fijadas por el Director según el grado y por sesión:'
+          : currentLang === 'it'
+            ? 'Studente: tariffe stabilite dal Direttore per classe e per sessione:'
+            : 'Student: Director-assigned fee by grade, per session:';
+    const lines = prices.map((price) =>
+      `• ${gradeLabel(price.gradeId)}: USD ${Number(price.monthlyRateUsd).toLocaleString('en-US', { maximumFractionDigits: 2 })} / ${currentLang === 'ar' ? 'حصة' : currentLang === 'fr' ? 'séance' : currentLang === 'es' ? 'sesión' : currentLang === 'it' ? 'sessione' : 'session'}`
+    );
+    return [director, student, ...lines].join('\n');
+  })();
 
   if (!isOpen) return null;
 
@@ -251,16 +295,16 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
 
     try {
       const authResult = isLogin
-        ? await loginAccount(username, password, schoolId)
+        ? await loginAccount(username, password, selectedSchoolId)
         : await registerAccount({
-            schoolId,
+            schoolId: selectedSchoolId,
             username,
             password,
             role: role === 'educator' ? 'educator' : 'student',
             fullName: name,
             email,
             phone,
-            schoolOrSubject,
+            schoolOrSubject: role === 'student' ? (selectedSchool?.name || schoolOrSubject) : schoolOrSubject,
 
             // Student's grade/class preference is saved separately; the actual
             // grade and registered session stay aligned with the selected educator.
@@ -276,6 +320,13 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
         sessionStorage.setItem('agenda-director-token', token);
         sessionStorage.setItem('agenda-session-token', token);
         window.location.replace(directorLink);
+        return;
+      }
+      if (account.role !== 'owner' && account.schoolId && account.schoolId !== schoolId) {
+        sessionStorage.setItem('agenda-session-token', token);
+        const targetUrl = new URL(window.location.href);
+        targetUrl.searchParams.set('schoolId', account.schoolId);
+        window.location.replace(targetUrl.toString());
         return;
       }
       onRegisterSuccess(account, token);
@@ -383,7 +434,7 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
             <div className="text-center space-y-2">
               <CreditCard className="mx-auto h-10 w-10 text-indigo-700" />
               <h3 className="text-lg font-black text-slate-900">{t.paymentTitle}</h3>
-              <p className="text-sm font-semibold text-slate-700">{t.paymentDescription}</p>
+              <p className="text-sm font-semibold text-slate-700 whitespace-pre-line">{paymentFeeDescription}</p>
             </div>
             {schoolPayment.paymentMethod === 'unset' || !schoolPayment.paymentValue ? (
               <p className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-center text-sm font-semibold text-amber-900">{currentLang === 'ar' ? 'لم يحدد المدير طريقة الدفع بعد. يرجى التواصل معه.' : currentLang === 'fr' ? 'Le Directeur n’a pas encore configuré le paiement. Veuillez le contacter.' : currentLang === 'es' ? 'El Director aún no ha configurado el pago. Ponte en contacto con él.' : currentLang === 'it' ? 'Il Direttore non ha ancora configurato il pagamento. Contattalo.' : 'The Director has not configured a payment method yet. Please contact the Director.'}</p>
@@ -597,18 +648,28 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
               </button>
             </div>
           </div>
-          {!isLogin && role !== 'director' && (
+          {(isLogin || (!isLogin && (role === 'student' || role === 'educator'))) && (
             <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">
-                {role === 'student' ? t.schoolOrGradeLabel : t.educatorSubjectLabel}
-              </label>
-              <input
-                type="text"
-                value={schoolOrSubject}
-                onChange={(event) => setSchoolOrSubject(event.target.value)}
-                placeholder={role === 'student' ? t.schoolPlaceholder : t.educatorSubjectPlaceholder}
+              <label className="block text-xs font-bold text-slate-700 mb-1">{currentLang === 'ar' ? 'اسم المدرسة' : currentLang === 'fr' ? 'Nom de l’établissement' : currentLang === 'es' ? 'Nombre de la escuela' : currentLang === 'it' ? 'Nome della scuola' : 'School name'}</label>
+              <select value={selectedSchoolId}
+                onChange={(event) => {
+                  const nextSchoolId = event.target.value;
+                  setSelectedSchoolId(nextSchoolId);
+                  setSelectedEducatorId('');
+                  if (role === 'student') setSchoolOrSubject(availableSchools.find((school) => school.id === nextSchoolId)?.name || '');
+                }}
                 className="w-full text-xs p-2.5 bg-slate-50 border border-slate-200 rounded-lg font-medium"
-              />
+                aria-label="School name">
+                {availableSchools.map((school) => <option key={school.id} value={school.id}>{school.name}</option>)}
+              </select>
+            </div>
+          )}
+          {!isLogin && role === 'educator' && (
+            <div>
+              <label className="block text-xs font-bold text-slate-700 mb-1">{t.educatorSubjectLabel}</label>
+              <input type="text" value={schoolOrSubject} onChange={(event) => setSchoolOrSubject(event.target.value)}
+                placeholder={t.educatorSubjectPlaceholder}
+                className="w-full text-xs p-2.5 bg-slate-50 border border-slate-200 rounded-lg font-medium" />
             </div>
           )}
           {directorRequestSaved && (
