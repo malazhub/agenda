@@ -99,12 +99,11 @@ const registerSignOutCleanup = useCallback(
   }, [currentLang, isRTL]);
 
   useEffect(() => {
-    // The platform's own home/shortcut name is always "Agenda". A school-specific
-    // link may still use its school's name in the browser tab.
-    document.title = activeSchoolId === 'default-agenda-school'
-      ? 'Agenda'
-      : activeSchoolName || schoolPathTitle || 'Agenda';
-  }, [activeSchoolId, activeSchoolName, schoolPathTitle]);
+    // Chrome's "Create a shortcut to this page" uses the live document title.
+    // Keep it fixed to the product name regardless of the currently selected
+    // school or its database display name (for example, "Agenda (malaz)").
+    document.title = 'Agenda';
+  }, []);
 
   useEffect(() => {
     let active = true;
