@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { Language, GradeLevelDef } from '../types';
+import { LEBANESE_GRADE_LEVELS } from '../data/mockGradesAndSessions';
 import { translations } from '../translations';
 import { LearningResourcesView } from './LearningResourcesView';
 import {
@@ -10,6 +11,7 @@ import {
 import {
   getLiveEducators,
   getSchoolEducators,
+  getEducatorAssignedSession,
   createGuestLiveStream,
   setEducatorLiveSession,
   getLiveStreamStatus,
@@ -263,6 +265,9 @@ const [guestUserId, setGuestUserId] = useState('');
 const [isFullscreen, setIsFullscreen] = useState(false);
 const [isStudentPreviewExpanded, setIsStudentPreviewExpanded] =
   useState(false);
+const [isPrimaryVideoExpanded, setIsPrimaryVideoExpanded] = useState(false);
+const [chatAllStudents, setChatAllStudents] = useState(false);
+const [assignedClassroomDetails, setAssignedClassroomDetails] = useState<StoredSessionRecord | null>(null);
 const [studentCameraDirection, setStudentCameraDirection] =
   useState<'front' | 'back' | null>(null);
 const [cameraError, setCameraError] = useState<string | null>(null);
@@ -289,6 +294,21 @@ const [permissionRequests, setPermissionRequests] = useState<any[]>([]);
 const [raisedHandIds, setRaisedHandIds] = useState<string[]>([]);
 const [canSpeak, setCanSpeak] = useState(false);
 const [allowedStudentIds, setAllowedStudentIds] = useState<string[]>([]);
+
+useEffect(() => {
+  if (!isEducator || !sessionToken || !registeredAccount?.registeredSessionId) {
+    setAssignedClassroomDetails(null);
+    return;
+  }
+  let active = true;
+  getEducatorAssignedSession(sessionToken)
+    .then(({ session }) => { if (active) setAssignedClassroomDetails(session); })
+    .catch((error) => {
+      console.warn('Unable to load the Director-assigned classroom details:', error);
+      if (active) setAssignedClassroomDetails(null);
+    });
+  return () => { active = false; };
+}, [isEducator, sessionToken, registeredAccount?.registeredSessionId]);
 
 const callEventUnsubs = useRef<Array<() => void>>([]);
 const containerRef = useRef<HTMLDivElement>(null);
@@ -342,7 +362,7 @@ const containerRef = useRef<HTMLDivElement>(null);
           };
         });
 
-        setLiveSessionsList(directory);
+        setLiveSessionsList(directory.sort((a, b) => Number(b.isLive) - Number(a.isLive) || a.educatorName.localeCompare(b.educatorName)));
       } catch (error) {
         console.error('Failed to load the school educator directory:', error);
         if (active) setLiveSessionsList([]);
@@ -1419,7 +1439,7 @@ const isStudentSessionMatch = (session: any): boolean => {
 };
 
   // Show every educator who is currently broadcasting.
-const visibleLiveSessions = isEducator ? [] : liveSessionsList;
+const visibleLiveSessions = isEducator ? [] : [...liveSessionsList].sort((a, b) => Number(b.isLive) - Number(a.isLive) || a.educatorName.localeCompare(b.educatorName));
 
 // Keep the student's own assigned classroom identified separately.
 const studentPrimarySession =
@@ -1503,9 +1523,11 @@ const studentPrimarySession =
 
       void startLiveCall({
         id: assignedSessionId,
-        grade: selectedGrade.name[currentLang],
+        grade: assignedClassroomDetails?.gradeId || selectedGrade.name[currentLang],
+        gradeId: assignedClassroomDetails?.gradeId || registeredAccount?.gradeId || '',
         educatorName,
-        subject: educatorSubject,
+        subject: assignedClassroomDetails?.subject || educatorSubject,
+        title: assignedClassroomDetails?.title || '',
         isLive: true,
       });
 
@@ -1548,15 +1570,14 @@ const studentPrimarySession =
 
   // Keep chat selection independent from the main classroom video.
   const selectedParticipant =
-    callParticipants.find(
-      (participant) =>
-        participant.userId === selectedParticipantId
-    ) ||
-    callParticipants.find(
-      (participant) =>
-        participant.userId !== localStreamUserId
-    ) ||
+    callParticipants.find((participant) => participant.userId === selectedParticipantId) ||
+    callParticipants.find((participant) => participant.userId !== localStreamUserId && !participant.roles?.some((role: string) => role === 'admin' || role === 'host')) ||
     null;
+
+  const connectedStudentParticipants = callParticipants.filter(
+    (participant) => participant.userId !== localStreamUserId &&
+      !participant.roles?.some((role: string) => role === 'admin' || role === 'host')
+  );
 
   // Educators always see their own camera as the primary video.
   const educatorOwnParticipant = callParticipants.find(
@@ -1601,267 +1622,101 @@ const studentPrimarySession =
       ? educatorOwnParticipant || null
       : studentEducatorParticipant;
 
-  const chatStudentId = isEducator
-    ? (
-        selectedParticipant &&
-        selectedParticipant.userId !== registeredAccount?.id
-          ? selectedParticipant.userId
-          : ''
-      )
-    : isStudent
-      ? registeredAccount?.id || ''
-      : '';
-
+  const chatStudentIds = isEducator
+    ? (chatAllStudents
+        ? connectedStudentParticipants.map((participant) => participant.userId)
+        : (selectedParticipant && selectedParticipant.userId !== registeredAccount?.id ? [selectedParticipant.userId] : []))
+    : isStudent ? [registeredAccount?.id || ''].filter(Boolean) : [];
+  const chatStudentIdsKey = chatStudentIds.join('|');
+  const chatStudentId = chatStudentIds[0] || '';
   const classroomSessionId = String(activeCallSession?.id || '');
-// Refresh private chat while the live classroom is active.
+
+  useEffect(() => {
+    if (!isEducator || !inLiveConference || !sessionToken || !classroomSessionId) return;
+    let active = true;
+    const heartbeat = () => void setEducatorLiveSession(sessionToken, true).catch((error) => {
+      if (active) console.warn('Educator live-presence heartbeat failed:', error);
+    });
+    heartbeat();
+    const heartbeatId = window.setInterval(heartbeat, 25_000);
+    return () => { active = false; window.clearInterval(heartbeatId); };
+  }, [isEducator, inLiveConference, sessionToken, classroomSessionId]);
+// Refresh each selected student's private thread; group mode merges individual threads.
 useEffect(() => {
-  // Each effect instance gets its own request version.
-  // Sign-out and classroom cleanup invalidate older versions.
-  const requestVersion =
-    ++chatRequestVersionRef.current;
-
-  // Do not poll when the classroom or chat participant is unavailable.
-  if (
-    !inLiveConference ||
-    !sessionToken ||
-    !classroomSessionId ||
-    !chatStudentId
-  ) {
-    setChatMessages([]);
-    setChatDraft('');
-    setChatAttachmentFile(null);
-    setChatError(null);
-    setChatLoading(false);
-    setChatClearing(false);
-
-    if (chatAttachmentInputRef.current) {
-      chatAttachmentInputRef.current.value = '';
-    }
-
+  const version = ++chatRequestVersionRef.current;
+  const targets = chatStudentIdsKey ? chatStudentIdsKey.split('|').filter(Boolean) : [];
+  if (!inLiveConference || !sessionToken || !classroomSessionId || !targets.length) {
+    setChatMessages([]); setChatDraft(''); setChatAttachmentFile(null);
+    setChatError(null); setChatLoading(false); setChatClearing(false);
+    if (chatAttachmentInputRef.current) chatAttachmentInputRef.current.value = '';
     return;
   }
-
   let cancelled = false;
-  let requestInProgress = false;
-
-  // A response is valid only while this exact effect is active.
-  const isCurrentRequest = () =>
-    !cancelled &&
-    requestVersion === chatRequestVersionRef.current;
-
-  const loadMessages = async (showLoading: boolean) => {
-    // Prevent overlapping polls and reject outdated requests.
-    if (
-      requestInProgress ||
-      !isCurrentRequest()
-    ) {
-      return;
-    }
-
-    requestInProgress = true;
-
-    if (showLoading) {
-      setChatLoading(true);
-      setChatError(null);
-    }
-
+  let busy = false;
+  const current = () => !cancelled && version === chatRequestVersionRef.current;
+  const load = async (initial: boolean) => {
+    if (busy || !current()) return;
+    busy = true;
+    if (initial) { setChatLoading(true); setChatError(null); }
     try {
-      const result = await getClassroomMessages(
-        sessionToken,
-        classroomSessionId,
-        chatStudentId
-      );
-
-      // Sign-out may have happened while the request was running.
-      // Never allow that old response to restore private messages.
-      if (!isCurrentRequest()) {
-        return;
-      }
-
-      // Merge by message ID to prevent duplicate messages.
-      setChatMessages((current) => {
-        const messagesById = new Map<
-          number,
-          ClassroomMessage
-        >();
-
-        for (const message of current) {
-          messagesById.set(message.id, message);
-        }
-
-        for (const message of result.messages || []) {
-          messagesById.set(message.id, message);
-        }
-
-        return Array.from(messagesById.values())
-          .sort((a, b) => a.id - b.id)
-          .slice(-100);
+      const groups = await Promise.all(targets.map(async (studentId) => {
+        const result = await getClassroomMessages(sessionToken, classroomSessionId, studentId);
+        return (result.messages || []).map((message) => ({ ...message, studentId }));
+      }));
+      if (!current()) return;
+      setChatMessages((old) => {
+        const all = new Map<number, ClassroomMessage>();
+        old.forEach((message) => all.set(message.id, message));
+        groups.flat().forEach((message) => all.set(message.id, message));
+        return [...all.values()].sort((x, y) => x.id - y.id).slice(-200);
       });
-
       setChatError(null);
-
     } catch (error) {
-      // Do not show errors from requests belonging to an old session.
-      if (isCurrentRequest()) {
-        console.error(
-          'Unable to refresh classroom messages:',
-          error
-        );
-
-        setChatError(
-          error instanceof Error
-            ? error.message
-            : 'Unable to receive classroom messages.'
-        );
-      }
-
+      if (current()) setChatError(error instanceof Error ? error.message : 'Unable to receive classroom messages.');
     } finally {
-      requestInProgress = false;
-
-      // Only the initial request controls the loading indicator.
-      // Background polling must not disable the chat input.
-      if (
-        showLoading &&
-        isCurrentRequest()
-      ) {
-        setChatLoading(false);
-      }
+      busy = false;
+      if (initial && current()) setChatLoading(false);
     }
   };
-
-  // Load the conversation immediately when the chat opens.
-  void loadMessages(true);
-
-  // Refresh the conversation every two seconds.
-  const refreshInterval = window.setInterval(() => {
-    void loadMessages(false);
-  }, 2000);
-
-  // Stop this polling session when leaving the classroom,
-  // changing participants, signing out, or unmounting.
-  return () => {
-    cancelled = true;
-    window.clearInterval(refreshInterval);
-  };
-
-}, [
-  inLiveConference,
-  sessionToken,
-  classroomSessionId,
-  chatStudentId,
-]);
+  void load(true);
+  const intervalId = window.setInterval(() => void load(false), 2000);
+  return () => { cancelled = true; window.clearInterval(intervalId); };
+}, [inLiveConference, sessionToken, classroomSessionId, chatStudentIdsKey]);
 
 const handleSendChatMessage = async () => {
   const message = chatDraft.trim();
-
-  if (
-    !sessionToken ||
-    !classroomSessionId ||
-    !chatStudentId ||
-    (!message && !chatAttachmentFile) ||
-    chatLoading ||
-    chatClearing
-  ) {
-    return;
-  }
-
-  // Remember which classroom session this request belongs to.
-  const requestVersion = chatRequestVersionRef.current;
-
-  setChatLoading(true);
-  setChatError(null);
-
+  if (!sessionToken || !classroomSessionId || !chatStudentIds.length || (!message && !chatAttachmentFile) || chatLoading || chatClearing) return;
+  const version = chatRequestVersionRef.current;
+  setChatLoading(true); setChatError(null);
   try {
-    let uploadedAttachment:
-      | {
-          attachmentKey: string;
-          attachmentName: string;
-          attachmentType: string;
-        }
-      | undefined;
-
-    // Upload an optional attachment first.
-    if (chatAttachmentFile) {
-      uploadedAttachment = await uploadClassroomAttachment(
-        sessionToken,
-        classroomSessionId,
-        chatStudentId,
-        chatAttachmentFile
-      );
-
-      // Stop if the user signed out while the file was uploading.
-      if (
-        requestVersion !== chatRequestVersionRef.current
-      ) {
-        return;
+    const saved: ClassroomMessage[] = [];
+    // Whole-class mode fans out to individual private threads.
+    for (const studentId of chatStudentIds) {
+      let attachment:
+        | { attachmentKey: string; attachmentName: string; attachmentType: string }
+        | undefined;
+      if (chatAttachmentFile) {
+        attachment = await uploadClassroomAttachment(sessionToken, classroomSessionId, studentId, chatAttachmentFile);
+        if (version !== chatRequestVersionRef.current) return;
       }
+      const result = await sendClassroomMessage(sessionToken, classroomSessionId, studentId, message, attachment);
+      if (version !== chatRequestVersionRef.current) return;
+      if (!result.sent || !result.message) throw new Error('The server did not confirm that the message was saved.');
+      saved.push({ ...result.message, studentId });
     }
-
-    const result = await sendClassroomMessage(
-      sessionToken,
-      classroomSessionId,
-      chatStudentId,
-      message,
-      uploadedAttachment
-    );
-
-    // Do not restore messages after sign-out or classroom cleanup.
-    if (
-      requestVersion !== chatRequestVersionRef.current
-    ) {
-      return;
-    }
-
-    if (!result.sent || !result.message) {
-      throw new Error(
-        'The server did not confirm that the message was saved.'
-      );
-    }
-
-    setChatMessages((current) => {
-      const alreadyReceived = current.some(
-        (item) => item.id === result.message.id
-      );
-
-      if (alreadyReceived) return current;
-
-      return [...current, result.message]
-        .sort((a, b) => a.id - b.id)
-        .slice(-100);
+    setChatMessages((old) => {
+      const all = new Map<number, ClassroomMessage>(old.map((item) => [item.id, item]));
+      saved.forEach((item) => all.set(item.id, item));
+      return [...all.values()].sort((x, y) => x.id - y.id).slice(-200);
     });
-
-    setChatDraft('');
-    setChatAttachmentFile(null);
-
-    if (chatAttachmentInputRef.current) {
-      chatAttachmentInputRef.current.value = '';
-    }
-
+    setChatDraft(''); setChatAttachmentFile(null);
+    if (chatAttachmentInputRef.current) chatAttachmentInputRef.current.value = '';
   } catch (error) {
-    if (
-      requestVersion === chatRequestVersionRef.current
-    ) {
-      console.error(
-        'Unable to send classroom message or attachment:',
-        error
-      );
-
-      setChatError(
-        error instanceof Error
-          ? error.message
-          : classroomLabel(
-              'تعذر إرسال الرسالة أو الملف.',
-              'Impossible d’envoyer le message ou le fichier.',
-              'Unable to send the message or file.'
-            )
-      );
+    if (version === chatRequestVersionRef.current) {
+      setChatError(error instanceof Error ? error.message : 'Unable to send the message or file.');
     }
   } finally {
-    if (
-      requestVersion === chatRequestVersionRef.current
-    ) {
-      setChatLoading(false);
-    }
+    if (version === chatRequestVersionRef.current) setChatLoading(false);
   }
 };
 
@@ -1869,7 +1724,7 @@ const handleClearChatMessages = async () => {
   if (
     !sessionToken ||
     !classroomSessionId ||
-    !chatStudentId ||
+    !chatStudentIds.length ||
     chatLoading ||
     chatClearing
   ) {
@@ -1893,11 +1748,10 @@ const handleClearChatMessages = async () => {
   setChatError(null);
 
   try {
-    const result = await clearClassroomMessages(
-      sessionToken,
-      classroomSessionId,
-      chatStudentId
-    );
+    const results = await Promise.all(chatStudentIds.map((studentId) =>
+      clearClassroomMessages(sessionToken, classroomSessionId, studentId)
+    ));
+    const result = { cleared: results.every((item) => item.cleared) };
 
     // Ignore an old response if classroom cleanup has started.
     if (
@@ -1988,15 +1842,14 @@ const handleClearChatMessages = async () => {
                 ) : (
                   <>
                     <h3 className="font-bold text-sm">
-                      {selectedGrade.name[currentLang]}
+                      {(() => {
+                        const gradeId = activeCallSession.gradeId || assignedClassroomDetails?.gradeId || registeredAccount?.gradeId;
+                        const gradeName = gradeId ? (LEBANESE_GRADE_LEVELS.find((grade) => grade.id.toLowerCase() === String(gradeId).toLowerCase())?.name[currentLang] || String(gradeId).toUpperCase()) : (activeCallSession.grade || selectedGrade.name[currentLang]);
+                        const subject = activeCallSession.subject || assignedClassroomDetails?.subject || educatorSubject;
+                        return `${gradeName} — ${subject}`;
+                      })()}
                     </h3>
-                    <p className="text-xs text-slate-300">
-                      {currentLang === 'ar' ? 'الأستاذ: ' : currentLang === 'fr' ? 'Éducateur : ' : currentLang === 'es' ? 'Educador: ' : currentLang === 'it' ? 'Educatore: ' : 'Educator: '}
-                      {activeCallSession.educatorName}
-                    </p>
-                    <p className="text-xs text-slate-400">
-                      {activeCallSession.subject}
-                    </p>
+                    <p className="text-xs text-slate-300">{currentLang === 'ar' ? 'الأستاذ: ' : currentLang === 'fr' ? 'Éducateur : ' : currentLang === 'es' ? 'Educador: ' : currentLang === 'it' ? 'Educatore: ' : 'Educator: '}{activeCallSession.educatorName || educatorName}</p>
                   </>
                 )}
               </div>
@@ -2091,8 +1944,11 @@ const handleClearChatMessages = async () => {
       {/* MAIN VIDEO */}
       <div className="min-w-0 min-h-0 flex flex-col">
 
-                <div className="relative flex-1 min-h-[240px] bg-black rounded-2xl overflow-hidden border border-slate-700">
+                <div className={isPrimaryVideoExpanded ? 'fixed inset-0 z-[100] bg-black p-3 sm:p-6' : 'relative flex-1 min-h-[240px] bg-black rounded-2xl overflow-hidden border border-slate-700'}>
 
+          <button type="button" onClick={() => setIsPrimaryVideoExpanded((expanded) => !expanded)} className="absolute right-3 top-3 z-20 rounded-lg bg-black/75 p-2 text-white hover:bg-black" title={isPrimaryVideoExpanded ? 'Close enlarged video' : 'Click to enlarge classroom video'} aria-label={isPrimaryVideoExpanded ? 'Minimize classroom video' : 'Enlarge classroom video'}>
+            {isPrimaryVideoExpanded ? <Minimize className="h-4 w-4"/> : <Maximize2 className="h-4 w-4"/>}
+          </button>
           {streamCall && primaryVideoParticipant && (
             <StreamParticipantVideo
               call={streamCall}
@@ -2196,11 +2052,13 @@ const handleClearChatMessages = async () => {
       {/* EDUCATOR'S STUDENT THUMBNAILS */}
         {isEducator && (
           <div className="min-w-0 min-h-0 lg:flex lg:flex-col">
-            <p className="text-xs font-bold text-slate-300 mb-2">
-              {currentLang === 'ar'
-                ? 'الطلاب المتصلون'
-                : 'Connected students'}
-            </p>
+            <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+              <p className="text-xs font-bold text-slate-300">{currentLang === 'ar' ? 'الطلاب المتصلون' : currentLang === 'fr' ? 'Élèves connectés' : currentLang === 'es' ? 'Estudiantes conectados' : currentLang === 'it' ? 'Studenti connessi' : 'Connected students'}</p>
+              <label className="inline-flex items-center gap-2 rounded-lg border border-indigo-400/50 bg-indigo-950 px-3 py-2 text-[10px] font-bold text-indigo-100 cursor-pointer">
+                <input type="checkbox" checked={chatAllStudents} onChange={(event) => { setChatAllStudents(event.target.checked); if (event.target.checked) setSelectedParticipantId(null); }} className="h-4 w-4 accent-indigo-400"/>
+                {currentLang === 'ar' ? 'إرسال إلى جميع الطلاب' : currentLang === 'fr' ? 'Envoyer à tous les élèves' : currentLang === 'es' ? 'Enviar a todos los estudiantes' : currentLang === 'it' ? 'Invia a tutti gli studenti' : 'Chat with all students'}
+              </label>
+            </div>
 
             <div className="flex gap-3 overflow-x-auto pb-2 lg:flex-1 lg:min-h-0 lg:flex-col lg:overflow-x-hidden lg:overflow-y-auto lg:pr-1">
                             {callParticipants
@@ -2214,10 +2072,7 @@ const handleClearChatMessages = async () => {
                 .map((participant) => {
                   const studentId = participant.userId;
                   const handRaised = raisedHandIds.includes(studentId);
-                  const selected =
-                    selectedParticipantId === studentId ||
-                    (!selectedParticipantId &&
-                      selectedParticipant?.userId === studentId);
+                  const selected = chatAllStudents || selectedParticipantId === studentId || (!selectedParticipantId && !chatAllStudents && selectedParticipant?.userId === studentId);
 
                   return (
                     <div
@@ -2230,7 +2085,7 @@ const handleClearChatMessages = async () => {
                     >
                       <button
                         type="button"
-                        onClick={() => setSelectedParticipantId(studentId)}
+                        onClick={() => { setChatAllStudents(false); setSelectedParticipantId(studentId); }}
                         className="w-full text-left cursor-pointer"
                       >
                         <div className="relative w-full aspect-video bg-black rounded-lg overflow-hidden">
@@ -2349,7 +2204,7 @@ const handleClearChatMessages = async () => {
               type="button"
               onClick={() => void handleClearChatMessages()}
               disabled={
-                !chatStudentId ||
+                !chatStudentIds.length ||
                 chatLoading ||
                 chatClearing
               }
@@ -2372,16 +2227,11 @@ const handleClearChatMessages = async () => {
 
           <p className="text-[11px] text-slate-400 mt-1">
             {isEducator
-              ? (
-                  selectedParticipant &&
-                  selectedParticipant.userId !== registeredAccount?.id
+              ? (chatAllStudents
+                  ? classroomLabel('جميع الطلاب المتصلين', 'Tous les élèves connectés', 'All connected students')
+                  : (selectedParticipant && selectedParticipant.userId !== registeredAccount?.id
                     ? (selectedParticipant.name || selectedParticipant.userId)
-                    : classroomLabel(
-                        'اختر طالباً لبدء المحادثة',
-                        'Choisissez un élève pour démarrer la conversation',
-                        'Select a student to start chatting'
-                      )
-                )
+                    : classroomLabel('اختر طالباً لبدء المحادثة', 'Choisissez un élève pour démarrer la conversation', 'Select a student to start chatting')))
               : classroomLabel(
                   'محادثتك الخاصة مع الأستاذ',
                   'Votre conversation privée avec le professeur',
@@ -2414,8 +2264,15 @@ const handleClearChatMessages = async () => {
             </p>
           ) : (
                         chatMessages.map((message) => {
-              const ownMessage =
-                message.senderId === registeredAccount?.id;
+              const ownMessage = message.senderId === registeredAccount?.id;
+              const recipientId = message.studentId || chatStudentId;
+              const recipientName = connectedStudentParticipants.find((participant) => participant.userId === recipientId)?.name || recipientId;
+              const senderName = ownMessage
+                ? (currentLang === 'ar' ? 'أنت' : currentLang === 'fr' ? 'Vous' : currentLang === 'es' ? 'Tú' : currentLang === 'it' ? 'Tu' : 'You')
+                : (isEducator ? (connectedStudentParticipants.find((participant) => participant.userId === message.senderId)?.name || message.senderId) : (activeCallSession?.educatorName || educatorName));
+              const attribution = isEducator
+                ? (ownMessage ? `${senderName} → ${chatAllStudents ? classroomLabel('جميع الطلاب', 'Tous les élèves', 'All students') : recipientName}` : `${senderName} → ${educatorName}`)
+                : `${senderName} → ${recipientName || educatorName}`;
 
               return (
                 <div
@@ -2431,6 +2288,7 @@ const handleClearChatMessages = async () => {
                         : 'bg-slate-700 text-slate-100'
                     }`}
                   >
+                    <p className={`mb-1 text-[10px] font-black ${ownMessage ? 'text-indigo-100' : 'text-amber-200'}`}>{attribution}</p>
                     {message.message !== '[Attachment]' && (
                       <p className="whitespace-pre-wrap break-words">
                         {message.message}
@@ -2492,7 +2350,7 @@ const handleClearChatMessages = async () => {
           </p>
         )}
 
-                <div className="p-3 border-t border-slate-700">           <input             ref={chatAttachmentInputRef}             type="file"             accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm,video/quicktime,application/pdf"             className="hidden"             onChange={(event) => {               const file = event.currentTarget.files?.[0] || null;                event.currentTarget.value = '';                if (!file) return;                if (file.size > 25 * 1024 * 1024) {                 setChatError(                   classroomLabel(                     'الحد الأقصى لحجم الملف هو 25 ميغابايت.',                     'La taille maximale du fichier est de 25 Mo.',                     'The maximum file size is 25 MB.'                   )                 );                 return;               }                setChatError(null);               setChatAttachmentFile(file);             }}           />            {chatAttachmentFile && (             <div className="mb-2 flex items-center justify-between gap-2 rounded-lg bg-slate-800 border border-slate-600 p-2">               <span className="min-w-0 truncate text-[11px] text-slate-200">                 {chatAttachmentFile.name}               </span>                <button                 type="button"                 onClick={() => setChatAttachmentFile(null)}                 className="shrink-0 rounded-lg p-1 text-slate-300 hover:bg-slate-700"                 title={classroomLabel(                   'إزالة المرفق',                   'Retirer le fichier',                   'Remove attachment'                 )}               >                 <X className="w-4 h-4" />               </button>             </div>           )}            <textarea             value={chatDraft}             onChange={(event) => setChatDraft(event.target.value)}             maxLength={2000}             rows={2}             disabled={!chatStudentId || chatLoading || chatClearing}             placeholder={classroomLabel(               'اكتب رسالة خاصة...',               'Écrire un message privé...',               'Write a private message...'             )}             className="w-full resize-none rounded-lg bg-slate-800 border border-slate-600 text-white text-xs p-2 outline-none focus:border-indigo-400 disabled:opacity-50"           />            <div className="mt-2 flex gap-2">             <button               type="button"               onClick={() => chatAttachmentInputRef.current?.click()}               disabled={                 !chatStudentId ||                 chatLoading ||                 chatClearing               }               className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-slate-700 hover:bg-slate-600 disabled:opacity-40 text-white text-xs font-bold py-2 cursor-pointer disabled:cursor-not-allowed"             >               <Paperclip className="w-4 h-4" />                {classroomLabel(                 'إرفاق',                 'Joindre',                 'Attach'               )}             </button>              <button               type="button"               onClick={() => void handleSendChatMessage()}               disabled={                 !chatStudentId ||                 (!chatDraft.trim() && !chatAttachmentFile) ||                 chatLoading ||                 chatClearing               }               className="flex-1 rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 text-white text-xs font-bold py-2 cursor-pointer disabled:cursor-not-allowed"             >               {chatLoading                 ? classroomLabel(                     'جارٍ الإرسال...',                     'Envoi...',                     'Sending...'                   )                 : classroomLabel(                     'إرسال',                     'Envoyer',                     'Send'                   )}             </button>           </div>         </div>
+                <div className="p-3 border-t border-slate-700">           <input             ref={chatAttachmentInputRef}             type="file"             accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm,video/quicktime,application/pdf"             className="hidden"             onChange={(event) => {               const file = event.currentTarget.files?.[0] || null;                event.currentTarget.value = '';                if (!file) return;                if (file.size > 25 * 1024 * 1024) {                 setChatError(                   classroomLabel(                     'الحد الأقصى لحجم الملف هو 25 ميغابايت.',                     'La taille maximale du fichier est de 25 Mo.',                     'The maximum file size is 25 MB.'                   )                 );                 return;               }                setChatError(null);               setChatAttachmentFile(file);             }}           />            {chatAttachmentFile && (             <div className="mb-2 flex items-center justify-between gap-2 rounded-lg bg-slate-800 border border-slate-600 p-2">               <span className="min-w-0 truncate text-[11px] text-slate-200">                 {chatAttachmentFile.name}               </span>                <button                 type="button"                 onClick={() => setChatAttachmentFile(null)}                 className="shrink-0 rounded-lg p-1 text-slate-300 hover:bg-slate-700"                 title={classroomLabel(                   'إزالة المرفق',                   'Retirer le fichier',                   'Remove attachment'                 )}               >                 <X className="w-4 h-4" />               </button>             </div>           )}            <textarea             value={chatDraft}             onChange={(event) => setChatDraft(event.target.value)}             maxLength={2000}             rows={2}             disabled={!chatStudentIds.length || chatLoading || chatClearing}             placeholder={classroomLabel(               'اكتب رسالة خاصة...',               'Écrire un message privé...',               'Write a private message...'             )}             className="w-full resize-none rounded-lg bg-slate-800 border border-slate-600 text-white text-xs p-2 outline-none focus:border-indigo-400 disabled:opacity-50"           />            <div className="mt-2 flex gap-2">             <button               type="button"               onClick={() => chatAttachmentInputRef.current?.click()}               disabled={                 !chatStudentIds.length ||                 chatLoading ||                 chatClearing               }               className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-slate-700 hover:bg-slate-600 disabled:opacity-40 text-white text-xs font-bold py-2 cursor-pointer disabled:cursor-not-allowed"             >               <Paperclip className="w-4 h-4" />                {classroomLabel(                 'إرفاق',                 'Joindre',                 'Attach'               )}             </button>              <button               type="button"               onClick={() => void handleSendChatMessage()}               disabled={                 !chatStudentIds.length ||                 (!chatDraft.trim() && !chatAttachmentFile) ||                 chatLoading ||                 chatClearing               }               className="flex-1 rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 text-white text-xs font-bold py-2 cursor-pointer disabled:cursor-not-allowed"             >               {chatLoading                 ? classroomLabel(                     'جارٍ الإرسال...',                     'Envoi...',                     'Sending...'                   )                 : classroomLabel(                     'إرسال',                     'Envoyer',                     'Send'                   )}             </button>           </div>         </div>
             </aside>
     </div>
 </div>
@@ -2818,9 +2676,11 @@ const handleClearChatMessages = async () => {
                     // Do not require the educator to appear in liveSessionsList.
                     const mySession = {
                       id: registeredAccount?.registeredSessionId || '',
-                      grade: selectedGrade.name[currentLang],
+                      grade: assignedClassroomDetails?.gradeId || selectedGrade.name[currentLang],
+                      gradeId: assignedClassroomDetails?.gradeId || registeredAccount?.gradeId || '',
                       educatorName,
-                      subject: educatorSubject,
+                      subject: assignedClassroomDetails?.subject || educatorSubject,
+                      title: assignedClassroomDetails?.title || '',
                       isLive: true,
                     };
                     
