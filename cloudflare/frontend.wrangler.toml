@@ -1,0 +1,10 @@
+name = "agenda"
+compatibility_date = "2026-11-19"
+account_id = "15cd99734560c6868dd06d79236a0334"
+workers_dev = true
+
+# This Worker serves the React frontend at https://agenda.mycamp.workers.dev.
+# Keep it separate from cloudflare/wrangler.toml, which deploys agenda-api.
+[assets]
+directory = "../dist"
+not_found_handling = "single-page-application"

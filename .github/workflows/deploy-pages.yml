@@ -165,6 +165,65 @@ jobs:
           console.log("Cloudflare Workers AI Arabic-language test passed:", arabicBody.text.trim().slice(0, 160));
           NODE
 
+  deploy-frontend-worker:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install dependencies
+        run: npm install
+
+      # Build this copy for the root of agenda.mycamp.workers.dev.
+      # The Pages build below intentionally uses /agenda/ instead.
+      - name: Build frontend for Cloudflare Worker
+        env:
+          VITE_CLOUDFLARE_API_URL: https://agenda-api.mycamp.workers.dev
+        run: npm run build
+
+      - name: Deploy frontend to agenda.mycamp.workers.dev
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: 15cd99734560c6868dd06d79236a0334
+          command: deploy --config cloudflare/frontend.wrangler.toml
+
+      - name: Verify live shortcut title and manifest
+        shell: bash
+        run: |
+          node --input-type=module <<'NODE'
+          const origin = "https://agenda.mycamp.workers.dev";
+          const page = await fetch(origin + "/", {
+            headers: { "Cache-Control": "no-cache", "Pragma": "no-cache" }
+          });
+          const html = await page.text();
+          if (!page.ok || !/<title>Agenda<\\/title>/i.test(html)) {
+            console.error("Frontend Worker did not serve the expected Agenda page title.", {
+              status: page.status,
+              title: html.match(/<title[^>]*>[\\s\\S]*?<\\/title>/i)?.[0] || "missing"
+            });
+            process.exit(1);
+          }
+
+          const manifestResponse = await fetch(origin + "/manifest.webmanifest", {
+            headers: { "Cache-Control": "no-cache", "Pragma": "no-cache" }
+          });
+          const manifest = await manifestResponse.json().catch(() => null);
+          if (!manifestResponse.ok || manifest?.name !== "Agenda" || manifest?.short_name !== "Agenda") {
+            console.error("Frontend Worker manifest does not advertise Agenda.", {
+              status: manifestResponse.status,
+              manifest
+            });
+            process.exit(1);
+          }
+          console.log("Frontend Worker shortcut verification passed: title, name, and short_name are Agenda.");
+          NODE
+
   build:
     runs-on: ubuntu-latest
     steps:
@@ -200,7 +259,7 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
-    needs: [build, deploy-worker]
+    needs: [build, deploy-worker, deploy-frontend-worker]
     steps:
       - name: Deploy to GitHub Pages
         id: deployment
