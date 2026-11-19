@@ -154,7 +154,20 @@ const registerSignOutCleanup = useCallback(
       try {
         const { account, directorLink, schoolSwitchRequired } = await getCurrentAccount(sessionToken, activeSchoolId);
         if (!active) return;
-        if (account.role === 'owner') { setOwnerAccount(account); setOwnerToken(sessionToken); return; }
+        if (account.role === 'owner') {
+          setOwnerAccount(account);
+          setOwnerToken(sessionToken);
+          const ownerUrl = new URL(window.location.href);
+          if (ownerUrl.searchParams.has('schoolId') || ownerUrl.searchParams.has('directorLogin')) {
+            ownerUrl.pathname = '/';
+            ownerUrl.searchParams.delete('schoolId');
+            ownerUrl.searchParams.delete('directorLogin');
+            ownerUrl.searchParams.delete('directorSetup');
+            window.history.replaceState({}, '', ownerUrl.toString());
+          }
+          setActiveSchoolId('default-agenda-school');
+          return;
+        }
         if (account.role === 'director') {
           sessionStorage.setItem('agenda-director-token', sessionToken);
           sessionStorage.setItem('agenda-session-token', sessionToken);
@@ -217,6 +230,14 @@ const registerSignOutCleanup = useCallback(
     setOwnerSchoolMode(false);
     setOwnerDirectorLoginMode(false);
     setIsClassroomActive(false);
+    // Owner Control Center always belongs to the platform root, never a school URL.
+    const ownerUrl = new URL(window.location.href);
+    ownerUrl.pathname = '/';
+    ownerUrl.searchParams.delete('schoolId');
+    ownerUrl.searchParams.delete('directorLogin');
+    ownerUrl.searchParams.delete('directorSetup');
+    window.history.replaceState({}, '', ownerUrl.toString());
+    setActiveSchoolId('default-agenda-school');
     showToast(`${account.fullName}: ${currentLang === 'ar' ? 'تم تسجيل دخول المالك.' : 'Owner signed in successfully.'}`);
   };
 
@@ -455,6 +476,10 @@ const registerSignOutCleanup = useCallback(
               token={ownerToken}
               onSignOut={handleSignOut}
               onDirectorSignIn={() => setOwnerDirectorLoginMode(true)}
+              onEnterGuestClassroom={() => {
+                setSelectedTeacherForBooking(MOCK_TEACHERS[0]);
+                setIsClassroomActive(true);
+              }}
               onManageMySchool={() => {
                 setIsClassroomActive(false);
                 setOwnerSchoolMode(true);
