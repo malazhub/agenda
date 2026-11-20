@@ -667,7 +667,6 @@ const registerSignOutCleanup = useCallback(
         />
       )}
 
-      {!chatOnlyMode && <>
       {/* Clean, Colorful Footer without payment badges */}
       <footer className="bg-linear-to-b from-slate-900 to-indigo-950 text-white mt-16 pt-8 pb-8 border-t border-slate-800">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 space-y-4">
