@@ -58,8 +58,8 @@ function normalizePhoneCredential(value) {
   let digits = String(value || '').trim().replace(/\D/g, '');
   if (digits.startsWith('00961')) digits = digits.slice(5);
   else if (digits.startsWith('961')) digits = digits.slice(3);
-  // Lebanon's domestic form may include a leading trunk zero; international
-  // +961 numbers omit it. Compare the same subscriber digits in either form.
+  // Domestic and international phone formats may differ by a leading trunk zero.
+  // Compare the normalized subscriber digits in either form.
   if (digits.startsWith('0')) digits = digits.slice(1);
   return digits;
 }
