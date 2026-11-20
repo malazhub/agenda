@@ -787,7 +787,7 @@ export function getSchoolPayment(schoolId:string):Promise<{paymentMethod:Directo
 export interface FounderMessage {
   id: string;
   senderId: string;
-  senderRole: 'student'|'educator'|'director'|'owner';
+  senderRole: 'student'|'educator'|'director'|'owner'|'guest';
   message: string;
   createdAt: string;
   readAt: string | null;
@@ -796,7 +796,7 @@ export interface FounderThread {
   accountId: string;
   fullName: string;
   username: string;
-  role: 'student'|'educator'|'director';
+  role: 'student'|'educator'|'director'|'guest';
   schoolId: string;
   schoolName: string;
   messageCount: number;
@@ -822,4 +822,11 @@ export function replyToFounderThread(token:string,accountId:string,message:strin
 }
 export function deleteFounderThread(token:string,accountId:string):Promise<{deleted:boolean}> {
   return request('/api/owner/founder/messages?'+new URLSearchParams({accountId}).toString(),{method:'DELETE',headers:authHeaders(token)});
+}
+
+export function getGuestContactMessages(guestId:string):Promise<{messages:FounderMessage[]}> {
+  return request('/api/guest/contact?'+new URLSearchParams({guestId}).toString());
+}
+export function sendGuestContactMessage(guestId:string,message:string):Promise<{sent:boolean}> {
+  return request('/api/guest/contact?'+new URLSearchParams({guestId}).toString(),{method:'POST',body:JSON.stringify({message})});
 }
