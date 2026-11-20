@@ -154,8 +154,13 @@ const registerSignOutCleanup = useCallback(
     let active = true;
     const refreshAccount = async () => {
       try {
-        const { account, directorLink, schoolSwitchRequired, chatOnly } = await getCurrentAccount(sessionToken, activeSchoolId);
+        const { account, directorLink, schoolSwitchRequired, chatOnly, token: refreshedToken } = await getCurrentAccount(sessionToken, activeSchoolId);
         if (!active) return;
+        const activeSessionToken = refreshedToken || sessionToken;
+        if (refreshedToken) {
+          sessionStorage.setItem('agenda-session-token', refreshedToken);
+          setSessionToken(refreshedToken);
+        }
         if (chatOnly) {
           setChatOnlyMode(true);
           setRegisteredAccount(account);
@@ -177,9 +182,9 @@ const registerSignOutCleanup = useCallback(
           return;
         }
         if (account.role === 'director') {
-          sessionStorage.setItem('agenda-director-token', sessionToken);
-          sessionStorage.setItem('agenda-session-token', sessionToken);
-          setDirectorAccessToken(sessionToken);
+          sessionStorage.setItem('agenda-director-token', activeSessionToken);
+          sessionStorage.setItem('agenda-session-token', activeSessionToken);
+          setDirectorAccessToken(activeSessionToken);
           if (directorLink && schoolSwitchRequired) {
             // Replace the currently open school (A) with the Director's own
             // school (B) in this same tab. The token survives same-origin
