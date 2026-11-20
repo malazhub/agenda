@@ -283,7 +283,7 @@ export const OFFICIAL_EXAMS: OfficialExam[] = [
  ar: "شهادة الثانوية العامة - فرع علوم الحياة (SV) - مادة علوم الحياة (البيولوجيا)"
  },
  overview: {
- en: "Session 1 (June 2024) - Neurophysiology of the reflex arc and neuromuscular transmission, plus Mendelian Genetics and genetic counseling for rare inherited conditions in Lebanon.",
+ en: "Session 1 (June 2024) - Neurophysiology of the reflex arc and neuromuscular transmission, plus Mendelian Genetics and genetic counseling for rare inherited conditions in different regions.",
  it: "Prima sessione (giugno 2024) - Neurofisiologia dell'arco riflesso e trasmissione neuromuscolare, genetica mendeliana e consulenza genetica per patologie ereditarie rare in .",
  es: "Primera convocatoria (junio de 2024): neurofisiología del arco reflejo y transmisión neuromuscular, genética mendeliana y asesoramiento genético para enfermedades hereditarias raras en Líbano.",
  fr: "1ère Session (Juin 2024) - Neurophysiologie de l'arc réflexe et transmission neuromusculaire, génétique mendélienne et conseil génétique.",
