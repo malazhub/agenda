@@ -84,7 +84,7 @@ export const AIChatBot: React.FC<AIChatBotProps> = ({ currentLang, schoolId, sch
  const [isOpen, setIsOpen] = useState(false);
  const [inputText, setInputText] = useState('');
  const [isTyping, setIsTyping] = useState(false);
- const [founderMode, setFounderMode] = useState(chatOnlyMode);
+ const [founderMode, setFounderMode] = useState(false);
  const [founderMessages, setFounderMessages] = useState<FounderMessage[]>([]);
  const [founderDraft, setFounderDraft] = useState('');
  const [founderBusy, setFounderBusy] = useState(false);
@@ -131,14 +131,7 @@ export const AIChatBot: React.FC<AIChatBotProps> = ({ currentLang, schoolId, sch
  // Blank chat: Starts with no initial pre-canned text as requested
  const [messages, setMessages] = useState<ChatMessage[]>([]);
  const [schoolContext, setSchoolContext] = useState<SchoolPublicContext | null>(null);
- useEffect(() => {
-  if (!chatOnlyMode) return;
-  // A deliberate Back action is sticky for this tab: root-page restoration
-  // must not immediately reopen Founder Chat on the next render or refresh.
-  const dismissed = sessionStorage.getItem('agenda-founder-chat-dismissed') === '1';
-  setFounderMode(!dismissed);
-  setIsOpen(!dismissed);
- }, [chatOnlyMode]);
+ // Founder Chat opens only when the user explicitly selects Contact Founder.
  useEffect(() => {
   if (!isOpen) return;
   const closeOnEscape = (event: KeyboardEvent) => {
