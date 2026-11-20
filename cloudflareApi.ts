@@ -800,6 +800,7 @@ export interface FounderThread {
   schoolId: string;
   schoolName: string;
   messageCount: number;
+  incomingCount: number;
   unreadIncoming: number;
   outgoingCount: number;
   lastMessageAt: string | null;
