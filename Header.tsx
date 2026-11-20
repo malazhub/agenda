@@ -117,9 +117,9 @@ export const Header: React.FC<HeaderProps> = ({
             <button
               type="button"
               onClick={async () => {
-                const shareUrl = schoolId === 'default-agenda-school'
-                  ? 'https://agenda.mycamp.workers.dev/'
-                  : `https://agenda.mycamp.workers.dev/?schoolId=${encodeURIComponent(schoolId)}`;
+                // Every share action intentionally distributes the single
+                // canonical owner/platform entry point, never a school-specific URL.
+                const shareUrl = 'https://agenda.mycamp.workers.dev/';
                 const shareData = {
                   title: schoolName || 'Agenda',
                   text: currentLang === 'ar' ? `منصة ${schoolName || 'Agenda'} للتعليم والدروس الخصوصية` : currentLang === 'fr' ? `Plateforme éducative ${schoolName || 'Agenda'}` : currentLang === 'es' ? `Plataforma educativa ${schoolName || 'Agenda'}` : currentLang === 'it' ? `Piattaforma educativa ${schoolName || 'Agenda'}` : `${schoolName || 'Agenda'} Educational Platform`,
