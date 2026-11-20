@@ -12,9 +12,9 @@ export const OFFICIAL_EXAMS: OfficialExam[] = [
  title: {
  en: " Official Baccalaureate - General Sciences (GS) - Mathematics",
  it: "Baccalaureato ufficiale - Scienze generali (SG) - Matematica",
- es: "Bachillerato oficial libanés - Ciencias generales (SG) - Matemáticas",
- fr: "Baccalauréat Libanais Officiel - Sciences Générales (SG) - Mathématiques",
- ar: "شهادة الثانوية العامة ة - فرع العلوم العامة (SG) - مادة الرياضيات"
+ es: "Bachillerato oficial - Ciencias generales (SG) - Matemáticas",
+ fr: "Baccalauréat officiel - Sciences Générales (SG) - Mathématiques",
+ ar: "شهادة الثانوية العامة - فرع العلوم العامة (SG) - مادة الرياضيات"
  },
  overview: {
  en: "Session 1 (June 2026) - Comprehensive official exam covering Complex Numbers, Space Geometry with planes and spheres, Differential Calculus, and Probability Distributions.",
@@ -157,8 +157,8 @@ export const OFFICIAL_EXAMS: OfficialExam[] = [
  title: {
  en: " Official Brevet (Grade 9 / EB9) - Mathematics",
  it: "Brevet ufficiale (classe 9 / EB9) - Matematica",
- es: "Brevet oficial libanés (curso 9 / EB9) - Matemáticas",
- fr: "Brevet Officiel Libanais (EB9 / 3ème) - Mathématiques",
+ es: "Brevet oficial  (curso 9 / EB9) - Matemáticas",
+ fr: "Brevet Officiel  (EB9 / 3ème) - Mathématiques",
  ar: "الشهادة المتوسطة ة (البريفيه - الصف التاسع) - مادة الرياضيات"
  },
  overview: {
@@ -278,16 +278,16 @@ export const OFFICIAL_EXAMS: OfficialExam[] = [
  title: {
  en: " Official Baccalaureate - Life Sciences (LS/SV) - Biology",
  it: "Baccalaureato ufficiale - Scienze della vita (LS/SV) - Biologia",
- es: "Bachillerato oficial libanés - Ciencias de la vida (LS/SV) - Biología",
- fr: "Baccalauréat Libanais Officiel - Sciences de la Vie (SV) - Biologie",
- ar: "شهادة الثانوية العامة ة - فرع علوم الحياة (SV) - مادة علوم الحياة (البيولوجيا)"
+ es: "Bachillerato oficial - Ciencias de la vida (LS/SV) - Biología",
+ fr: "Baccalauréat officiel - Sciences de la Vie (SV) - Biologie",
+ ar: "شهادة الثانوية العامة - فرع علوم الحياة (SV) - مادة علوم الحياة (البيولوجيا)"
  },
  overview: {
  en: "Session 1 (June 2024) - Neurophysiology of the reflex arc and neuromuscular transmission, plus Mendelian Genetics and genetic counseling for rare inherited conditions in Lebanon.",
- it: "Prima sessione (giugno 2024) - Neurofisiologia dell'arco riflesso e trasmissione neuromuscolare, genetica mendeliana e consulenza genetica per patologie ereditarie rare in Libano.",
+ it: "Prima sessione (giugno 2024) - Neurofisiologia dell'arco riflesso e trasmissione neuromuscolare, genetica mendeliana e consulenza genetica per patologie ereditarie rare in .",
  es: "Primera convocatoria (junio de 2024): neurofisiología del arco reflejo y transmisión neuromuscular, genética mendeliana y asesoramiento genético para enfermedades hereditarias raras en Líbano.",
  fr: "1ère Session (Juin 2024) - Neurophysiologie de l'arc réflexe et transmission neuromusculaire, génétique mendélienne et conseil génétique.",
- ar: "الدورة الأولى (حزيران ٢٠٢٤) - الفيزيولوجيا العصبية والسيالة العصبية والنقل المشبكي، والوراثة المندلية وشجرة النسب الوراثية للأمراض الشائعة في لبنان."
+ ar: "الدورة الأولى (حزيران ٢٠٢٤) - الفيزيولوجيا العصبية والسيالة العصبية والنقل المشبكي، والوراثة المندلية وشجرة النسب الوراثية للأمراض الشائعة في مناطق مختلفة."
  },
  officialInstructions: {
  en: "Use standard scientific reasoning verbs (Compare, Analyze, Deduce, Explain). Answers lacking proper data extraction will receive partial marks under MEHE guidelines.",
@@ -354,16 +354,16 @@ export const OFFICIAL_EXAMS: OfficialExam[] = [
  title: {
  en: " Official Baccalaureate - Socio-Economics (SE/ES) - Economics",
  it: "Baccalaureato ufficiale - Socioeconomia (SE/ES) - Economia",
- es: "Bachillerato oficial libanés - Socioeconomía (SE/ES) - Economía",
- fr: "Baccalauréat Libanais Officiel - Sociologie & Économie (SE) - Économie",
- ar: "شهادة الثانوية العامة ة - فرع الاجتماع والاقتصاد (SE) - مادة الاقتصاد"
+ es: "Bachillerato oficial - Socioeconomía (SE/ES) - Economía",
+ fr: "Baccalauréat officiel - Sociologie & Économie (SE) - Économie",
+ ar: "شهادة الثانوية العامة - فرع الاجتماع والاقتصاد (SE) - مادة الاقتصاد"
  },
  overview: {
  en: "Session 1 (June 2023) - Macroeconomic stabilization policies in developing countries, inflation, exchange rate volatility, balance of payments, and economic growth mechanisms.",
  it: "Prima sessione (giugno 2023) - Politiche di stabilizzazione macroeconomica nei paesi in via di sviluppo, inflazione, volatilità dei tassi di cambio, bilancia dei pagamenti e crescita economica.",
  es: "Primera convocatoria (junio de 2023): políticas de estabilización macroeconómica en países en desarrollo, inflación, volatilidad del tipo de cambio, balanza de pagos y crecimiento económico.",
  fr: "1ère Session (Juin 2023) - Politiques macroéconomiques de relance et de stabilisation, inflation, taux de change, balance des paiements et croissance économique.",
- ar: "الدورة الأولى (حزيران ٢٠٢٣) - السياسات الاقتصادية والمالية، التضخم المالي، تقلبات أسعار الصرف، ميزان المدفوعات، وديناميكيات النمو الاقتصادي في لبنان."
+ ar: "الدورة الأولى (حزيران ٢٠٢٣) - السياسات الاقتصادية والمالية، التضخم المالي، تقلبات أسعار الصرف، ميزان المدفوعات، وديناميكيات النمو الاقتصادي في مناطق مختلفة."
  },
  officialInstructions: {
  en: "Answer all parts clearly. Syntheses must include proper introduction (hook, definition, problem), 2 balanced parts, and conclusion with an open perspective.",
@@ -428,9 +428,9 @@ export const OFFICIAL_EXAMS: OfficialExam[] = [
  title: {
  en: " Official Baccalaureate - General Sciences (GS) - Physics",
  it: "Baccalaureato ufficiale - Scienze generali (SG) - Fisica",
- es: "Bachillerato oficial libanés - Ciencias generales (SG) - Física",
- fr: "Baccalauréat Libanais Officiel - Sciences Générales (SG) - Physique",
- ar: "شهادة الثانوية العامة ة - فرع العلوم العامة (SG) - مادة الفيزياء"
+ es: "Bachillerato oficial - Ciencias generales (SG) - Física",
+ fr: "Baccalauréat officiel - Sciences Générales (SG) - Physique",
+ ar: "شهادة الثانوية العامة - فرع العلوم العامة (SG) - مادة الفيزياء"
  },
  overview: {
  en: "Session 1 (June 2022) - Mechanics of damped and forced harmonic oscillators, Electromagnetic Induction and RLC resonant circuits.",
@@ -525,7 +525,7 @@ export const ARCHIVE_YEARS: ArchiveYearSummary[] = Array.from({ length: 27 }, (_
  const year = 2026 - i;
  let context = {
  en: `Standard official exam session covering Brevet and all 4 Baccalaureate branches.`,
- fr: `Session officielle libanaise couvrant le Brevet et les 4 séries du Baccalauréat.`,
+ fr: `Session officielle e couvrant le Brevet et les 4 séries du Baccalauréat.`,
  ar: `دورة الامتحانات الرسمية ة الشاملة لشهادة البريفيه وفروع البكالوريا الأربعة.`
  };
 
@@ -550,7 +550,7 @@ export const ARCHIVE_YEARS: ArchiveYearSummary[] = Array.from({ length: 27 }, (_
  } else if (year === 2000) {
  context = {
  en: `Inaugural implementation year of the modern Reformed Curriculum (Decree 10227).`,
- fr: `Année inaugurale du nouveau curriculum libanais réformé (Décret 10227).`,
+ fr: `Année inaugurale du nouveau curriculum  réformé (Décret 10227).`,
  ar: `سنة التدشين الأولى للمنهج الحديث المطور (المرسوم ١٠٢٢٧).`
  };
  }
