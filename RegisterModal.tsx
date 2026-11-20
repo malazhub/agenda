@@ -316,7 +316,7 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
             className: role === 'educator' ? newClassName.trim() : undefined,
           });
       const { account, token, directorLink, chatOnly } = authResult;
-      if (isLogin && account.role === 'director') {
+      if (isLogin && account.role === 'director' && !chatOnly) {
         sessionStorage.setItem('agenda-director-token', token);
         sessionStorage.setItem('agenda-session-token', token);
         const destination = directorLink || `https://agenda.mycamp.workers.dev/?schoolId=${encodeURIComponent(account.schoolId)}`;
