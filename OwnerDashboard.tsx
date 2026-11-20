@@ -227,7 +227,7 @@ export const OwnerDashboard: React.FC<{ currentLang:Language; token:string; onSi
         <table className="w-full text-sm min-w-[1450px]">
           <thead className="bg-slate-50"><tr>{[t.school,t.director,t.phone,t.email,currentLang==='ar'?'الوارد':currentLang==='fr'?'Messages reçus':currentLang==='es'?'Chat entrante':currentLang==='it'?'Chat in':'Chat in',currentLang==='ar'?'الصادر':currentLang==='fr'?'Messages envoyés':currentLang==='es'?'Chat saliente':currentLang==='it'?'Chat out':'Chat out',t.students,t.educators,t.joined,t.expiry,t.account,t.paymentState,t.schoolLink,t.paymentLink,t.actions].map(x=><th key={x} className="p-3 text-start whitespace-nowrap">{x}</th>)}</tr></thead>
           <tbody>{rows.length===0 ? <tr><td colSpan={15} className="p-4 text-center text-slate-500">{t.empty}</td></tr> : rows.map(row=>{
-            const schoolThreads = founderThreads.filter(thread => thread.schoolId === row.schoolId);
+            const schoolThreads = founderThreads.filter(thread => thread.accountId === row.id);
             const chatIn = schoolThreads.reduce((total, thread) => total + (thread.incomingCount || 0), 0);
             const chatOut = schoolThreads.reduce((total, thread) => total + (thread.outgoingCount || 0), 0);
             const link=destination(row);
@@ -244,7 +244,10 @@ export const OwnerDashboard: React.FC<{ currentLang:Language; token:string; onSi
                   <button type="button" disabled={!schoolThreads.find(thread=>thread.accountId===row.id)||founderActionBusy} onClick={()=>{const thread=schoolThreads.find(item=>item.accountId===row.id);if(thread)void clearFounderConversation(thread);}} className="text-[10px] font-bold text-rose-700 underline disabled:opacity-40">{currentLang==='ar'?'مسح':currentLang==='fr'?'Effacer':currentLang==='es'?'Borrar':currentLang==='it'?'Pulisci':'Clear'}</button>
                 </div>
               </td>
-              <td className="p-3 text-center font-semibold text-indigo-700">{chatOut}</td>
+              <td className="p-3">
+                <span className="font-semibold text-indigo-700">{chatOut}</span>
+                <button type="button" disabled={!schoolThreads[0]||founderActionBusy} onClick={()=>{if(schoolThreads[0])void clearFounderConversation(schoolThreads[0]);}} className="mt-1 block text-[10px] font-bold text-rose-700 underline disabled:opacity-40">{currentLang==='ar'?'مسح المحادثة':currentLang==='fr'?'Effacer':currentLang==='es'?'Borrar chat':currentLang==='it'?'Pulisci chat':'Clear chat'}</button>
+              </td>
               <td className="p-3">{row.studentCount}</td><td className="p-3">{row.educatorCount}</td>
               <td className="p-3 whitespace-nowrap">{dateLabel(row.createdAt,currentLang)}</td>
               <td className="p-3 whitespace-nowrap">{dateLabel(row.expiresAt,currentLang)}</td>
@@ -257,7 +260,7 @@ export const OwnerDashboard: React.FC<{ currentLang:Language; token:string; onSi
             </tr>;
           })}</tbody>
           <tfoot className="bg-indigo-50 border-t-2 border-indigo-200">
-            <tr><td colSpan={13} className="p-3">
+            <tr><td colSpan={15} className="p-3">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <span className="text-xs font-semibold text-slate-700">{Object.keys(pendingStatuses).length ? `${Object.keys(pendingStatuses).length} ${t.unsaved}` : t.saved}</span>
                 <button type="button" onClick={()=>void saveAllStatuses()} disabled={!Object.keys(pendingStatuses).length || busy==='save-statuses'} className="rounded-lg bg-indigo-700 px-5 py-2.5 text-sm font-bold text-white shadow-sm disabled:cursor-not-allowed disabled:opacity-40">{busy==='save-statuses'?t.saving:t.saveChanges}</button>
