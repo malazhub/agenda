@@ -4,7 +4,7 @@ import type { Language } from '../types';
 import {
   createOwnerDirector, deleteOwnerDirector, getOwnerDirectors, saveOwnerDirectorStatuses,
   issueDirectorSetupLink, updateOwnerDirector, resetOwnerDirectorPhonePassword,
-  getOwnerFounderThreads, getOwnerFounderMessages, replyToFounderThread, deleteFounderThread,
+  getOwnerFounderThreads, getOwnerFounderMessages, replyToFounderThread, deleteFounderThread, deleteOwnerAccount,
 } from '../services/cloudflareApi';
 import type { OwnerDirector, FounderThread, FounderMessage } from '../services/cloudflareApi';
 
@@ -173,6 +173,32 @@ export const OwnerDashboard: React.FC<{ currentLang:Language; token:string; onSi
     }
   };
 
+  const deleteSchoolAccount = async (thread: FounderThread) => {
+    const prompt = currentLang === 'ar' ? 'هل تريد حذف هذا الحساب نهائياً؟'
+      : currentLang === 'fr' ? 'Supprimer définitivement ce compte ?'
+      : currentLang === 'es' ? '¿Eliminar esta cuenta permanentemente?'
+      : currentLang === 'it' ? 'Eliminare definitivamente questo account?'
+      : 'Permanently delete this account?';
+    if (!window.confirm(prompt) || founderActionBusy) return;
+    setFounderActionBusy(true);
+    setError('');
+    try {
+      await deleteOwnerAccount(token, thread.accountId);
+      const inbox = await getOwnerFounderThreads(token);
+      setFounderThreads(inbox.threads || []);
+      if (selectedFounderThread?.accountId === thread.accountId) {
+        setSelectedFounderThread(null);
+        setFounderConversation([]);
+        setFounderReply('');
+      }
+      setMessage(currentLang === 'ar' ? 'تم حذف الحساب.' : currentLang === 'fr' ? 'Compte supprimé.' : currentLang === 'es' ? 'Cuenta eliminada.' : currentLang === 'it' ? 'Account eliminato.' : 'Account deleted.');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : t.error);
+    } finally {
+      setFounderActionBusy(false);
+    }
+  };
+
   useEffect(() => {
     let active = true;
     const refreshFounderCounts = async () => {
@@ -328,38 +354,91 @@ export const OwnerDashboard: React.FC<{ currentLang:Language; token:string; onSi
         : role === 'student'
           ? (currentLang==='ar'?'الطلاب':currentLang==='fr'?'Élèves':currentLang==='es'?'Estudiantes':currentLang==='it'?'Studenti':'Students')
           : (currentLang==='ar'?'الزوار':currentLang==='fr'?'Visiteurs':currentLang==='es'?'Visitantes':currentLang==='it'?'Visitatori':'Website visitors');
+      if (role === 'guest') return (
+        <section key={role} className="overflow-hidden rounded-2xl border bg-white">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b bg-slate-50 p-4">
+            <h2 className="font-black">{roleTitle} <span className="ms-1 text-xs font-semibold text-slate-500">({group.length})</span></h2>
+            <span className="text-[11px] text-slate-500">{currentLang==='ar'?'محادثات زوار الموقع':currentLang==='fr'?'Conversations des visiteurs':currentLang==='es'?'Conversaciones de visitantes':currentLang==='it'?'Conversazioni dei visitatori':'Visitor conversations'}</span>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[780px] text-sm">
+              <thead className="bg-white"><tr>
+                <th className="p-3 text-start">{currentLang==='ar'?'الزائر':currentLang==='fr'?'Visiteur':currentLang==='es'?'Visitante':currentLang==='it'?'Visitatore':'Visitor'}</th>
+                <th className="p-3 text-center">Chat in</th>
+                <th className="p-3 text-center">Chat out</th>
+                <th className="p-3 text-start">{currentLang==='ar'?'آخر رسالة':currentLang==='fr'?'Dernier message':currentLang==='es'?'Último mensaje':currentLang==='it'?'Ultimo messaggio':'Last message'}</th>
+                <th className="p-3 text-start">{currentLang==='ar'?'إجراءات':currentLang==='fr'?'Actions':currentLang==='es'?'Acciones':currentLang==='it'?'Azioni':'Actions'}</th>
+              </tr></thead>
+              <tbody>
+                {group.length===0
+                  ? <tr><td colSpan={5} className="p-4 text-center text-slate-400">{currentLang==='ar'?'لم يراسلنا أي زائر بعد.':currentLang==='fr'?'Aucun visiteur ne nous a encore écrit.':currentLang==='es'?'Todavía no hemos recibido mensajes de visitantes.':currentLang==='it'?'Nessun visitatore ci ha ancora scritto.':'No visitors have contacted us yet.'}</td></tr>
+                  : group.map((thread) => <tr key={thread.accountId} className={thread.unreadIncoming>0?'border-t bg-rose-50':'border-t'}>
+                    <td className="p-3"><b>{thread.fullName}</b><small className="block text-slate-500">{thread.username}</small></td>
+                    <td className="p-3 text-center"><span className={thread.unreadIncoming>0?'font-black text-rose-700':'font-semibold text-slate-700'}>{thread.incomingCount||0}</span></td>
+                    <td className="p-3 text-center font-semibold text-indigo-700">{thread.outgoingCount||0}</td>
+                    <td className="p-3 whitespace-nowrap text-xs text-slate-500">{thread.lastMessageAt?dateLabel(thread.lastMessageAt,currentLang):'—'}</td>
+                    <td className="p-3"><div className="flex items-center gap-3">
+                      <button type="button" onClick={()=>void openFounderConversation(thread)} className="font-bold text-indigo-700 underline">{currentLang==='ar'?'فتح والرد':currentLang==='fr'?'Ouvrir / répondre':currentLang==='es'?'Abrir / responder':currentLang==='it'?'Apri / rispondi':'Open / reply'}</button>
+                      <button type="button" disabled={founderActionBusy} onClick={()=>void clearFounderConversation(thread)} className="font-bold text-rose-700 underline disabled:opacity-40">{currentLang==='ar'?'مسح':currentLang==='fr'?'Effacer':currentLang==='es'?'Borrar':currentLang==='it'?'Pulisci':'Clear chat'}</button>
+                    </div></td>
+                  </tr>)}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      );
+      const headers = currentLang === 'ar'
+        ? ['الاسم الكامل','المعلم','اسم المستخدم أو البريد الإلكتروني','كلمة المرور','البريد الإلكتروني','رقم الهاتف','المدرسة / المادة','الحصة المسجلة','تاريخ الانضمام','تاريخ الانتهاء','مفعّل','مدفوع','حذف']
+        : currentLang === 'fr'
+          ? ['Nom complet','Éducateur','Nom d’utilisateur ou e-mail','Mot de passe','Adresse e-mail','Téléphone','École / matière','Séance inscrite','Date d’inscription','Date d’expiration','Activé','Payé','Supprimer']
+          : currentLang === 'es'
+            ? ['Nombre completo','Educador','Usuario o correo electrónico','Contraseña','Correo electrónico','Teléfono','Escuela / materia','Sesión registrada','Fecha de alta','Fecha de vencimiento','Activado','Pagado','Eliminar']
+            : currentLang === 'it'
+              ? ['Nome completo','Educatore','Nome utente o e-mail','Password','Indirizzo e-mail','Numero di telefono','Scuola / materia','Sessione registrata','Data di iscrizione','Data di scadenza','Attivato','Pagato','Elimina']
+              : ['Full name','Educator','Username or email address','Password','Email address','Phone number','School / subject','Registered session','Joining date','Expiry date','Activated','Paid','Delete'];
+      const emptyLabel = currentLang==='ar'?'لا توجد تسجيلات بعد.':currentLang==='fr'?'Aucune inscription pour le moment.':currentLang==='es'?'Todavía no hay registros.':currentLang==='it'?'Nessuna registrazione al momento.':'No registrations yet.';
+      const yes = currentLang==='ar'?'نعم':currentLang==='fr'?'Oui':currentLang==='es'?'Sí':currentLang==='it'?'Sì':'Yes';
+      const no = currentLang==='ar'?'لا':currentLang==='fr'?'Non':currentLang==='es'?'No':currentLang==='it'?'No':'No';
+      const passwordTip = currentLang==='ar'?'كلمات المرور لا يمكن عرضها؛ يتم تخزينها بأمان.':currentLang==='fr'?'Les mots de passe ne peuvent pas être affichés ; ils sont stockés de manière sécurisée.':currentLang==='es'?'Las contraseñas no se pueden mostrar; se almacenan de forma segura.':currentLang==='it'?'Le password non possono essere visualizzate; sono conservate in modo sicuro.':'Passwords cannot be viewed; they are stored securely.';
       return <section key={role} className="overflow-hidden rounded-2xl border bg-white">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b bg-slate-50 p-4">
           <h2 className="font-black">{roleTitle} <span className="ms-1 text-xs font-semibold text-slate-500">({group.length})</span></h2>
-          <span className="text-[11px] text-slate-500">{currentLang==='ar'?'محادثات المالك مع الحسابات':currentLang==='fr'?'Conversations avec le propriétaire':currentLang==='es'?'Conversaciones con el propietario':currentLang==='it'?'Conversazioni con il proprietario':'Owner conversations'}</span>
+          <span className="text-[11px] text-slate-500">{currentLang==='ar'?'إدارة حسابات المدرسة':currentLang==='fr'?'Gestion des comptes scolaires':currentLang==='es'?'Gestión de cuentas escolares':currentLang==='it'?'Gestione degli account scolastici':'School account management'}</span>
         </div>
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[780px] text-sm">
-            <thead className="bg-white"><tr>
-              <th className="p-3 text-start">{currentLang==='ar'?'الحساب':currentLang==='fr'?'Compte':currentLang==='es'?'Cuenta':currentLang==='it'?'Account':'Account'}</th>
-              <th className="p-3 text-start">{t.school}</th>
-              <th className="p-3 text-center">Chat in</th>
-              <th className="p-3 text-center">Chat out</th>
-              <th className="p-3 text-start">{currentLang==='ar'?'آخر رسالة':currentLang==='fr'?'Dernier message':currentLang==='es'?'Último mensaje':currentLang==='it'?'Ultimo messaggio':'Last message'}</th>
-              <th className="p-3 text-start">{currentLang==='ar'?'إجراءات':currentLang==='fr'?'Actions':currentLang==='es'?'Acciones':currentLang==='it'?'Azioni':'Actions'}</th>
-            </tr></thead>
+          <table className="w-full min-w-[1550px] text-xs">
+            <thead className="bg-white"><tr>{headers.map((header) => <th key={header} className="whitespace-nowrap p-3 text-start">{header}</th>)}</tr></thead>
             <tbody>
               {group.length===0
-                ? <tr><td colSpan={6} className="p-4 text-center text-slate-400">{currentLang==='ar'?'لا توجد حسابات مسجلة.':currentLang==='fr'?'Aucun compte enregistré.':currentLang==='es'?'No hay cuentas registradas.':currentLang==='it'?'Nessun account registrato.':role==='guest'?'No visitors have contacted us yet.':'No accounts registered.'}</td></tr>
-                : group.map((thread) => <tr key={thread.accountId} className={thread.unreadIncoming>0?'border-t bg-rose-50':'border-t'}>
-                  <td className="p-3"><b>{thread.fullName}</b><small className="block text-slate-500">@{thread.username}</small></td>
-                  <td className="p-3">{thread.schoolName||'Agenda'}</td>
-                  <td className="p-3 text-center">
-                    <span className={thread.unreadIncoming>0?'font-black text-rose-700':'font-semibold text-slate-700'}>{thread.incomingCount||0}</span>
-                    {thread.unreadIncoming>0&&<small className="ms-1 font-bold text-rose-700">({thread.unreadIncoming} {currentLang==='ar'?'جديد':'unread'})</small>}
-                  </td>
-                  <td className="p-3 text-center font-semibold text-indigo-700">{thread.outgoingCount||0}</td>
-                  <td className="p-3 whitespace-nowrap text-xs text-slate-500">{thread.lastMessageAt?dateLabel(thread.lastMessageAt,currentLang):'—'}</td>
-                  <td className="p-3"><div className="flex items-center gap-3">
-                    <button type="button" onClick={()=>void openFounderConversation(thread)} className="font-bold text-indigo-700 underline">{currentLang==='ar'?'فتح والرد':currentLang==='fr'?'Ouvrir / répondre':currentLang==='es'?'Abrir / responder':currentLang==='it'?'Apri / rispondi':'Open / reply'}</button>
-                    <button type="button" disabled={founderActionBusy} onClick={()=>void clearFounderConversation(thread)} className="font-bold text-rose-700 underline disabled:opacity-40">{currentLang==='ar'?'مسح':currentLang==='fr'?'Effacer':currentLang==='es'?'Borrar':currentLang==='it'?'Pulisci':'Clear chat'}</button>
-                  </div></td>
-                </tr>)}
+                ? <tr><td colSpan={13} className="p-4 text-center text-slate-400">{emptyLabel}</td></tr>
+                : group.map((thread) => {
+                  const activated = thread.activated === true || Number(thread.activated || 0) === 1;
+                  const paid = thread.paid === true || Number(thread.paid || 0) === 1;
+                  return <tr key={thread.accountId} className={thread.unreadIncoming>0?'border-t bg-rose-50':'border-t border-slate-100'}>
+                    <td className="p-3">
+                      <button type="button" onClick={()=>void openFounderConversation(thread)} className="text-start font-bold text-indigo-800 underline decoration-indigo-300 underline-offset-2">{thread.fullName || '—'}</button>
+                      <small className="mt-1 block text-slate-500">
+                        {thread.unreadIncoming>0
+                          ? String(thread.unreadIncoming) + (currentLang==='ar'?' رسائل جديدة':currentLang==='fr'?' nouveaux messages':currentLang==='es'?' mensajes nuevos':currentLang==='it'?' nuovi messaggi':' unread message(s)')
+                          : String(thread.incomingCount||0) + ' in · ' + String(thread.outgoingCount||0) + ' out'}
+                      </small>
+                    </td>
+                    <td className="p-3">{role==='student' ? (thread.educatorName || '—') : '—'}</td>
+                    <td className="p-3">{thread.username || thread.email || '—'}</td>
+                    <td className="p-3"><span title={passwordTip} aria-label={passwordTip}>••••••••</span></td>
+                    <td className="p-3">{thread.email || '—'}</td>
+                    <td className="p-3">{thread.phone || '—'}</td>
+                    <td className="p-3">{thread.schoolOrSubject || '—'}</td>
+                    <td className="p-3">{thread.registeredSession || '—'}</td>
+                    <td className="whitespace-nowrap p-3">{dateLabel(thread.createdAt || null,currentLang)}</td>
+                    <td className="whitespace-nowrap p-3">{dateLabel(thread.expiresAt || null,currentLang)}</td>
+                    <td className="p-3"><span className={activated?'font-bold text-emerald-700':'font-bold text-rose-700'}>{activated?yes:no}</span></td>
+                    <td className="p-3"><span className={paid?'font-bold text-emerald-700':'font-bold text-amber-700'}>{paid?yes:no}</span></td>
+                    <td className="p-3">
+                      <button type="button" disabled={founderActionBusy} onClick={()=>void deleteSchoolAccount(thread)} className="rounded-lg p-2 text-rose-700 hover:bg-rose-50 disabled:opacity-40" aria-label={headers[12]} title={headers[12]}><Trash2 size={16}/></button>
+                    </td>
+                  </tr>;
+                })}
             </tbody>
           </table>
         </div>
