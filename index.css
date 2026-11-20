@@ -55,7 +55,7 @@
   background: #94a3b8;
 }
 
-/* Print specific styles for Lebanese official exam papers */
+/* Print styles for official exam papers */
 @media print {
   body {
     background: white !important;
