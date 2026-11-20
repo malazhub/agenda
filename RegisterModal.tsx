@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Language } from '../types';
 import { translations } from '../translations';
-import { LEBANESE_GRADE_LEVELS } from '../data/mockGradesAndSessions';
+import { GRADE_LEVELS } from '../data/mockGradesAndSessions';
 import { UserPlus, X, CheckCircle2, CreditCard, ArrowLeft, ArrowRight, Eye, EyeOff } from 'lucide-react';
 import {
   getSchoolPayment,
@@ -52,7 +52,7 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
   const [selectedEducatorId, setSelectedEducatorId] = useState<string>('');
   const [newClassName, setNewClassName] = useState('');
   const [registrationGrades, setRegistrationGrades] = useState<string[]>(
-    LEBANESE_GRADE_LEVELS.map((grade) => grade.id)
+    GRADE_LEVELS.map((grade) => grade.id)
   );
   const [isLoadingGrades, setIsLoadingGrades] = useState(false);
   const [showPayment, setShowPayment] = useState(false);
@@ -138,19 +138,19 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
     if (!isOpen) return;
     let active = true;
     setIsLoadingGrades(true);
-    setRegistrationGrades(LEBANESE_GRADE_LEVELS.map((grade) => grade.id));
+    setRegistrationGrades(GRADE_LEVELS.map((grade) => grade.id));
     getRegistrationGrades(selectedSchoolId)
       .then(({ grades }) => {
         if (!active) return;
         const available = new Set([
-          ...LEBANESE_GRADE_LEVELS.map((grade) => grade.id),
+          ...GRADE_LEVELS.map((grade) => grade.id),
           ...(Array.isArray(grades) ? grades : []),
         ]);
         setRegistrationGrades([...available]);
       })
       .catch((gradeError) => {
         console.warn('Using built-in grade catalogue:', gradeError);
-        if (active) setRegistrationGrades(LEBANESE_GRADE_LEVELS.map((grade) => grade.id));
+        if (active) setRegistrationGrades(GRADE_LEVELS.map((grade) => grade.id));
       })
       .finally(() => {
         if (active) setIsLoadingGrades(false);
@@ -175,7 +175,7 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
   }, [isOpen]);
 
   const gradeLabel = (gradeId: string) => {
-    const grade = LEBANESE_GRADE_LEVELS.find((item) => item.id === gradeId);
+    const grade = GRADE_LEVELS.find((item) => item.id === gradeId);
     return grade
       ? (grade.name[currentLang] || grade.name.en || grade.badge)
       : gradeId.toUpperCase();
