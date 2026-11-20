@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Language } from '../types';
-import { generateAIContent, getSchoolPublicContext, getUsMessages, sendUsMessage } from '../services/cloudflareApi';
-import type { SchoolPublicContext, CloudflareAccount, UsMessage } from '../services/cloudflareApi';
+import { generateAIContent, getSchoolPublicContext, getFounderMessages, sendFounderMessage } from '../services/cloudflareApi';
+import type { SchoolPublicContext, CloudflareAccount, FounderMessage } from '../services/cloudflareApi';
 import { 
  X, 
  Send, 
@@ -17,7 +17,7 @@ interface AIChatBotProps {
  sessionToken?: string;
  chatOnlyMode?: boolean;
  isOwner?: boolean;
- onUsBackHome?: () => void;
+ onFounderBackHome?: () => void;
 }
 
 interface ChatMessage {
@@ -79,12 +79,12 @@ function detectChatLanguage(text: string, fallback: Language): Language {
  return fallback;
 }
 
-export const AIChatBot: React.FC<AIChatBotProps> = ({ currentLang, schoolId, schoolName, account, sessionToken = '', chatOnlyMode = false, isOwner = false, onUsBackHome }) => {
+export const AIChatBot: React.FC<AIChatBotProps> = ({ currentLang, schoolId, schoolName, account, sessionToken = '', chatOnlyMode = false, isOwner = false, onFounderBackHome }) => {
  const [isOpen, setIsOpen] = useState(false);
  const [inputText, setInputText] = useState('');
  const [isTyping, setIsTyping] = useState(false);
  const [usMode, setUsMode] = useState(false);
- const [usMessages, setUsMessages] = useState<UsMessage[]>([]);
+ const [usMessages, setFounderMessages] = useState<FounderMessage[]>([]);
  const [usDraft, setUsDraft] = useState('');
  const [usBusy, setUsBusy] = useState(false);
  const [usError, setUsError] = useState('');
@@ -149,9 +149,9 @@ export const AIChatBot: React.FC<AIChatBotProps> = ({ currentLang, schoolId, sch
   const refresh = async () => {
    const sequence = ++usRefreshSequenceRef.current;
    try {
-    const response = await getUsMessages(sessionToken);
+    const response = await getFounderMessages(sessionToken);
     if (active && sequence === usRefreshSequenceRef.current) {
-     setUsMessages(response.messages || []);
+     setFounderMessages(response.messages || []);
      setUsError('');
     }
    } catch (error) {
@@ -164,11 +164,11 @@ export const AIChatBot: React.FC<AIChatBotProps> = ({ currentLang, schoolId, sch
   const intervalId = window.setInterval(() => void refresh(), 12000);
   return () => { active = false; window.clearInterval(intervalId); };
  }, [usMode, sessionToken, account?.id, isOwner]);
- const submitUsMessage = async () => {
+ const submitFounderMessage = async () => {
   const message = usDraft.trim();
   if (!message || !sessionToken || !account || isOwner || usBusy) return;
   const optimisticId = 'pending-' + crypto.randomUUID();
-  const optimisticMessage: UsMessage = {
+  const optimisticMessage: FounderMessage = {
    id: optimisticId,
    senderId: account.id,
    senderRole: account.role,
@@ -177,18 +177,18 @@ export const AIChatBot: React.FC<AIChatBotProps> = ({ currentLang, schoolId, sch
    readAt: null,
   };
   // Render immediately, then reconcile with the canonical saved transcript.
-  setUsMessages((previous) => [...previous, optimisticMessage]);
+  setFounderMessages((previous) => [...previous, optimisticMessage]);
   setUsBusy(true);
   setUsError('');
   setUsDraft('');
   ++usRefreshSequenceRef.current; // Invalidate polls started before this send.
   try {
-   await sendUsMessage(sessionToken, message);
+   await sendFounderMessage(sessionToken, message);
    const sequence = ++usRefreshSequenceRef.current;
-   const response = await getUsMessages(sessionToken);
-   if (sequence === usRefreshSequenceRef.current) setUsMessages(response.messages || []);
+   const response = await getFounderMessages(sessionToken);
+   if (sequence === usRefreshSequenceRef.current) setFounderMessages(response.messages || []);
   } catch (error) {
-   setUsMessages((previous) => previous.filter((item) => item.id !== optimisticId));
+   setFounderMessages((previous) => previous.filter((item) => item.id !== optimisticId));
    setUsDraft(message);
    setUsError(error instanceof Error ? error.message : 'Unable to send your message. Please try again.');
   } finally {
@@ -906,7 +906,7 @@ Platform architecture and navigation:
     <div><h5 className="text-sm font-black">{currentLang === 'ar' ? 'تواصل معنا' : currentLang === 'fr' ? 'Contactez-nous' : currentLang === 'es' ? 'Contáctanos' : currentLang === 'it' ? 'Contattaci' : 'Contact us'}</h5>
     <p className="mt-0.5 text-[10px] text-slate-300">{currentLang === 'ar' ? 'أرسل رسالتك وتابع ردنا هنا.' : currentLang === 'fr' ? 'Envoyez-nous un message et suivez notre réponse ici.' : currentLang === 'es' ? 'Envíanos tu mensaje y consulta nuestra respuesta aquí.' : currentLang === 'it' ? 'Scrivici e consulta qui la nostra risposta.' : 'Send us a message and follow our reply here.'}</p></div>
     <div className="flex shrink-0 items-center gap-2">
-     <button type="button" onClick={() => { setUsMode(false); setIsOpen(false); if (chatOnlyMode) { onUsBackHome?.(); if (!onUsBackHome) window.location.replace('https://agenda.mycamp.workers.dev/'); } }} className="rounded-lg bg-white/10 px-3 py-2 text-xs font-bold">{currentLang === 'ar' ? 'عودة' : currentLang === 'fr' ? 'Retour' : currentLang === 'es' ? 'Volver' : currentLang === 'it' ? 'Indietro' : 'Back'}</button>
+     <button type="button" onClick={() => { setUsMode(false); setIsOpen(false); if (chatOnlyMode) { onFounderBackHome?.(); if (!onFounderBackHome) window.location.replace('https://agenda.mycamp.workers.dev/'); } }} className="rounded-lg bg-white/10 px-3 py-2 text-xs font-bold">{currentLang === 'ar' ? 'عودة' : currentLang === 'fr' ? 'Retour' : currentLang === 'es' ? 'Volver' : currentLang === 'it' ? 'Indietro' : 'Back'}</button>
      <button type="button" onClick={() => { setUsMode(false); setIsOpen(false); }} aria-label={chatLabels.close} title={chatLabels.close} className="rounded-lg bg-white/10 p-2 text-white transition hover:bg-white/20"><X className="h-4 w-4"/></button>
     </div>
    </div>
@@ -929,7 +929,7 @@ Platform architecture and navigation:
      </>
     )}
    </div>
-   {account && sessionToken && <form onSubmit={(event) => { event.preventDefault(); void submitUsMessage(); }} className="flex shrink-0 items-end gap-2 border-t border-slate-200 bg-white p-3">
+   {account && sessionToken && <form onSubmit={(event) => { event.preventDefault(); void submitFounderMessage(); }} className="flex shrink-0 items-end gap-2 border-t border-slate-200 bg-white p-3">
     <label className="flex min-w-0 flex-1 flex-col gap-1.5">
      <span className="text-[10px] font-black uppercase tracking-wider text-slate-600">{currentLang === 'ar' ? 'السؤال' : currentLang === 'fr' ? 'Question' : currentLang === 'es' ? 'Pregunta' : currentLang === 'it' ? 'Domanda' : 'Question'}</span>
      <textarea value={usDraft} onChange={(event) => setUsDraft(event.target.value)} maxLength={4000} rows={2} placeholder={currentLang === 'ar' ? 'اكتب سؤالك أو رسالتك...' : currentLang === 'fr' ? 'Écrivez votre question ou message...' : currentLang === 'es' ? 'Escribe tu pregunta o mensaje...' : currentLang === 'it' ? 'Scrivi la tua domanda o il messaggio...' : 'Write your question or message...'} className="min-h-14 w-full resize-none rounded-xl border border-slate-200 bg-slate-50 p-2.5 text-xs outline-indigo-600" />
