@@ -883,7 +883,10 @@ Platform architecture and navigation:
     )}
    </div>
    {account && sessionToken && <form onSubmit={(event) => { event.preventDefault(); void submitFounderMessage(); }} className="flex shrink-0 items-end gap-2 border-t border-slate-200 bg-white p-3">
-    <textarea value={founderDraft} onChange={(event) => setFounderDraft(event.target.value)} maxLength={4000} rows={2} placeholder={currentLang === 'ar' ? 'اكتب رسالتك للمؤسس...' : currentLang === 'fr' ? 'Écrivez votre message...' : currentLang === 'es' ? 'Escribe tu mensaje...' : currentLang === 'it' ? 'Scrivi il tuo messaggio...' : 'Write your message to the founder...'} className="min-h-14 flex-1 resize-none rounded-xl border border-slate-200 bg-slate-50 p-2.5 text-xs outline-indigo-600" />
+    <label className="flex min-w-0 flex-1 flex-col gap-1.5">
+     <span className="text-[10px] font-black uppercase tracking-wider text-slate-600">{currentLang === 'ar' ? 'السؤال' : currentLang === 'fr' ? 'Question' : currentLang === 'es' ? 'Pregunta' : currentLang === 'it' ? 'Domanda' : 'Question'}</span>
+     <textarea value={founderDraft} onChange={(event) => setFounderDraft(event.target.value)} maxLength={4000} rows={2} placeholder={currentLang === 'ar' ? 'اكتب سؤالك أو رسالتك...' : currentLang === 'fr' ? 'Écrivez votre question ou message...' : currentLang === 'es' ? 'Escribe tu pregunta o mensaje...' : currentLang === 'it' ? 'Scrivi la tua domanda o il messaggio...' : 'Write your question or message...'} className="min-h-14 w-full resize-none rounded-xl border border-slate-200 bg-slate-50 p-2.5 text-xs outline-indigo-600" />
+    </label>
     <button type="submit" disabled={!founderDraft.trim() || founderBusy} className="rounded-xl bg-indigo-700 p-3 text-white disabled:opacity-40" aria-label={currentLang === 'ar' ? 'إرسال' : 'Send'}><Send className="h-4 w-4"/></button>
    </form>}
   </div>
