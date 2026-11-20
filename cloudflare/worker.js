@@ -1095,7 +1095,15 @@ async function founderUserMessages(request, env) {
       "UPDATE founder_messages SET read_at = datetime('now') WHERE thread_account_id = ? AND sender_id != ? AND read_at IS NULL"
     ).bind(account.id, account.id).run();
     const result = await env.DB.prepare(
-      "SELECT id, sender_id AS senderId, sender_role AS senderRole, message, created_at AS createdAt, read_at AS readAt FROM founder_messages WHERE thread_account_id = ? ORDER BY id ASC LIMIT 300"
+      `SELECT id, sender_id AS senderId, sender_role AS senderRole, message, created_at AS createdAt, read_at AS readAt
+       FROM (
+         SELECT rowid AS insertionOrder, id, sender_id, sender_role, message, created_at, read_at
+         FROM founder_messages
+         WHERE thread_account_id = ?
+         ORDER BY created_at DESC, rowid DESC
+         LIMIT 300
+       )
+       ORDER BY createdAt ASC, insertionOrder ASC`
     ).bind(account.id).all();
     return json({ messages: result.results || [] });
   }
@@ -1122,7 +1130,15 @@ async function ownerFounderMessages(request, env) {
         "UPDATE founder_messages SET read_at = datetime('now') WHERE thread_account_id = ? AND sender_id != ? AND read_at IS NULL"
       ).bind(accountId, owner.sub).run();
       const messages = await env.DB.prepare(
-        "SELECT id, sender_id AS senderId, sender_role AS senderRole, message, created_at AS createdAt, read_at AS readAt FROM founder_messages WHERE thread_account_id = ? ORDER BY id ASC LIMIT 300"
+        `SELECT id, sender_id AS senderId, sender_role AS senderRole, message, created_at AS createdAt, read_at AS readAt
+         FROM (
+           SELECT rowid AS insertionOrder, id, sender_id, sender_role, message, created_at, read_at
+           FROM founder_messages
+           WHERE thread_account_id = ?
+           ORDER BY created_at DESC, rowid DESC
+           LIMIT 300
+         )
+         ORDER BY createdAt ASC, insertionOrder ASC`
       ).bind(accountId).all();
       return json({ messages: messages.results || [] });
     }
