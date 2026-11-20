@@ -1095,6 +1095,7 @@ async function ownerFounderMessages(request, env) {
       `SELECT a.id AS accountId, a.full_name AS fullName, a.username, a.role,
               a.school_id AS schoolId, COALESCE(s.name, '') AS schoolName,
               COUNT(m.id) AS messageCount,
+              SUM(CASE WHEN m.id IS NOT NULL AND m.sender_id != ? THEN 1 ELSE 0 END) AS incomingCount,
               SUM(CASE WHEN m.id IS NOT NULL AND m.sender_id != ? AND m.read_at IS NULL THEN 1 ELSE 0 END) AS unreadIncoming,
               SUM(CASE WHEN m.id IS NOT NULL AND m.sender_id = ? THEN 1 ELSE 0 END) AS outgoingCount,
               MAX(m.created_at) AS lastMessageAt
@@ -1102,10 +1103,11 @@ async function ownerFounderMessages(request, env) {
        LEFT JOIN schools s ON s.id = a.school_id
        LEFT JOIN founder_messages m ON m.thread_account_id = a.id
        WHERE a.role IN ('student','educator','director')
+         AND NOT EXISTS (SELECT 1 FROM platform_owners p WHERE p.account_id = a.id)
        GROUP BY a.id, a.full_name, a.username, a.role, a.school_id, s.name
        ORDER BY CASE WHEN COUNT(m.id) > 0 THEN 0 ELSE 1 END, MAX(m.created_at) DESC, a.full_name COLLATE NOCASE
        LIMIT 5000`
-    ).bind(owner.sub, owner.sub).all();
+    ).bind(owner.sub, owner.sub, owner.sub).all();
     return json({ threads: threads.results || [] });
   }
 
