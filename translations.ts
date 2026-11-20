@@ -621,7 +621,7 @@ const baseTranslations: Record<'ar' | 'en' | 'fr', Translations> = {
     relatedExamInArchive: "Similar Exam Question",
     
     tutorsTitle: "Certified Educators",
-    tutorsSubtitle: "Vetted teachers from top schools across Lebanon. Strict flat rate: $7 / session.",
+    tutorsSubtitle: "Experienced educators across academic subjects. Tutoring from $7 / session.",
     streamFilter: "Stream",
     allStreams: "All Streams",
     francophone: "Francophone",
