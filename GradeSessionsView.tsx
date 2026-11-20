@@ -2016,19 +2016,6 @@ const handleClearChatMessages = async () => {
                         'Enlarge camera'
                       )
                 }
-                title={
-                  isStudentPreviewExpanded
-                    ? classroomLabel(
-                        'اضغط للعودة إلى الحجم الصغير',
-                        'Cliquer pour réduire',
-                        'Click to return to small view'
-                      )
-                    : classroomLabel(
-                        'اضغط لتكبير الكاميرا',
-                        'Cliquer pour agrandir',
-                        'Click to enlarge camera'
-                      )
-                }
                 className={
                   isStudentPreviewExpanded
                     ? 'fixed inset-0 z-[100] flex items-center justify-center bg-black/95 p-3 sm:p-6 cursor-zoom-out'
@@ -2041,15 +2028,6 @@ const handleClearChatMessages = async () => {
                     sessionId={studentOwnParticipant.sessionId}
                     muted={true}
                   />
-                  {!isStudentPreviewExpanded && (
-                    <span className="pointer-events-none absolute inset-x-1 bottom-1 rounded-md bg-black/80 px-1.5 py-1 text-center text-[8px] font-bold leading-tight text-white shadow sm:text-[9px]">
-                      {classroomLabel(
-                        'اضغط لتكبير الكاميرا',
-                        'Cliquer pour agrandir',
-                        'Click to enlarge camera'
-                      )}
-                    </span>
-                  )}
                 </div>
               </button>
             )}
