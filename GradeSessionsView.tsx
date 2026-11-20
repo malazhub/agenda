@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { Language, GradeLevelDef } from '../types';
-import { LEBANESE_GRADE_LEVELS } from '../data/mockGradesAndSessions';
+import { GRADE_LEVELS } from '../data/mockGradesAndSessions';
 import { translations } from '../translations';
 import { LearningResourcesView } from './LearningResourcesView';
 import {
@@ -1844,7 +1844,7 @@ const handleClearChatMessages = async () => {
                     <h3 className="font-bold text-sm">
                       {(() => {
                         const gradeId = activeCallSession.gradeId || assignedClassroomDetails?.gradeId || registeredAccount?.gradeId;
-                        const gradeName = gradeId ? (LEBANESE_GRADE_LEVELS.find((grade) => grade.id.toLowerCase() === String(gradeId).toLowerCase())?.name[currentLang] || String(gradeId).toUpperCase()) : (activeCallSession.grade || selectedGrade.name[currentLang]);
+                        const gradeName = gradeId ? (GRADE_LEVELS.find((grade) => grade.id.toLowerCase() === String(gradeId).toLowerCase())?.name[currentLang] || String(gradeId).toUpperCase()) : (activeCallSession.grade || selectedGrade.name[currentLang]);
                         const subject = activeCallSession.subject || assignedClassroomDetails?.subject || educatorSubject;
                         return `${gradeName} — ${subject}`;
                       })()}
