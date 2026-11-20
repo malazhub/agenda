@@ -157,7 +157,9 @@ export const CoursesHub: React.FC<CoursesHubProps> = ({
     if (!directorAccessToken) return;
     sessionStorage.setItem('agenda-director-token', directorAccessToken);
     setDirectorToken(directorAccessToken);
-    setDirectorScreen('dashboard');
+    // Signing in returns the Director to the school's normal home screen.
+    // The dashboard remains available as an explicit action from that screen.
+    setDirectorScreen('home');
   }, [directorAccessToken]);
 
   useEffect(() => {
@@ -1165,6 +1167,17 @@ const updateAccount = async (
 
   return (
     <div className="space-y-0">
+      {registeredAccount?.role === 'director' && directorToken && !ownerSchoolToken && (
+        <div className="mb-3 flex justify-end">
+          <button
+            type="button"
+            onClick={() => setDirectorScreen('dashboard')}
+            className="rounded-xl border border-indigo-200 bg-white px-4 py-2 text-xs font-black text-indigo-800 shadow-sm transition hover:bg-indigo-50"
+          >
+            {currentLang === 'ar' ? 'لوحة المدير' : currentLang === 'fr' ? 'Tableau de bord du Directeur' : currentLang === 'es' ? 'Panel del Director' : currentLang === 'it' ? 'Dashboard del Direttore' : 'Director Dashboard'}
+          </button>
+        </div>
+      )}
       <div className="rounded-3xl bg-linear-to-r from-amber-500 via-emerald-600 to-indigo-700 p-6 sm:p-8 text-white shadow-xl relative overflow-hidden">
         <div className="max-w-6xl mx-auto items-center relative z-10">
           <div className="space-y-6 text-center">
