@@ -1,12 +1,12 @@
 import React, { useEffect, useState } from 'react';
-import { ShieldCheck, RefreshCw, Building2, Users, Copy, ExternalLink, Trash2, KeyRound } from 'lucide-react';
+import { ShieldCheck, RefreshCw, Building2, Users, Copy, ExternalLink, Trash2, KeyRound, MessageCircle, Send, X } from 'lucide-react';
 import type { Language } from '../types';
 import {
   createOwnerDirector, deleteOwnerDirector, getOwnerDirectors, saveOwnerDirectorStatuses,
   issueDirectorSetupLink, updateOwnerDirector, resetOwnerDirectorPhonePassword,
-  getOwnerFounderThreads,
+  getOwnerFounderThreads, getOwnerFounderMessages, replyToFounderThread, deleteFounderThread,
 } from '../services/cloudflareApi';
-import type { OwnerDirector, FounderThread } from '../services/cloudflareApi';
+import type { OwnerDirector, FounderThread, FounderMessage } from '../services/cloudflareApi';
 
 const labels = {
   en: { title:'Owner Control Center', subtitle:'Manage Directors and their school licences', directors:'Directors', school:'School', director:'Director', phone:'Phone', email:'Email', joined:'Joining date', account:'Account', paymentState:'Paid status', paidLabel:'Paid', unpaid:'Unpaid', accountActive:'Active', accountInactive:'Inactive', activateAccount:'Activate account', deactivateAccount:'Deactivate account', markPaid:'Mark paid', markUnpaid:'Mark unpaid', students:'Students', educators:'Educators', expiry:'Licence expiry', status:'Status', schoolLink:'School link', paymentLink:'Director payment / contact link', actions:'Owner controls', active:'Active', suspended:'Suspended', setupPending:'Password not set', setupDone:'Account set up', phoneEnabled:'Phone initial password enabled', phoneDisabled:'Personal password is active', add:'Add Director', fullName:'Director full name', schoolName:'School name', phoneLabel:'Director phone', emailLabel:'Director email', paid:'I confirm receipt of the one-time USD 150 school licence payment.', notice:'The Director chooses a username using a private setup link. Their initial password is the phone number entered by the Owner; they can change it after signing in. The licence runs for one year.', create:'Create school and Director', cancel:'Cancel', creating:'Creating…', created:'Director and school created. Send the private setup link to the Director.', setupLink:'Private account setup link', smsMessage:'SMS message to send to the Director', copySms:'Copy SMS message', initialPasswordNotice:'The phone number entered above will be the Director’s initial password. The Director can change it after signing in.', copy:'Copy', renew:'Renew one year', suspend:'Suspend licence', activate:'Activate licence', resend:'Generate new setup link', resetPhonePassword:'Reset initial password to phone', copyLoginSms:'Copy login SMS', smsCopied:'Login SMS copied. Send it to the Director.', delete:'Delete Director and school', confirmDelete:'Permanently delete this Director, the school, all accounts, sessions and stored school media?', deleted:'Director and school deleted.', saved:'Changes saved.',saveChanges:'Save all changes',saving:'Saving…',unsaved:'Unsaved changes', loading:'Loading Directors…', empty:'No Directors registered yet.', noPayment:'Not provided by Director', payment:'Payment / contact', open:'Open', error:'Could not complete the request.' },
@@ -35,6 +35,11 @@ export const OwnerDashboard: React.FC<{ currentLang:Language; token:string; onSi
   const t: Labels = labels[currentLang] || labels.en;
   const [rows,setRows] = useState<OwnerDirector[]>([]);
   const [founderThreads,setFounderThreads] = useState<FounderThread[]>([]);
+  const [selectedFounderThread,setSelectedFounderThread] = useState<FounderThread | null>(null);
+  const [founderConversation,setFounderConversation] = useState<FounderMessage[]>([]);
+  const [founderReply,setFounderReply] = useState('');
+  const [founderConversationLoading,setFounderConversationLoading] = useState(false);
+  const [founderActionBusy,setFounderActionBusy] = useState(false);
   const [pendingStatuses,setPendingStatuses] = useState<Record<string,{activated:boolean;paid:boolean}>>({});
   const [loading,setLoading] = useState(true);
   const [busy,setBusy] = useState('');
@@ -56,6 +61,68 @@ export const OwnerDashboard: React.FC<{ currentLang:Language; token:string; onSi
     finally { setLoading(false); }
   };
   useEffect(() => { void refresh(); }, [token]);
+  const openFounderConversation = async (thread: FounderThread) => {
+    setSelectedFounderThread(thread);
+    setFounderConversationLoading(true);
+    setFounderReply('');
+    try {
+      const result = await getOwnerFounderMessages(token, thread.accountId);
+      setFounderConversation(result.messages || []);
+      const inbox = await getOwnerFounderThreads(token);
+      setFounderThreads(inbox.threads || []);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : t.error);
+    } finally {
+      setFounderConversationLoading(false);
+    }
+  };
+
+  const sendFounderReply = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const thread = selectedFounderThread;
+    const reply = founderReply.trim();
+    if (!thread || !reply || founderActionBusy) return;
+    setFounderActionBusy(true);
+    setError('');
+    try {
+      await replyToFounderThread(token, thread.accountId, reply);
+      setFounderReply('');
+      const result = await getOwnerFounderMessages(token, thread.accountId);
+      setFounderConversation(result.messages || []);
+      const inbox = await getOwnerFounderThreads(token);
+      setFounderThreads(inbox.threads || []);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : t.error);
+    } finally {
+      setFounderActionBusy(false);
+    }
+  };
+
+  const clearFounderConversation = async (thread: FounderThread) => {
+    const prompt = currentLang === 'ar' ? 'هل تريد حذف جميع رسائل هذه المحادثة؟'
+      : currentLang === 'fr' ? 'Supprimer tous les messages de cette conversation ?'
+      : currentLang === 'es' ? '¿Eliminar todos los mensajes de esta conversación?'
+      : currentLang === 'it' ? 'Eliminare tutti i messaggi di questa conversazione?'
+      : 'Clear all messages in this conversation?';
+    if (!window.confirm(prompt) || founderActionBusy) return;
+    setFounderActionBusy(true);
+    setError('');
+    try {
+      await deleteFounderThread(token, thread.accountId);
+      const inbox = await getOwnerFounderThreads(token);
+      setFounderThreads(inbox.threads || []);
+      if (selectedFounderThread?.accountId === thread.accountId) {
+        setSelectedFounderThread(null);
+        setFounderConversation([]);
+        setFounderReply('');
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : t.error);
+    } finally {
+      setFounderActionBusy(false);
+    }
+  };
+
   useEffect(() => {
     let active = true;
     const refreshFounderCounts = async () => {
@@ -170,7 +237,13 @@ export const OwnerDashboard: React.FC<{ currentLang:Language; token:string; onSi
               <td className="p-3"><b>{row.fullName}</b><small className="block text-slate-500">@{row.username}</small><small className="block text-slate-500">{row.setupPending?t.setupPending:t.setupDone}</small><small className={row.phonePasswordEnabled?'block text-emerald-700':'block text-slate-500'}>{row.phonePasswordEnabled?t.phoneEnabled:t.phoneDisabled}</small></td>
               <td className="p-3 whitespace-nowrap">{row.phone||'—'}</td>
               <td className="p-3">{row.email||'—'}</td>
-              <td className="p-3 text-center"><span className={schoolThreads.some(thread=>thread.unreadIncoming>0)?'inline-flex min-w-8 justify-center rounded-full bg-rose-100 px-2 py-1 font-black text-rose-700':'font-semibold text-slate-700'} title={schoolThreads.reduce((n,thread)=>n+(thread.unreadIncoming||0),0)+' unread'}>{chatIn}</span></td>
+              <td className="p-3">
+                <span className={schoolThreads.some(thread=>thread.unreadIncoming>0)?'inline-flex min-w-8 justify-center rounded-full bg-rose-100 px-2 py-1 font-black text-rose-700':'inline-flex min-w-8 justify-center rounded-full bg-slate-100 px-2 py-1 font-black text-slate-700'} title={schoolThreads.reduce((n,thread)=>n+(thread.unreadIncoming||0),0)+' unread'}>{chatIn}</span>
+                <div className="mt-1 flex flex-wrap gap-2">
+                  <button type="button" disabled={!schoolThreads.find(thread=>thread.accountId===row.id)} onClick={()=>{const thread=schoolThreads.find(item=>item.accountId===row.id);if(thread)void openFounderConversation(thread);}} className="text-[10px] font-bold text-indigo-700 underline disabled:opacity-40">{currentLang==='ar'?'فتح':currentLang==='fr'?'Ouvrir':currentLang==='es'?'Abrir':currentLang==='it'?'Apri':'Open chat'}</button>
+                  <button type="button" disabled={!schoolThreads.find(thread=>thread.accountId===row.id)||founderActionBusy} onClick={()=>{const thread=schoolThreads.find(item=>item.accountId===row.id);if(thread)void clearFounderConversation(thread);}} className="text-[10px] font-bold text-rose-700 underline disabled:opacity-40">{currentLang==='ar'?'مسح':currentLang==='fr'?'Effacer':currentLang==='es'?'Borrar':currentLang==='it'?'Pulisci':'Clear'}</button>
+                </div>
+              </td>
               <td className="p-3 text-center font-semibold text-indigo-700">{chatOut}</td>
               <td className="p-3">{row.studentCount}</td><td className="p-3">{row.educatorCount}</td>
               <td className="p-3 whitespace-nowrap">{dateLabel(row.createdAt,currentLang)}</td>
@@ -194,6 +267,77 @@ export const OwnerDashboard: React.FC<{ currentLang:Language; token:string; onSi
         </table>
       </div>}
     </section>
+
+    {(['educator','student'] as const).map((role) => {
+      const group = founderThreads.filter((thread) => thread.role === role);
+      const roleTitle = role === 'educator'
+        ? (currentLang==='ar'?'المعلمون':currentLang==='fr'?'Éducateurs':currentLang==='es'?'Educadores':currentLang==='it'?'Educatori':'Educators')
+        : (currentLang==='ar'?'الطلاب':currentLang==='fr'?'Élèves':currentLang==='es'?'Estudiantes':currentLang==='it'?'Studenti':'Students');
+      return <section key={role} className="overflow-hidden rounded-2xl border bg-white">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b bg-slate-50 p-4">
+          <h2 className="font-black">{roleTitle} <span className="ms-1 text-xs font-semibold text-slate-500">({group.length})</span></h2>
+          <span className="text-[11px] text-slate-500">{currentLang==='ar'?'محادثات المالك مع الحسابات':currentLang==='fr'?'Conversations avec le propriétaire':currentLang==='es'?'Conversaciones con el propietario':currentLang==='it'?'Conversazioni con il proprietario':'Owner conversations'}</span>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[780px] text-sm">
+            <thead className="bg-white"><tr>
+              <th className="p-3 text-start">{currentLang==='ar'?'الحساب':currentLang==='fr'?'Compte':currentLang==='es'?'Cuenta':currentLang==='it'?'Account':'Account'}</th>
+              <th className="p-3 text-start">{t.school}</th>
+              <th className="p-3 text-center">Chat in</th>
+              <th className="p-3 text-center">Chat out</th>
+              <th className="p-3 text-start">{currentLang==='ar'?'آخر رسالة':currentLang==='fr'?'Dernier message':currentLang==='es'?'Último mensaje':currentLang==='it'?'Ultimo messaggio':'Last message'}</th>
+              <th className="p-3 text-start">{currentLang==='ar'?'إجراءات':currentLang==='fr'?'Actions':currentLang==='es'?'Acciones':currentLang==='it'?'Azioni':'Actions'}</th>
+            </tr></thead>
+            <tbody>
+              {group.length===0
+                ? <tr><td colSpan={6} className="p-4 text-center text-slate-400">{currentLang==='ar'?'لا توجد حسابات مسجلة.':currentLang==='fr'?'Aucun compte enregistré.':currentLang==='es'?'No hay cuentas registradas.':currentLang==='it'?'Nessun account registrato.':'No accounts registered.'}</td></tr>
+                : group.map((thread) => <tr key={thread.accountId} className={thread.unreadIncoming>0?'border-t bg-rose-50':'border-t'}>
+                  <td className="p-3"><b>{thread.fullName}</b><small className="block text-slate-500">@{thread.username}</small></td>
+                  <td className="p-3">{thread.schoolName||'Agenda'}</td>
+                  <td className="p-3 text-center">
+                    <span className={thread.unreadIncoming>0?'font-black text-rose-700':'font-semibold text-slate-700'}>{thread.incomingCount||0}</span>
+                    {thread.unreadIncoming>0&&<small className="ms-1 font-bold text-rose-700">({thread.unreadIncoming} {currentLang==='ar'?'جديد':'unread'})</small>}
+                  </td>
+                  <td className="p-3 text-center font-semibold text-indigo-700">{thread.outgoingCount||0}</td>
+                  <td className="p-3 whitespace-nowrap text-xs text-slate-500">{thread.lastMessageAt?dateLabel(thread.lastMessageAt,currentLang):'—'}</td>
+                  <td className="p-3"><div className="flex items-center gap-3">
+                    <button type="button" onClick={()=>void openFounderConversation(thread)} className="font-bold text-indigo-700 underline">{currentLang==='ar'?'فتح والرد':currentLang==='fr'?'Ouvrir / répondre':currentLang==='es'?'Abrir / responder':currentLang==='it'?'Apri / rispondi':'Open / reply'}</button>
+                    <button type="button" disabled={founderActionBusy} onClick={()=>void clearFounderConversation(thread)} className="font-bold text-rose-700 underline disabled:opacity-40">{currentLang==='ar'?'مسح':currentLang==='fr'?'Effacer':currentLang==='es'?'Borrar':currentLang==='it'?'Pulisci':'Clear chat'}</button>
+                  </div></td>
+                </tr>)}
+            </tbody>
+          </table>
+        </div>
+      </section>;
+    })}
+
+    {selectedFounderThread && (
+      <div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/50 p-3 sm:p-5" onClick={()=>setSelectedFounderThread(null)}>
+        <section role="dialog" aria-modal="true" aria-label="Founder conversation" onClick={(event)=>event.stopPropagation()} className="flex max-h-[90dvh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
+          <header className="flex items-center justify-between gap-3 bg-slate-950 p-4 text-white">
+            <div className="min-w-0"><h3 className="truncate font-black">{selectedFounderThread.fullName}</h3><p className="text-[11px] text-slate-300">@{selectedFounderThread.username} · {selectedFounderThread.schoolName||'Agenda'} · {selectedFounderThread.role}</p></div>
+            <button type="button" onClick={()=>setSelectedFounderThread(null)} className="rounded-lg bg-white/10 p-2" aria-label={currentLang==='ar'?'إغلاق':'Close'}><X size={17}/></button>
+          </header>
+          <div className="min-h-0 flex-1 space-y-3 overflow-y-auto bg-slate-50 p-4">
+            {founderConversationLoading ? <p className="py-8 text-center text-sm text-slate-500">Loading…</p>
+              : founderConversation.length===0 ? <p className="py-8 text-center text-sm text-slate-400">{currentLang==='ar'?'لا توجد رسائل بعد. أرسل أول رسالة.':'No messages yet. Send the first message.'}</p>
+              : founderConversation.map((item)=> <div key={item.id} className={item.senderRole==='owner'?'flex justify-end':'flex justify-start'}>
+                  <div className={item.senderRole==='owner'?'max-w-[86%] rounded-2xl rounded-br-sm bg-indigo-700 p-3 text-sm text-white':'max-w-[86%] rounded-2xl rounded-bl-sm border border-slate-200 bg-white p-3 text-sm text-slate-800'}>
+                    <p className="mb-1 text-[10px] font-black opacity-70">{item.senderRole==='owner'?'Owner':selectedFounderThread.fullName}</p>
+                    <p className="whitespace-pre-wrap break-words">{item.message}</p>
+                    <time className="mt-1 block text-end text-[9px] opacity-60">{new Date(item.createdAt).toLocaleString(currentLang,{dateStyle:'short',timeStyle:'short'})}</time>
+                  </div>
+                </div>)}
+          </div>
+          <form onSubmit={sendFounderReply} className="flex items-end gap-2 border-t border-slate-200 bg-white p-3">
+            <textarea value={founderReply} onChange={(event)=>setFounderReply(event.target.value)} rows={2} maxLength={4000} placeholder={currentLang==='ar'?'اكتب ردك للعميل...':currentLang==='fr'?'Écrire une réponse...':currentLang==='es'?'Escribe una respuesta...':currentLang==='it'?'Scrivi una risposta...':'Write a reply to this user...'} className="min-h-14 min-w-0 flex-1 resize-none rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm outline-indigo-600"/>
+            <button type="submit" disabled={!founderReply.trim()||founderActionBusy} className="rounded-xl bg-indigo-700 p-3 text-white disabled:opacity-40" aria-label="Send reply"><Send size={16}/></button>
+            <button type="button" disabled={founderActionBusy} onClick={()=>void clearFounderConversation(selectedFounderThread)} className="rounded-xl border border-rose-200 bg-white p-3 text-rose-700 disabled:opacity-40" aria-label="Clear chat"><Trash2 size={16}/></button>
+          </form>
+          {error&&<p role="alert" className="px-3 pb-3 text-xs text-rose-700">{error}</p>}
+        </section>
+      </div>
+    )}
 
     {showCreate&&<section className="rounded-2xl border bg-white p-5 space-y-4">
       <div><h3 className="font-black">{t.add}</h3><p className="mt-1 text-xs text-slate-500">{t.notice}</p><p className="mt-2 text-xs font-semibold text-amber-700">{t.initialPasswordNotice}</p></div>
