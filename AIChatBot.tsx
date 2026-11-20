@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Language } from '../types';
-import { generateAIContent, getSchoolPublicContext, getFounderMessages, sendFounderMessage } from '../services/cloudflareApi';
-import type { SchoolPublicContext, CloudflareAccount, FounderMessage } from '../services/cloudflareApi';
+import { generateAIContent, getSchoolPublicContext, getUsMessages, sendUsMessage } from '../services/cloudflareApi';
+import type { SchoolPublicContext, CloudflareAccount, UsMessage } from '../services/cloudflareApi';
 import { 
  X, 
  Send, 
@@ -17,8 +17,7 @@ interface AIChatBotProps {
  sessionToken?: string;
  chatOnlyMode?: boolean;
  isOwner?: boolean;
- onOpenSignIn?: () => void;
- onFounderBackHome?: () => void;
+ onUsBackHome?: () => void;
 }
 
 interface ChatMessage {
@@ -80,15 +79,15 @@ function detectChatLanguage(text: string, fallback: Language): Language {
  return fallback;
 }
 
-export const AIChatBot: React.FC<AIChatBotProps> = ({ currentLang, schoolId, schoolName, account, sessionToken = '', chatOnlyMode = false, isOwner = false, onOpenSignIn, onFounderBackHome }) => {
+export const AIChatBot: React.FC<AIChatBotProps> = ({ currentLang, schoolId, schoolName, account, sessionToken = '', chatOnlyMode = false, isOwner = false, onUsBackHome }) => {
  const [isOpen, setIsOpen] = useState(false);
  const [inputText, setInputText] = useState('');
  const [isTyping, setIsTyping] = useState(false);
- const [founderMode, setFounderMode] = useState(false);
- const [founderMessages, setFounderMessages] = useState<FounderMessage[]>([]);
- const [founderDraft, setFounderDraft] = useState('');
- const [founderBusy, setFounderBusy] = useState(false);
- const [founderError, setFounderError] = useState('');
+ const [usMode, setUsMode] = useState(false);
+ const [usMessages, setUsMessages] = useState<UsMessage[]>([]);
+ const [usDraft, setUsDraft] = useState('');
+ const [usBusy, setUsBusy] = useState(false);
+ const [usError, setUsError] = useState('');
  const messagesEndRef = useRef<HTMLDivElement>(null);
  const previousLanguageRef = useRef<Language>(currentLang);
  const activeLanguageRef = useRef<Language>(currentLang);
@@ -131,12 +130,12 @@ export const AIChatBot: React.FC<AIChatBotProps> = ({ currentLang, schoolId, sch
  // Blank chat: Starts with no initial pre-canned text as requested
  const [messages, setMessages] = useState<ChatMessage[]>([]);
  const [schoolContext, setSchoolContext] = useState<SchoolPublicContext | null>(null);
- // Founder Chat opens only when the user explicitly selects Contact Founder.
+ // Us Chat opens only when the user explicitly selects Contact us.
  useEffect(() => {
   if (!isOpen) return;
   const closeOnEscape = (event: KeyboardEvent) => {
    if (event.key === 'Escape') {
-    setFounderMode(false);
+    setUsMode(false);
     setIsOpen(false);
    }
   };
@@ -144,33 +143,28 @@ export const AIChatBot: React.FC<AIChatBotProps> = ({ currentLang, schoolId, sch
   return () => window.removeEventListener('keydown', closeOnEscape);
  }, [isOpen]);
  useEffect(() => {
-  if (!founderMode || !sessionToken || !account || isOwner) return;
+  if (!usMode || !sessionToken || !account || isOwner) return;
   let active = true;
   const refresh = async () => {
-   try { const response = await getFounderMessages(sessionToken); if (active) { setFounderMessages(response.messages || []); setFounderError(''); } }
-   catch (error) { if (active) setFounderError(error instanceof Error ? error.message : 'Unable to load the conversation.'); }
+   try { const response = await getUsMessages(sessionToken); if (active) { setUsMessages(response.messages || []); setUsError(''); } }
+   catch (error) { if (active) setUsError(error instanceof Error ? error.message : 'Unable to load the conversation.'); }
   };
   void refresh();
   const intervalId = window.setInterval(() => void refresh(), 12000);
   return () => { active = false; window.clearInterval(intervalId); };
- }, [founderMode, sessionToken, account?.id, isOwner]);
- const submitFounderMessage = async () => {
-  const message = founderDraft.trim();
-  if (!message || !sessionToken || !account || isOwner || founderBusy) return;
-  setFounderBusy(true); setFounderError('');
+ }, [usMode, sessionToken, account?.id, isOwner]);
+ const submitUsMessage = async () => {
+  const message = usDraft.trim();
+  if (!message || !sessionToken || !account || isOwner || usBusy) return;
+  setUsBusy(true); setUsError('');
   try {
-   await sendFounderMessage(sessionToken, message);
-   setFounderDraft('');
-   const response = await getFounderMessages(sessionToken);
-   setFounderMessages(response.messages || []);
-   const confirmation = currentLang === 'ar' ? 'وصلتنا رسالتك بنجاح، وسنراجعها ونرد عليك في أقرب وقت.'
-    : currentLang === 'fr' ? 'Votre message a bien été reçu. Nous le consulterons et vous répondrons dès que possible.'
-    : currentLang === 'es' ? 'Hemos recibido tu mensaje. Lo revisaremos y te responderemos lo antes posible.'
-    : currentLang === 'it' ? 'Abbiamo ricevuto il tuo messaggio. Lo esamineremo e ti risponderemo al più presto.'
-    : 'We received your message and will review it and respond as soon as possible.';
-   setFounderMessages((previous) => [...previous, { id: 'local-ack-' + Date.now(), senderId: 'founder-ack', senderRole: 'owner', message: confirmation, createdAt: new Date().toISOString(), readAt: null }]);
-  } catch (error) { setFounderError(error instanceof Error ? error.message : 'Unable to send your message. Please try again.'); }
-  finally { setFounderBusy(false); }
+   await sendUsMessage(sessionToken, message);
+   setUsDraft('');
+   const response = await getUsMessages(sessionToken);
+   setUsMessages(response.messages || []);
+
+  } catch (error) { setUsError(error instanceof Error ? error.message : 'Unable to send your message. Please try again.'); }
+  finally { setUsBusy(false); }
  };
 
  useEffect(() => {
@@ -352,11 +346,11 @@ export const AIChatBot: React.FC<AIChatBotProps> = ({ currentLang, schoolId, sch
     'حساب المدير', 'تسجيل مدير جديد'
   ].some((keyword) => q.includes(keyword));
   if (directorRegistrationQuestion) {
-    if (responseLang === 'ar') return 'لإنشاء حساب مدير: افتح صفحة Agenda الرئيسية، اختر «إنشاء حساب»، ثم اختر «مدير». أدخل اسمك الكامل واسم المدرسة والبريد الإلكتروني ورقم الهاتف وكلمة المرور، ثم أرسل الطلب. إنشاء مساحة مدرسة مستقلة يتطلب رسم إعداد لمرة واحدة قدره 150 دولاراً أمريكياً. بعد مراجعة الطلب وتأكيد الدفع وتفعيل الحساب من المالك، افتح رابط المدرسة وسجّل الدخول ببريدك أو بيانات الحساب. إذا كان الحساب بانتظار الموافقة، يمكنك استخدام «التواصل مع المؤسس» لمراسلة المالك ومتابعة الرد.';
-    if (responseLang === 'fr') return 'Pour créer un compte Directeur : ouvrez la page principale d’Agenda, choisissez « Créer un compte », puis « Directeur ». Saisissez votre nom complet, le nom de l’établissement, votre e-mail, votre téléphone et un mot de passe, puis envoyez la demande. La création d’un espace scolaire indépendant nécessite des frais uniques de configuration de 150 USD. Après vérification de la demande, confirmation du paiement et activation par le propriétaire de la plateforme, ouvrez le lien de votre établissement et connectez-vous. Pendant l’attente, vous pouvez utiliser « Contacter le fondateur » pour écrire au propriétaire.';
-    if (responseLang === 'es') return 'Para crear una cuenta de Director: abre la página principal de Agenda, elige «Crear cuenta» y después «Director». Introduce tu nombre completo, el nombre de la escuela, correo electrónico, teléfono y contraseña; luego envía la solicitud. La creación de un espacio escolar independiente requiere un pago único de configuración de 150 USD. Cuando el propietario de la plataforma revise la solicitud, confirme el pago y active la cuenta, abre el enlace de tu escuela e inicia sesión. Mientras esperas, puedes usar «Contactar al fundador» para escribir al propietario.';
-    if (responseLang === 'it') return 'Per creare un account Direttore: apri la pagina principale di Agenda, scegli «Crea account» e poi «Direttore». Inserisci nome completo, nome della scuola, e-mail, telefono e password, quindi invia la richiesta. La creazione di uno spazio scolastico indipendente richiede una quota unica di configurazione di 150 USD. Dopo la verifica della richiesta, la conferma del pagamento e l’attivazione da parte del proprietario della piattaforma, apri il link della scuola ed effettua l’accesso. Durante l’attesa puoi usare «Contatta il fondatore» per scrivere al proprietario.';
-    return 'To register as a Director, open the main Agenda page, choose Create Account, then select Director. Enter your full name, school name, email, phone number and password, then submit the request. Creating an independent school space has a one-time USD 150 setup fee. Once the platform Owner reviews the request, confirms payment and activates the account, open your school link and sign in. While waiting for approval, use Contact Founder to message the Owner.';
+    if (responseLang === 'ar') return 'لإنشاء حساب مدير: افتح صفحة Agenda الرئيسية، اختر «إنشاء حساب»، ثم اختر «مدير». أدخل اسمك الكامل واسم المدرسة والبريد الإلكتروني ورقم الهاتف وكلمة المرور، ثم أرسل الطلب. إنشاء مساحة مدرسة مستقلة يتطلب رسم إعداد لمرة واحدة قدره 150 دولاراً أمريكياً. بعد مراجعة الطلب وتأكيد الدفع وتفعيل الحساب من المالك، افتح رابط المدرسة وسجّل الدخول ببريدك أو بيانات الحساب. إذا كان الحساب بانتظار الموافقة، يمكنك استخدام «تواصل معنا» لمراسلة المالك ومتابعة الرد.';
+    if (responseLang === 'fr') return 'Pour créer un compte Directeur : ouvrez la page principale d’Agenda, choisissez « Créer un compte », puis « Directeur ». Saisissez votre nom complet, le nom de l’établissement, votre e-mail, votre téléphone et un mot de passe, puis envoyez la demande. La création d’un espace scolaire indépendant nécessite des frais uniques de configuration de 150 USD. Après vérification de la demande, confirmation du paiement et activation par le propriétaire de la plateforme, ouvrez le lien de votre établissement et connectez-vous. Pendant l’attente, vous pouvez utiliser « Contactez-nous » pour écrire au propriétaire.';
+    if (responseLang === 'es') return 'Para crear una cuenta de Director: abre la página principal de Agenda, elige «Crear cuenta» y después «Director». Introduce tu nombre completo, el nombre de la escuela, correo electrónico, teléfono y contraseña; luego envía la solicitud. La creación de un espacio escolar independiente requiere un pago único de configuración de 150 USD. Cuando el propietario de la plataforma revise la solicitud, confirme el pago y active la cuenta, abre el enlace de tu escuela e inicia sesión. Mientras esperas, puedes usar «Contáctanos» para escribir al propietario.';
+    if (responseLang === 'it') return 'Per creare un account Direttore: apri la pagina principale di Agenda, scegli «Crea account» e poi «Direttore». Inserisci nome completo, nome della scuola, e-mail, telefono e password, quindi invia la richiesta. La creazione di uno spazio scolastico indipendente richiede una quota unica di configurazione di 150 USD. Dopo la verifica della richiesta, la conferma del pagamento e l’attivazione da parte del proprietario della piattaforma, apri il link della scuola ed effettua l’accesso. Durante l’attesa puoi usare «Contattaci» per scrivere al proprietario.';
+    return 'To register as a Director, open the main Agenda page, choose Create Account, then select Director. Enter your full name, school name, email, phone number and password, then submit the request. Creating an independent school space has a one-time USD 150 setup fee. Once the platform Owner reviews the request, confirms payment and activates the account, open your school link and sign in. While waiting for approval, use Contact us to message the Owner.';
   }
 
   const registrationQuestion = ['register', 'registration', 'sign up', 'create account', 'inscrire', 'inscription', 'créer un compte', 'm’inscrire', 'registrar', 'registro', 'registración', 'inscripción', 'crear cuenta', 'registrarme', 'registrazione', 'registrarmi', 'creare account', 'crea un account', 'تسجيل', 'سجل', 'اسجل', 'أسجل', 'التسجيل', 'إنشاء حساب', 'انشاء حساب', 'تسجيل حساب', 'كيف اسجل', 'كيف أسجل'].some((keyword) => q.includes(keyword));
@@ -370,11 +364,11 @@ export const AIChatBot: React.FC<AIChatBotProps> = ({ currentLang, schoolId, sch
 
  const signInQuestion = ['password', 'username', 'sign in', 'sign-in', 'login', 'log in', 'mot de passe', 'identifiant', 'connexion', 'se connecter', 'contraseña', 'usuario', 'iniciar sesión', 'iniciar sesion', 'acceso', 'accedi', 'accesso', 'nome utente', 'effettua il login', 'كلمة المرور', 'اسم المستخدم', 'دخول', 'تسجيل الدخول', 'نسيت كلمة المرور', 'نسيت كلمة السر'].some((keyword) => q.includes(keyword));
  if (signInQuestion) {
- if (responseLang === 'ar') return 'لتسجيل الدخول، استخدم اسم المستخدم وكلمة المرور اللذين أنشأتهما عند التسجيل، واختر اسم مدرستك من القائمة. إذا كان الحساب بانتظار تفعيل المالك، فسيُسمح لك بفتح محادثة «التواصل مع المؤسس» فقط لقراءة الردود وإرسال الرسائل، ولن تتمكن من استخدام وظائف المدرسة حتى التفعيل. بعد التفعيل، سجّل الدخول مجدداً للوصول الكامل. إذا نسيت كلمة المرور، تواصل مع مدير مدرستك لإعادة تعيينها.';
- if (responseLang === 'fr') return "Pour vous connecter, utilisez le nom d’utilisateur et le mot de passe créés lors de l’inscription et choisissez le nom de votre établissement dans la liste. Si votre compte attend l’activation du propriétaire, vous pourrez uniquement ouvrir « Contacter le fondateur », lire les réponses et envoyer des messages. Les fonctions scolaires resteront verrouillées jusqu’à l’activation. Après activation, reconnectez-vous pour obtenir l’accès complet. En cas d’oubli, contactez le Directeur pour réinitialiser le mot de passe.";
- if (responseLang === 'es') return 'Para iniciar sesión, utiliza el usuario y la contraseña creados al registrarte y selecciona el nombre de tu escuela en la lista. Si la cuenta está pendiente de activación por el propietario, solo podrás abrir «Contactar al fundador», leer respuestas y enviar mensajes; las funciones escolares permanecerán bloqueadas hasta la activación. Después de la activación, vuelve a iniciar sesión para obtener acceso completo. Si olvidas la contraseña, contacta con el Director para restablecerla.';
- if (responseLang === 'it') return "Per accedere, usa il nome utente e la password creati durante la registrazione e seleziona il nome della scuola nell’elenco. Se l’account è in attesa dell’attivazione del proprietario, potrai soltanto aprire «Contatta il fondatore», leggere le risposte e inviare messaggi; le funzioni scolastiche resteranno bloccate fino all’attivazione. Dopo l’attivazione, accedi di nuovo per ottenere l’accesso completo. Se dimentichi la password, contatta il Direttore per reimpostarla.";
- return 'Sign in with the username and password you created during registration, and select your school from the list. If your account is waiting for the Owner to activate it, you can open Contact Founder, read replies and send messages only; school features remain locked until activation. After activation, sign in again for full access. If you forget your password, contact your school Director to reset it.';
+ if (responseLang === 'ar') return 'لتسجيل الدخول، استخدم اسم المستخدم وكلمة المرور اللذين أنشأتهما عند التسجيل، واختر اسم مدرستك من القائمة. إذا كان الحساب بانتظار تفعيل المالك، فسيُسمح لك بفتح محادثة «تواصل معنا» فقط لقراءة الردود وإرسال الرسائل، ولن تتمكن من استخدام وظائف المدرسة حتى التفعيل. بعد التفعيل، سجّل الدخول مجدداً للوصول الكامل. إذا نسيت كلمة المرور، تواصل مع مدير مدرستك لإعادة تعيينها.';
+ if (responseLang === 'fr') return "Pour vous connecter, utilisez le nom d’utilisateur et le mot de passe créés lors de l’inscription et choisissez le nom de votre établissement dans la liste. Si votre compte attend l’activation du propriétaire, vous pourrez uniquement ouvrir « Contactez-nous », lire les réponses et envoyer des messages. Les fonctions scolaires resteront verrouillées jusqu’à l’activation. Après activation, reconnectez-vous pour obtenir l’accès complet. En cas d’oubli, contactez le Directeur pour réinitialiser le mot de passe.";
+ if (responseLang === 'es') return 'Para iniciar sesión, utiliza el usuario y la contraseña creados al registrarte y selecciona el nombre de tu escuela en la lista. Si la cuenta está pendiente de activación por el propietario, solo podrás abrir «Contáctanos», leer respuestas y enviar mensajes; las funciones escolares permanecerán bloqueadas hasta la activación. Después de la activación, vuelve a iniciar sesión para obtener acceso completo. Si olvidas la contraseña, contacta con el Director para restablecerla.';
+ if (responseLang === 'it') return "Per accedere, usa il nome utente e la password creati durante la registrazione e seleziona il nome della scuola nell’elenco. Se l’account è in attesa dell’attivazione del proprietario, potrai soltanto aprire «Contattaci», leggere le risposte e inviare messaggi; le funzioni scolastiche resteranno bloccate fino all’attivazione. Dopo l’attivazione, accedi di nuovo per ottenere l’accesso completo. Se dimentichi la password, contatta il Direttore per reimpostarla.";
+ return 'Sign in with the username and password you created during registration, and select your school from the list. If your account is waiting for the Owner to activate it, you can open Contact us, read replies and send messages only; school features remain locked until activation. After activation, sign in again for full access. If you forget your password, contact your school Director to reset it.';
  }
 
  const classroomControlsQuestion = [
@@ -531,21 +525,21 @@ export const AIChatBot: React.FC<AIChatBotProps> = ({ currentLang, schoolId, sch
  return 'To pay, open the Payment section during registration and follow the Suyool link and instructions. This assistant does not process or verify payments; your school Director confirms payment status in the Director Dashboard. Never share card details or passwords in chat.';
  }
 
- const founderContactQuestion = [
-    'contact founder', 'message founder', 'contact the founder', 'talk to founder', 'message the owner',
-    'contact platform owner', 'write to the founder', 'founder support',
-    'contacter le fondateur', 'écrire au fondateur', 'contacter le propriétaire',
-    'contactar al fundador', 'escribir al fundador', 'contactar al propietario',
-    'contattare il fondatore', 'scrivere al fondatore', 'contattare il proprietario',
-    'التواصل مع المؤسس', 'اتصل بالمؤسس', 'مراسلة المؤسس', 'التواصل مع المالك',
+ const usContactQuestion = [
+    'contact us', 'message us', 'contact the us', 'talk to us', 'message the owner',
+    'contact platform owner', 'write to the us', 'us support',
+    'nous contacter', 'nous écrire', 'contacter le propriétaire',
+    'contactarnos', 'escribir al fundador', 'contactar al propietario',
+    'contattarci', 'scrivere al fondatore', 'contattare il proprietario',
+    'تواصل معنا', 'اتصل بالمؤسس', 'مراسلة المؤسس', 'تواصل معنا',
     'مراسلة المالك', 'كيف أتواصل مع المؤسس', 'كيف اتواصل مع المالك'
   ].some((keyword) => q.includes(keyword));
-  if (founderContactQuestion) {
-    if (responseLang === 'ar') return 'افتح «المساعد الذكي» واضغط زر «التواصل مع المؤسس» الكامل الظاهر فوق خانة السؤال. سجّل الدخول بحسابك أولاً لإرسال الرسالة ومتابعة الردود. إذا كان حسابك بانتظار التفعيل، يمكنك استخدام هذه المحادثة وحدها حتى يفعّله المالك. تظهر الرسائل الواردة للمؤسس في مركز تحكم المالك ضمن قوائم المديرين والمعلمين والطلاب.';
-    if (responseLang === 'fr') return 'Ouvrez l’« Assistant IA » et cliquez sur le bouton « Contacter le fondateur », affiché en pleine largeur au-dessus du champ de question. Connectez-vous d’abord pour envoyer un message et suivre les réponses. Si votre compte attend son activation, cette conversation reste disponible jusqu’à l’activation par le propriétaire. Les messages reçus apparaissent dans le Centre de contrôle du propriétaire, dans les listes des directeurs, éducateurs et élèves.';
-    if (responseLang === 'es') return 'Abre el «Asistente de IA» y pulsa el botón «Contactar al fundador», que aparece a todo lo ancho encima del campo de preguntas. Primero inicia sesión para enviar mensajes y consultar las respuestas. Si tu cuenta está pendiente de activación, podrás usar este chat hasta que el propietario la active. Los mensajes recibidos aparecen en el Centro de control del propietario, en las listas de directores, educadores y estudiantes.';
-    if (responseLang === 'it') return 'Apri l’«Assistente IA» e premi il pulsante «Contatta il fondatore», visualizzato a tutta larghezza sopra il campo della domanda. Accedi prima per inviare messaggi e leggere le risposte. Se l’account è in attesa di attivazione, questa chat resta disponibile finché il proprietario non lo attiva. I messaggi ricevuti appaiono nel Centro di controllo del proprietario, negli elenchi di direttori, educatori e studenti.';
-    return 'Open the AI Assistant and select the full-width Contact Founder button above the question field. Sign in first to send a message and follow replies. If your account is awaiting activation, this chat remains available until the Owner activates it. Incoming messages appear in Owner Control Center under the Directors, Educators and Students lists.';
+  if (usContactQuestion) {
+    if (responseLang === 'ar') return 'افتح «المساعد الذكي» واضغط زر «تواصل معنا» الكامل الظاهر فوق خانة السؤال. سجّل الدخول بحسابك أولاً لإرسال الرسالة ومتابعة الردود. إذا كان حسابك بانتظار التفعيل، يمكنك استخدام هذه المحادثة وحدها حتى يفعّله المالك. تظهر الرسائل الواردة للمؤسس في مركز تحكم المالك ضمن قوائم المديرين والمعلمين والطلاب.';
+    if (responseLang === 'fr') return 'Ouvrez l’« Assistant IA » et cliquez sur le bouton « Contactez-nous », affiché en pleine largeur au-dessus du champ de question. Connectez-vous d’abord pour envoyer un message et suivre les réponses. Si votre compte attend son activation, cette conversation reste disponible jusqu’à l’activation par le propriétaire. Les messages reçus apparaissent dans le Centre de contrôle du propriétaire, dans les listes des directeurs, éducateurs et élèves.';
+    if (responseLang === 'es') return 'Abre el «Asistente de IA» y pulsa el botón «Contáctanos», que aparece a todo lo ancho encima del campo de preguntas. Primero inicia sesión para enviar mensajes y consultar las respuestas. Si tu cuenta está pendiente de activación, podrás usar este chat hasta que el propietario la active. Los mensajes recibidos aparecen en el Centro de control del propietario, en las listas de directores, educadores y estudiantes.';
+    if (responseLang === 'it') return 'Apri l’«Assistente IA» e premi il pulsante «Contattaci», visualizzato a tutta larghezza sopra il campo della domanda. Accedi prima per inviare messaggi e leggere le risposte. Se l’account è in attesa di attivazione, questa chat resta disponibile finché il proprietario non lo attiva. I messaggi ricevuti appaiono nel Centro di controllo del proprietario, negli elenchi di direttori, educatori e studenti.';
+    return 'Open the AI Assistant and select the full-width Contact us button above the question field. Sign in first to send a message and follow replies. If your account is awaiting activation, this chat remains available until the Owner activates it. Incoming messages appear in Owner Control Center under the Directors, Educators and Students lists.';
   }
 
   const contactQuestion = [
@@ -832,9 +826,9 @@ Platform architecture and navigation:
 
  {!isOwner && (
   <div className="shrink-0 border-t border-slate-100 bg-white px-3 pt-2">
-   <button type="button" onClick={() => account && sessionToken ? setFounderMode(true) : onOpenSignIn?.()} className="flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2.5 text-sm font-bold text-amber-900 transition hover:bg-amber-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-600">
+   <button type="button" onClick={() => setUsMode(true)} className="flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2.5 text-sm font-bold text-amber-900 transition hover:bg-amber-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-600">
     <span aria-hidden="true">✉</span>
-    <span>{currentLang === 'ar' ? 'التواصل مع المؤسس' : currentLang === 'fr' ? 'Contacter le fondateur' : currentLang === 'es' ? 'Contactar al fundador' : currentLang === 'it' ? 'Contatta il fondatore' : 'Contact Founder'}</span>
+    <span>{currentLang === 'ar' ? 'تواصل معنا' : currentLang === 'fr' ? 'Contactez-nous' : currentLang === 'es' ? 'Contáctanos' : currentLang === 'it' ? 'Contattaci' : 'Contact us'}</span>
    </button>
   </div>
  )}
@@ -877,41 +871,41 @@ Platform architecture and navigation:
  <Send className="w-4 h-4" />
  </button>
  </form>
- {founderMode && (
+ {usMode && (
   <div className="absolute inset-0 z-[5] flex flex-col bg-white">
    <div className="flex items-center justify-between gap-2 border-b border-slate-200 bg-slate-950 p-4 text-white">
-    <div><h5 className="text-sm font-black">{currentLang === 'ar' ? 'التواصل مع المؤسس' : currentLang === 'fr' ? 'Contacter le fondateur' : currentLang === 'es' ? 'Contactar al fundador' : currentLang === 'it' ? 'Contatta il fondatore' : 'Contact Founder'}</h5>
-    <p className="mt-0.5 text-[10px] text-slate-300">{currentLang === 'ar' ? 'أرسل سؤالك وتابع الرد هنا.' : currentLang === 'fr' ? 'Envoyez votre question et suivez la réponse ici.' : currentLang === 'es' ? 'Envía tu pregunta y consulta la respuesta aquí.' : currentLang === 'it' ? 'Invia la domanda e consulta qui la risposta.' : 'Send your question and follow the reply here.'}</p></div>
+    <div><h5 className="text-sm font-black">{currentLang === 'ar' ? 'تواصل معنا' : currentLang === 'fr' ? 'Contactez-nous' : currentLang === 'es' ? 'Contáctanos' : currentLang === 'it' ? 'Contattaci' : 'Contact us'}</h5>
+    <p className="mt-0.5 text-[10px] text-slate-300">{currentLang === 'ar' ? 'أرسل رسالتك وتابع ردنا هنا.' : currentLang === 'fr' ? 'Envoyez-nous un message et suivez notre réponse ici.' : currentLang === 'es' ? 'Envíanos tu mensaje y consulta nuestra respuesta aquí.' : currentLang === 'it' ? 'Scrivici e consulta qui la nostra risposta.' : 'Send us a message and follow our reply here.'}</p></div>
     <div className="flex shrink-0 items-center gap-2">
-     <button type="button" onClick={() => { setFounderMode(false); setIsOpen(false); if (chatOnlyMode) { onFounderBackHome?.(); if (!onFounderBackHome) window.location.replace('https://agenda.mycamp.workers.dev/'); } }} className="rounded-lg bg-white/10 px-3 py-2 text-xs font-bold">{currentLang === 'ar' ? 'عودة' : currentLang === 'fr' ? 'Retour' : currentLang === 'es' ? 'Volver' : currentLang === 'it' ? 'Indietro' : 'Back'}</button>
-     <button type="button" onClick={() => { setFounderMode(false); setIsOpen(false); }} aria-label={chatLabels.close} title={chatLabels.close} className="rounded-lg bg-white/10 p-2 text-white transition hover:bg-white/20"><X className="h-4 w-4"/></button>
+     <button type="button" onClick={() => { setUsMode(false); setIsOpen(false); if (chatOnlyMode) { onUsBackHome?.(); if (!onUsBackHome) window.location.replace('https://agenda.mycamp.workers.dev/'); } }} className="rounded-lg bg-white/10 px-3 py-2 text-xs font-bold">{currentLang === 'ar' ? 'عودة' : currentLang === 'fr' ? 'Retour' : currentLang === 'es' ? 'Volver' : currentLang === 'it' ? 'Indietro' : 'Back'}</button>
+     <button type="button" onClick={() => { setUsMode(false); setIsOpen(false); }} aria-label={chatLabels.close} title={chatLabels.close} className="rounded-lg bg-white/10 p-2 text-white transition hover:bg-white/20"><X className="h-4 w-4"/></button>
     </div>
    </div>
    <div className="flex-1 space-y-3 overflow-y-auto bg-slate-50 p-4">
     {!account || !sessionToken ? (
-     <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-xs text-amber-900">{currentLang === 'ar' ? 'سجّل الدخول بحسابك أولاً لإرسال رسالة إلى المؤسس.' : currentLang === 'fr' ? 'Connectez-vous d’abord pour écrire au fondateur.' : currentLang === 'es' ? 'Inicia sesión primero para escribir al fundador.' : currentLang === 'it' ? 'Accedi prima per scrivere al fondatore.' : 'Sign in first to contact the founder.'}
-      <button type="button" onClick={onOpenSignIn} className="mt-2 block rounded-lg bg-indigo-700 px-3 py-2 font-bold text-white">{currentLang === 'ar' ? 'تسجيل الدخول' : currentLang === 'fr' ? 'Se connecter' : currentLang === 'es' ? 'Iniciar sesión' : currentLang === 'it' ? 'Accedi' : 'Sign In'}</button>
-     </div>
-    ) : (
+      <div className="mx-3 mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-center text-sm font-semibold leading-6 text-amber-950" role="status">
+       {currentLang === 'ar' ? 'أنشئ حساباً لتتمكن من الدردشة معنا.' : currentLang === 'fr' ? 'Créez un compte pour discuter avec nous.' : currentLang === 'es' ? 'Crea una cuenta para chatear con nosotros.' : currentLang === 'it' ? 'Crea un account per chattare con noi.' : 'Create an account to chat with us.'}
+      </div>
+) : (
      <>
-      {founderMessages.map((msg) => <div key={msg.id} className={msg.senderRole === 'owner' ? 'flex justify-start' : 'flex justify-end'}>
+      {usMessages.map((msg) => <div key={msg.id} className={msg.senderRole === 'owner' ? 'flex justify-start' : 'flex justify-end'}>
        <div className={msg.senderRole === 'owner' ? 'max-w-[88%] rounded-2xl rounded-bl-sm border border-slate-200 bg-white px-3 py-2.5 text-xs text-slate-800 shadow-sm' : 'max-w-[88%] rounded-2xl rounded-br-sm bg-indigo-700 px-3 py-2.5 text-xs text-white shadow-sm'}>
-        <p className="mb-1 text-[9px] font-black opacity-70">{msg.senderRole === 'owner' ? (currentLang === 'ar' ? 'المؤسس' : currentLang === 'fr' ? 'Fondateur' : currentLang === 'es' ? 'Fundador' : currentLang === 'it' ? 'Fondatore' : 'Founder') : (account.fullName || account.username)}</p>
+        <p className="mb-1 text-[9px] font-black opacity-70">{msg.senderRole === 'owner' ? (currentLang === 'ar' ? 'نحن' : currentLang === 'fr' ? 'Nous' : currentLang === 'es' ? 'Nosotros' : currentLang === 'it' ? 'Noi' : 'Us') : (account.fullName || account.username)}</p>
         <p className="whitespace-pre-wrap">{msg.message}</p>
         <time className="mt-1 block text-end text-[9px] opacity-60">{new Date(msg.createdAt).toLocaleString(chatLocale[currentLang], { dateStyle: 'short', timeStyle: 'short' })}</time>
        </div>
       </div>)}
-      {founderMessages.length === 0 && !founderError && <p className="py-8 text-center text-xs text-slate-400">{currentLang === 'ar' ? 'لا توجد رسائل بعد. اكتب رسالتك الأولى أدناه.' : currentLang === 'fr' ? 'Aucun message. Écrivez le premier ci-dessous.' : currentLang === 'es' ? 'Todavía no hay mensajes. Escribe el primero abajo.' : currentLang === 'it' ? 'Nessun messaggio. Scrivi il primo qui sotto.' : 'No messages yet. Write the first message below.'}</p>}
-      {founderError && <p role="alert" className="rounded-lg bg-rose-50 p-2 text-[11px] text-rose-700">{founderError}</p>}
+      {usMessages.length === 0 && !usError && <p className="py-8 text-center text-xs text-slate-400">{currentLang === 'ar' ? 'لا توجد رسائل بعد. اكتب رسالتك الأولى أدناه.' : currentLang === 'fr' ? 'Aucun message. Écrivez le premier ci-dessous.' : currentLang === 'es' ? 'Todavía no hay mensajes. Escribe el primero abajo.' : currentLang === 'it' ? 'Nessun messaggio. Scrivi il primo qui sotto.' : 'No messages yet. Write the first message below.'}</p>}
+      {usError && <p role="alert" className="rounded-lg bg-rose-50 p-2 text-[11px] text-rose-700">{usError}</p>}
      </>
     )}
    </div>
-   {account && sessionToken && <form onSubmit={(event) => { event.preventDefault(); void submitFounderMessage(); }} className="flex shrink-0 items-end gap-2 border-t border-slate-200 bg-white p-3">
+   {account && sessionToken && <form onSubmit={(event) => { event.preventDefault(); void submitUsMessage(); }} className="flex shrink-0 items-end gap-2 border-t border-slate-200 bg-white p-3">
     <label className="flex min-w-0 flex-1 flex-col gap-1.5">
      <span className="text-[10px] font-black uppercase tracking-wider text-slate-600">{currentLang === 'ar' ? 'السؤال' : currentLang === 'fr' ? 'Question' : currentLang === 'es' ? 'Pregunta' : currentLang === 'it' ? 'Domanda' : 'Question'}</span>
-     <textarea value={founderDraft} onChange={(event) => setFounderDraft(event.target.value)} maxLength={4000} rows={2} placeholder={currentLang === 'ar' ? 'اكتب سؤالك أو رسالتك...' : currentLang === 'fr' ? 'Écrivez votre question ou message...' : currentLang === 'es' ? 'Escribe tu pregunta o mensaje...' : currentLang === 'it' ? 'Scrivi la tua domanda o il messaggio...' : 'Write your question or message...'} className="min-h-14 w-full resize-none rounded-xl border border-slate-200 bg-slate-50 p-2.5 text-xs outline-indigo-600" />
+     <textarea value={usDraft} onChange={(event) => setUsDraft(event.target.value)} maxLength={4000} rows={2} placeholder={currentLang === 'ar' ? 'اكتب سؤالك أو رسالتك...' : currentLang === 'fr' ? 'Écrivez votre question ou message...' : currentLang === 'es' ? 'Escribe tu pregunta o mensaje...' : currentLang === 'it' ? 'Scrivi la tua domanda o il messaggio...' : 'Write your question or message...'} className="min-h-14 w-full resize-none rounded-xl border border-slate-200 bg-slate-50 p-2.5 text-xs outline-indigo-600" />
     </label>
-    <button type="submit" disabled={!founderDraft.trim() || founderBusy} className="rounded-xl bg-indigo-700 p-3 text-white disabled:opacity-40" aria-label={currentLang === 'ar' ? 'إرسال' : 'Send'}><Send className="h-4 w-4"/></button>
+    <button type="submit" disabled={!usDraft.trim() || usBusy} className="rounded-xl bg-indigo-700 p-3 text-white disabled:opacity-40" aria-label={currentLang === 'ar' ? 'إرسال' : 'Send'}><Send className="h-4 w-4"/></button>
    </form>}
   </div>
  )}
