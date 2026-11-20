@@ -796,9 +796,21 @@ export interface FounderThread {
   accountId: string;
   fullName: string;
   username: string;
+  email?: string;
+  phone?: string;
   role: 'student'|'educator'|'director'|'guest';
   schoolId: string;
   schoolName: string;
+  schoolOrSubject?: string;
+  gradeId?: string;
+  registeredEducatorId?: string | null;
+  educatorName?: string;
+  registeredSessionId?: string | null;
+  registeredSession?: string;
+  createdAt?: string | null;
+  expiresAt?: string | null;
+  activated?: boolean | number;
+  paid?: boolean | number;
   messageCount: number;
   incomingCount: number;
   unreadIncoming: number;
@@ -829,4 +841,8 @@ export function getGuestContactMessages(guestId:string):Promise<{messages:Founde
 }
 export function sendGuestContactMessage(guestId:string,message:string):Promise<{sent:boolean}> {
   return request('/api/guest/contact?'+new URLSearchParams({guestId}).toString(),{method:'POST',body:JSON.stringify({message})});
+}
+
+export function deleteOwnerAccount(token:string,accountId:string):Promise<{deleted:boolean}> {
+  return request('/api/owner/accounts/'+encodeURIComponent(accountId),{method:'DELETE',headers:authHeaders(token)});
 }
