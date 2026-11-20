@@ -348,7 +348,7 @@ async function authenticate(request, env, requiredRole) {
     if (!ownerDirector) return null;
     authenticated = { ...payload, role: "director", isPlatformOwner: true };
   } else if (requiredRole === "founder-chat") {
-    if (!["student", "educator", "director"].includes(payload.role)) return null;
+    if (!["student", "educator", "director", "owner"].includes(payload.role)) return null;
   } else if (requiredRole && payload.role !== requiredRole) {
     return null;
   }
@@ -1096,16 +1096,18 @@ async function ownerFounderMessages(request, env) {
     }
     const threads = await env.DB.prepare(
       `SELECT a.id AS accountId, a.full_name AS fullName, a.username, a.role,
-              a.school_id AS schoolId, s.name AS schoolName,
-              COUNT(*) AS messageCount,
-              SUM(CASE WHEN m.sender_id != ? AND m.read_at IS NULL THEN 1 ELSE 0 END) AS unreadIncoming,
-              SUM(CASE WHEN m.sender_id = ? THEN 1 ELSE 0 END) AS outgoingCount,
+              a.school_id AS schoolId, COALESCE(s.name, '') AS schoolName,
+              COUNT(m.id) AS messageCount,
+              SUM(CASE WHEN m.id IS NOT NULL AND m.sender_id != ? AND m.read_at IS NULL THEN 1 ELSE 0 END) AS unreadIncoming,
+              SUM(CASE WHEN m.id IS NOT NULL AND m.sender_id = ? THEN 1 ELSE 0 END) AS outgoingCount,
               MAX(m.created_at) AS lastMessageAt
-       FROM founder_messages m
-       INNER JOIN accounts a ON a.id = m.thread_account_id
+       FROM accounts a
        LEFT JOIN schools s ON s.id = a.school_id
+       LEFT JOIN founder_messages m ON m.thread_account_id = a.id
+       WHERE a.role IN ('student','educator','director')
        GROUP BY a.id, a.full_name, a.username, a.role, a.school_id, s.name
-       ORDER BY MAX(m.created_at) DESC`
+       ORDER BY CASE WHEN COUNT(m.id) > 0 THEN 0 ELSE 1 END, MAX(m.created_at) DESC, a.full_name COLLATE NOCASE
+       LIMIT 5000`
     ).bind(owner.sub, owner.sub).all();
     return json({ threads: threads.results || [] });
   }
