@@ -321,11 +321,13 @@ export const OwnerDashboard: React.FC<{ currentLang:Language; token:string; onSi
       </div>}
     </section>
 
-    {(['educator','student'] as const).map((role) => {
+    {(['educator','student','guest'] as const).map((role) => {
       const group = founderThreads.filter((thread) => thread.role === role);
       const roleTitle = role === 'educator'
         ? (currentLang==='ar'?'المعلمون':currentLang==='fr'?'Éducateurs':currentLang==='es'?'Educadores':currentLang==='it'?'Educatori':'Educators')
-        : (currentLang==='ar'?'الطلاب':currentLang==='fr'?'Élèves':currentLang==='es'?'Estudiantes':currentLang==='it'?'Studenti':'Students');
+        : role === 'student'
+          ? (currentLang==='ar'?'الطلاب':currentLang==='fr'?'Élèves':currentLang==='es'?'Estudiantes':currentLang==='it'?'Studenti':'Students')
+          : (currentLang==='ar'?'الزوار':currentLang==='fr'?'Visiteurs':currentLang==='es'?'Visitantes':currentLang==='it'?'Visitatori':'Website visitors');
       return <section key={role} className="overflow-hidden rounded-2xl border bg-white">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b bg-slate-50 p-4">
           <h2 className="font-black">{roleTitle} <span className="ms-1 text-xs font-semibold text-slate-500">({group.length})</span></h2>
@@ -343,7 +345,7 @@ export const OwnerDashboard: React.FC<{ currentLang:Language; token:string; onSi
             </tr></thead>
             <tbody>
               {group.length===0
-                ? <tr><td colSpan={6} className="p-4 text-center text-slate-400">{currentLang==='ar'?'لا توجد حسابات مسجلة.':currentLang==='fr'?'Aucun compte enregistré.':currentLang==='es'?'No hay cuentas registradas.':currentLang==='it'?'Nessun account registrato.':'No accounts registered.'}</td></tr>
+                ? <tr><td colSpan={6} className="p-4 text-center text-slate-400">{currentLang==='ar'?'لا توجد حسابات مسجلة.':currentLang==='fr'?'Aucun compte enregistré.':currentLang==='es'?'No hay cuentas registradas.':currentLang==='it'?'Nessun account registrato.':role==='guest'?'No visitors have contacted us yet.':'No accounts registered.'}</td></tr>
                 : group.map((thread) => <tr key={thread.accountId} className={thread.unreadIncoming>0?'border-t bg-rose-50':'border-t'}>
                   <td className="p-3"><b>{thread.fullName}</b><small className="block text-slate-500">@{thread.username}</small></td>
                   <td className="p-3">{thread.schoolName||'Agenda'}</td>
