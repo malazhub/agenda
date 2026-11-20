@@ -41,6 +41,7 @@ export const OwnerDashboard: React.FC<{ currentLang:Language; token:string; onSi
   const [founderConversationLoading,setFounderConversationLoading] = useState(false);
   const [founderActionBusy,setFounderActionBusy] = useState(false);
   const founderConversationRefreshSequence = useRef(0);
+  const founderConversationEndRef = useRef<HTMLDivElement>(null);
   const [pendingStatuses,setPendingStatuses] = useState<Record<string,{activated:boolean;paid:boolean}>>({});
   const [loading,setLoading] = useState(true);
   const [busy,setBusy] = useState('');
@@ -104,6 +105,10 @@ export const OwnerDashboard: React.FC<{ currentLang:Language; token:string; onSi
     };
   }, [token, selectedFounderThread?.accountId]);
 
+  useEffect(() => {
+    if (!selectedFounderThread) return;
+    founderConversationEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+  }, [founderConversation, selectedFounderThread?.accountId]);
   const sendFounderReply = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const thread = selectedFounderThread;
@@ -376,6 +381,7 @@ export const OwnerDashboard: React.FC<{ currentLang:Language; token:string; onSi
                     <time className="mt-1 block text-end text-[9px] opacity-60">{new Date(item.createdAt).toLocaleString(currentLang,{dateStyle:'short',timeStyle:'short'})}</time>
                   </div>
                 </div>)}
+            <div ref={founderConversationEndRef} />
           </div>
           <form onSubmit={sendFounderReply} className="flex items-end gap-2 border-t border-slate-200 bg-white p-3">
             <textarea value={founderReply} onChange={(event)=>setFounderReply(event.target.value)} rows={2} maxLength={4000} placeholder={currentLang==='ar'?'اكتب ردك للعميل...':currentLang==='fr'?'Écrire une réponse...':currentLang==='es'?'Escribe una respuesta...':currentLang==='it'?'Scrivi una risposta...':'Write a reply to this user...'} className="min-h-14 min-w-0 flex-1 resize-none rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm outline-indigo-600"/>
