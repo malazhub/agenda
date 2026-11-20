@@ -1164,7 +1164,7 @@ const updateAccount = async (
   }
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-0">
       <div className="rounded-3xl bg-linear-to-r from-amber-500 via-emerald-600 to-indigo-700 p-6 sm:p-8 text-white shadow-xl relative overflow-hidden">
         <div className="max-w-6xl mx-auto items-center relative z-10">
           <div className="space-y-6 text-center">
