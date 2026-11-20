@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Language, GradeLevelDef, LiveSessionInfo } from '../types';
 import { translations } from '../translations';
-import { LEBANESE_GRADE_LEVELS } from '../data/mockGradesAndSessions';
+import { GRADE_LEVELS } from '../data/mockGradesAndSessions';
 import { GradeSessionsView } from './GradeSessionsView';
 import { DirectorSessionsPanel } from './DirectorSessionsPanel';
 import { LiveVideoPlayer } from './LiveVideoPlayer';
@@ -230,7 +230,7 @@ export const CoursesHub: React.FC<CoursesHubProps> = ({
       .toLowerCase()
       .replace(/[^a-z0-9]/g, '');
 
-    const matchingGrade = LEBANESE_GRADE_LEVELS.find((grade) => {
+    const matchingGrade = GRADE_LEVELS.find((grade) => {
       const gradeId = grade.id
         .toLowerCase()
         .replace(/[^a-z0-9]/g, '');
@@ -636,7 +636,7 @@ const updateAccount = async (
       .replace(/[^a-z0-9]/g, '') || '';
 
     const targetGrade =
-      LEBANESE_GRADE_LEVELS.find((grade) => {
+      GRADE_LEVELS.find((grade) => {
         const gradeId = grade.id
           .toLowerCase()
           .replace(/[^a-z0-9]/g, '');
@@ -652,7 +652,7 @@ const updateAccount = async (
             gradeName.includes(accountGrade ?? '')
           )
         );
-      }) || LEBANESE_GRADE_LEVELS[0];
+      }) || GRADE_LEVELS[0];
 
     // Guests open directly on Live Sessions.
     // Signed-in users retain Learning Resources as their first tab.
@@ -785,16 +785,16 @@ const updateAccount = async (
           onChange={(event) => stageDirectorAccountUpdate(row, { gradeId: event.target.value, registeredSessionId: null })}
           className="w-full max-w-64 rounded border border-slate-300 bg-white p-1.5 text-[10px]"
         >
-          {LEBANESE_GRADE_LEVELS.map((grade) => (
+          {GRADE_LEVELS.map((grade) => (
             <option key={grade.id} value={grade.id}>{grade.name[currentLang] || grade.name.en}</option>
           ))}
-          {!LEBANESE_GRADE_LEVELS.some((grade) => grade.id === stagedDirectorAccount(row).gradeId) && stagedDirectorAccount(row).gradeId && (
+          {!GRADE_LEVELS.some((grade) => grade.id === stagedDirectorAccount(row).gradeId) && stagedDirectorAccount(row).gradeId && (
             <option value={stagedDirectorAccount(row).gradeId}>{stagedDirectorAccount(row).gradeId.toUpperCase()}</option>
           )}
         </select>
         <input
           aria-label={row.fullName + ' custom grade'}
-          value={LEBANESE_GRADE_LEVELS.some((grade) => grade.id === stagedDirectorAccount(row).gradeId) ? '' : stagedDirectorAccount(row).gradeId}
+          value={GRADE_LEVELS.some((grade) => grade.id === stagedDirectorAccount(row).gradeId) ? '' : stagedDirectorAccount(row).gradeId}
           onChange={(event) => stageDirectorAccountUpdate(row, { gradeId: event.target.value.trim().toLowerCase().replace(/[^a-z0-9_-]/g, '_').slice(0, 40), registeredSessionId: null })}
           placeholder={currentLang === 'ar' ? 'أو اكتب صفاً جديداً' : currentLang === 'fr' ? 'Ou saisir une nouvelle classe' : currentLang === 'es' ? 'O escribe un nuevo curso' : currentLang === 'it' ? 'Oppure inserisci una nuova classe' : 'Or enter a new grade'}
           className="w-full max-w-64 rounded border border-slate-300 bg-white p-1.5 text-[10px]"
@@ -803,8 +803,8 @@ const updateAccount = async (
     ) : (
       <span className="text-[10px] font-semibold text-slate-600">
         {row.studentGradeLabel
-          ? (LEBANESE_GRADE_LEVELS.find((grade) => grade.id === row.studentGradeLabel)?.name[currentLang] || row.studentGradeLabel)
-          : (LEBANESE_GRADE_LEVELS.find((grade) => grade.id === stagedDirectorAccount(row).gradeId)?.name[currentLang] || stagedDirectorAccount(row).gradeId.toUpperCase())}
+          ? (GRADE_LEVELS.find((grade) => grade.id === row.studentGradeLabel)?.name[currentLang] || row.studentGradeLabel)
+          : (GRADE_LEVELS.find((grade) => grade.id === stagedDirectorAccount(row).gradeId)?.name[currentLang] || stagedDirectorAccount(row).gradeId.toUpperCase())}
       </span>
     )}
   </div>
@@ -1107,7 +1107,7 @@ const updateAccount = async (
             <DirectorSessionsPanel
               currentLang={currentLang}
               token={directorToken}
-              grades={LEBANESE_GRADE_LEVELS}
+              grades={GRADE_LEVELS}
               onJoinSession={handleMonitorSession}
             />
             {monitorSession && (
