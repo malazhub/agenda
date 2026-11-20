@@ -643,7 +643,6 @@ const registerSignOutCleanup = useCallback(
         sessionToken={sessionToken}
         chatOnlyMode={chatOnlyMode}
         isOwner={Boolean(ownerAccount)}
-        ownerToken={ownerToken}
         onOpenSignIn={() => setIsRegisterOpen(true)}
       />
     </div>
