@@ -329,7 +329,25 @@ export const AIChatBot: React.FC<AIChatBotProps> = ({ currentLang, schoolId, sch
  return `The default student rate is USD 125 per session. The Director may adjust it according to the school’s circumstances, so confirm the final rate and number of sessions with your school Director. This is charged per session.\\nSchool: ${context?.schoolName || schoolName || 'Agenda'}.`;
  }
 
- const registrationQuestion = ['register', 'registration', 'sign up', 'create account', 'inscrire', 'inscription', 'créer un compte', 'm’inscrire', 'registrar', 'registro', 'registración', 'inscripción', 'crear cuenta', 'registrarme', 'registrazione', 'registrarmi', 'creare account', 'crea un account', 'تسجيل', 'سجل', 'التسجيل', 'إنشاء حساب', 'انشاء حساب'].some((keyword) => q.includes(keyword));
+ const directorRegistrationQuestion = [
+    'register as director', 'register as a director', 'director registration', 'director account registration',
+    'create director account', 'create an account as director', 'how to become a director',
+    'inscription comme directeur', 'créer un compte directeur', 'creer un compte directeur',
+    'registro como director', 'registrarse como director', 'crear cuenta de director',
+    'registrazione come direttore', 'creare account direttore',
+    'التسجيل كمدير', 'تسجيل كمدير', 'كيف اسجل كمدير', 'كيف أسجل كمدير', 'كيف أسجل كمدير مدرسة',
+    'كيف انشئ حساب مدير', 'كيف أنشئ حساب مدير', 'إنشاء حساب مدير', 'انشاء حساب مدير',
+    'حساب المدير', 'تسجيل مدير جديد'
+  ].some((keyword) => q.includes(keyword));
+  if (directorRegistrationQuestion) {
+    if (responseLang === 'ar') return 'لإنشاء حساب مدير: افتح صفحة Agenda الرئيسية، اختر «إنشاء حساب»، ثم اختر «مدير». أدخل اسمك الكامل واسم المدرسة والبريد الإلكتروني ورقم الهاتف وكلمة المرور، ثم أرسل الطلب. إنشاء مساحة مدرسة مستقلة يتطلب رسم إعداد لمرة واحدة قدره 150 دولاراً أمريكياً. بعد مراجعة الطلب وتأكيد الدفع وتفعيل الحساب من المالك، افتح رابط المدرسة وسجّل الدخول ببريدك أو بيانات الحساب. إذا كان الحساب بانتظار الموافقة، يمكنك استخدام «التواصل مع المؤسس» لمراسلة المالك ومتابعة الرد.';
+    if (responseLang === 'fr') return 'Pour créer un compte Directeur : ouvrez la page principale d’Agenda, choisissez « Créer un compte », puis « Directeur ». Saisissez votre nom complet, le nom de l’établissement, votre e-mail, votre téléphone et un mot de passe, puis envoyez la demande. La création d’un espace scolaire indépendant nécessite des frais uniques de configuration de 150 USD. Après vérification de la demande, confirmation du paiement et activation par le propriétaire de la plateforme, ouvrez le lien de votre établissement et connectez-vous. Pendant l’attente, vous pouvez utiliser « Contacter le fondateur » pour écrire au propriétaire.';
+    if (responseLang === 'es') return 'Para crear una cuenta de Director: abre la página principal de Agenda, elige «Crear cuenta» y después «Director». Introduce tu nombre completo, el nombre de la escuela, correo electrónico, teléfono y contraseña; luego envía la solicitud. La creación de un espacio escolar independiente requiere un pago único de configuración de 150 USD. Cuando el propietario de la plataforma revise la solicitud, confirme el pago y active la cuenta, abre el enlace de tu escuela e inicia sesión. Mientras esperas, puedes usar «Contactar al fundador» para escribir al propietario.';
+    if (responseLang === 'it') return 'Per creare un account Direttore: apri la pagina principale di Agenda, scegli «Crea account» e poi «Direttore». Inserisci nome completo, nome della scuola, e-mail, telefono e password, quindi invia la richiesta. La creazione di uno spazio scolastico indipendente richiede una quota unica di configurazione di 150 USD. Dopo la verifica della richiesta, la conferma del pagamento e l’attivazione da parte del proprietario della piattaforma, apri il link della scuola ed effettua l’accesso. Durante l’attesa puoi usare «Contatta il fondatore» per scrivere al proprietario.';
+    return 'To register as a Director, open the main Agenda page, choose Create Account, then select Director. Enter your full name, school name, email, phone number and password, then submit the request. Creating an independent school space has a one-time USD 150 setup fee. Once the platform Owner reviews the request, confirms payment and activates the account, open your school link and sign in. While waiting for approval, use Contact Founder to message the Owner.';
+  }
+
+  const registrationQuestion = ['register', 'registration', 'sign up', 'create account', 'inscrire', 'inscription', 'créer un compte', 'm’inscrire', 'registrar', 'registro', 'registración', 'inscripción', 'crear cuenta', 'registrarme', 'registrazione', 'registrarmi', 'creare account', 'crea un account', 'تسجيل', 'سجل', 'اسجل', 'أسجل', 'التسجيل', 'إنشاء حساب', 'انشاء حساب', 'تسجيل حساب', 'كيف اسجل', 'كيف أسجل'].some((keyword) => q.includes(keyword));
  if (registrationQuestion) {
  if (responseLang === 'ar') return 'للتسجيل: افتح رابط المدرسة الصحيح، اختر طالباً أو معلماً، أدخل الاسم والبريد الإلكتروني واسم المستخدم وكلمة المرور، ثم اختر الصف والأستاذ/الحصة المتاحة. بعد التسجيل ينتظر الحساب موافقة المدير وتفعيله.';
  if (responseLang === 'fr') return "Pour vous inscrire : ouvrez le lien de votre établissement, choisissez Élève ou Éducateur, saisissez vos coordonnées, créez un nom d’utilisateur et un mot de passe, puis choisissez la classe et l’éducateur disponibles. Le Directeur doit ensuite activer le compte.";
@@ -347,7 +365,42 @@ export const AIChatBot: React.FC<AIChatBotProps> = ({ currentLang, schoolId, sch
  return 'Sign in with the username and password you created during registration. If you forget them, contact your school Director to reset the password. Never share your password.';
  }
 
- const lessonQuestion = ['saved lesson', 'saved lessons', 'recording', 'lesson', 'archive', 'ressource', 'ressources', 'leçon', 'lecon', 'cours enregistré', 'cours enregistrés', 'leçons enregistrées', 'clase guardada', 'clases guardadas', 'lección', 'lecciones guardadas', 'recursos guardados', 'lezione', 'lezioni salvate', 'lezioni registrate', 'risorse salvate', 'registrazione', 'دروس محفوظة', 'الدروس المحفوظة', 'درس', 'أرشيف', 'استرجاع الدروس'].some((keyword) => q.includes(keyword));
+ const classroomControlsQuestion = [
+    'zoom in', 'zoom out', 'enlarge video', 'minimize video', 'enlarge screen', 'shrink screen',
+    'camera thumbnail', 'flip camera', 'self cam', 'self camera', 'mirror camera', 'reverse camera',
+    'agrandir la vidéo', 'réduire la vidéo', 'zoom caméra', 'caméra inversée',
+    'ampliar vídeo', 'reducir vídeo', 'voltear cámara', 'cámara frontal',
+    'ingrandire video', 'ridurre video', 'capovolgere telecamera',
+    'تكبير الشاشة', 'تصغير الشاشة', 'تكبير الفيديو', 'تصغير الفيديو', 'تكبير الكاميرا',
+    'قلب الكاميرا', 'عكس الكاميرا', 'الكاميرا الأمامية', 'زووم'
+  ].some((keyword) => q.includes(keyword));
+  if (classroomControlsQuestion) {
+    if (responseLang === 'ar') return 'داخل الصف المباشر: انقر على صورة الفيديو أو الصورة المصغّرة لتكبيرها، ثم انقر مرة أخرى للعودة إلى الحجم الطبيعي. استخدم أزرار الكاميرا والميكروفون لتشغيلهما أو إيقافهما. زر «Self Cam» يبدّل حالة كاميرتك، وزر «Flip Cam» يعكس اتجاه الصورة؛ ويتغير لون الزر لإظهار الاختيار الحالي.';
+    if (responseLang === 'fr') return 'Dans la classe en direct, cliquez sur la vidéo ou sa vignette pour l’agrandir, puis cliquez de nouveau pour revenir à la taille normale. Utilisez les commandes de caméra et de microphone pour les activer ou les couper. « Self Cam » commande votre caméra et « Flip Cam » inverse l’image ; la couleur du bouton indique l’état sélectionné.';
+    if (responseLang === 'es') return 'En el aula en directo, haz clic en el vídeo o en su miniatura para ampliarlo y vuelve a hacer clic para recuperar el tamaño normal. Usa los controles de cámara y micrófono para activarlos o desactivarlos. «Self Cam» controla tu cámara y «Flip Cam» invierte la imagen; el color del botón indica el estado seleccionado.';
+    if (responseLang === 'it') return 'Nell’aula in diretta, fai clic sul video o sulla miniatura per ingrandirlo e fai clic di nuovo per tornare alle dimensioni normali. Usa i controlli della videocamera e del microfono per attivarli o disattivarli. «Self Cam» controlla la tua videocamera e «Flip Cam» capovolge l’immagine; il colore del pulsante mostra lo stato selezionato.';
+    return 'In the live classroom, click the video or thumbnail to enlarge it, then click again to return to normal size. Use the camera and microphone controls to turn them on or off. Self Cam controls your camera, and Flip Cam mirrors the image; the button colour indicates the selected state.';
+  }
+
+  const privateChatQuestion = [
+    'private chat', 'send private message', 'message a student', 'message students', 'chat with student',
+    'send attachment', 'share attachment', 'message all students', 'chat all students', 'send to everyone',
+    'group message', 'conversation with student', 'messagerie privée', 'message privé', 'envoyer à tous les élèves',
+    'chat privado', 'mensaje privado', 'enviar a todos los estudiantes',
+    'chat privato', 'messaggio privato', 'invia a tutti gli studenti',
+    'المحادثة الخاصة', 'محادثة خاصة', 'رسالة خاصة', 'إرسال مرفق', 'ارسال مرفق',
+    'إرسال للجميع', 'ارسال للجميع', 'كل الطلاب', 'جميع الطلاب', 'محادثة جميع الطلاب',
+    'إرسال رسالة للطلاب', 'إرسال رسالة للطالب'
+  ].some((keyword) => q.includes(keyword));
+  if (privateChatQuestion) {
+    if (responseLang === 'ar') return 'في الصف المباشر، اختر صورة الطالب لإرسال رسالة أو مرفق إليه وحده. لإرسال رسالة أو مرفق إلى جميع الطلاب، فعّل مربع «Chat all students»؛ ستُحدد صور جميع الطلاب ويُرسل المحتوى إلى الجميع. أزل التحديد أو اختر طالباً واحداً للعودة إلى المحادثة الفردية. تُعرض الرسائل مع اسم المرسل أو المستلم لتسهيل متابعة كل محادثة.';
+    if (responseLang === 'fr') return 'Dans la classe en direct, sélectionnez la vignette d’un élève pour lui envoyer un message ou une pièce jointe en privé. Pour écrire à toute la classe, cochez « Chat all students » : toutes les vignettes sont sélectionnées et le message ou le fichier est envoyé à tous. Décochez cette option ou sélectionnez un seul élève pour revenir à une conversation individuelle. Les messages indiquent l’expéditeur et le destinataire.';
+    if (responseLang === 'es') return 'En el aula en directo, selecciona la miniatura de un estudiante para enviarle un mensaje o archivo privado. Para escribir a toda la clase, marca «Chat all students»: se seleccionarán todas las miniaturas y el mensaje o archivo se enviará a todos. Desmarca la opción o selecciona a un solo estudiante para volver al chat individual. Los mensajes identifican al remitente y al destinatario.';
+    if (responseLang === 'it') return 'Nell’aula in diretta, seleziona la miniatura di uno studente per inviargli un messaggio o un allegato privato. Per scrivere a tutta la classe, seleziona «Chat all students»: tutte le miniature verranno selezionate e il messaggio o il file sarà inviato a tutti. Deseleziona l’opzione o scegli un solo studente per tornare alla chat individuale. I messaggi indicano mittente e destinatario.';
+    return 'In the live classroom, select one student’s thumbnail to send a private message or attachment to that student. To send to the whole class, check “Chat all students”; all student thumbnails become selected and the message or attachment is sent to everyone. Uncheck it or select one student to return to a one-to-one chat. Messages identify their sender and recipient.';
+  }
+
+  const lessonQuestion = ['saved lesson', 'saved lessons', 'recording', 'lesson', 'archive', 'ressource', 'ressources', 'leçon', 'lecon', 'cours enregistré', 'cours enregistrés', 'leçons enregistrées', 'clase guardada', 'clases guardadas', 'lección', 'lecciones guardadas', 'recursos guardados', 'lezione', 'lezioni salvate', 'lezioni registrate', 'risorse salvate', 'registrazione', 'دروس محفوظة', 'الدروس المحفوظة', 'درس', 'أرشيف', 'استرجاع الدروس'].some((keyword) => q.includes(keyword));
  if (lessonQuestion) {
  if (responseLang === 'ar') return 'لاسترجاع الدروس المحفوظة، سجّل الدخول وافتح غرفة الصف ثم اختر «الموارد التعليمية». اختر الأستاذ لعرض خانات الدروس والملفات التي نشرها. يمكن للمدرس تعديل موارده الخاصة فقط.';
  if (responseLang === 'fr') return "Pour retrouver les leçons enregistrées, connectez-vous, ouvrez la salle de classe puis choisissez « Ressources pédagogiques ». Sélectionnez l’éducateur pour consulter les leçons et fichiers publiés. Chaque éducateur ne peut modifier que ses propres ressources.";
@@ -400,10 +453,10 @@ export const AIChatBot: React.FC<AIChatBotProps> = ({ currentLang, schoolId, sch
  const directorManagementQuestion = [
  'director manage', 'manage accounts', 'director dashboard', 'reset password', 'change username',
  'change user name', 'change password', 'activate account', 'deactivate account', 'mark as paid',
- 'renew account', 'student account management', 'educator account management',
+ 'renew account', 'student account management', 'educator account management', 'approve students', 'approve educators', 'activate students', 'activate educators', 'confirm registration', 'how to approve', 'how to activate', 'approve account', 'pending account', 'enable account',
  'gestion des comptes', 'réinitialiser le mot de passe', 'gestionar cuentas', 'restablecer contraseña',
  'gestione account', 'reimpostare password', 'إدارة الحسابات', 'لوحة المدير', 'تغيير اسم المستخدم',
- 'تغيير كلمة المرور', 'إعادة تعيين كلمة المرور', 'تفعيل الحساب', 'تجديد الحساب', 'حالة الدفع'
+ 'تغيير كلمة المرور', 'إعادة تعيين كلمة المرور', 'تفعيل الحساب', 'تجديد الحساب', 'حالة الدفع', 'الموافقة على الطلاب', 'الموافقة على المعلمين', 'اعتماد الطلاب', 'اعتماد المعلمين', 'تفعيل الطلاب', 'تفعيل المعلمين', 'تفعيل حسابات الطلاب', 'تفعيل حسابات المعلمين', 'كيف يفعّل المدير', 'كيف يفعل المدير', 'تأكيد التسجيل', 'قبول طلب التسجيل', 'الحسابات المعلقة'
  ].some((keyword) => q.includes(keyword));
  if (directorManagementQuestion) {
  if (responseLang === 'ar') return 'من «دخول المدير» ثم «لوحة المدير» ← «الحسابات»، يستطيع المدير مراجعة الطلاب والأساتذة، تفعيل الحسابات أو إيقافها، تحديث حالة الدفع، تجديد صلاحية الحساب، تغيير اسم مستخدم الطالب أو الأستاذ، وإعادة تعيين كلمة المرور. كما يستطيع تغيير تعيين الطالب للأستاذ. ويستطيع المدير تعديل اسم المستخدم وكلمة المرور الخاصين به من إعدادات ملف المدير. لا يمكن للمساعد رؤية كلمات المرور الحالية أو طلبها منك.';
