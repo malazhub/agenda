@@ -95,9 +95,9 @@ export interface Teacher {
   name: string;
   title: string;
   avatar: string;
-  location: string; // e.g. Beirut, Mount Lebanon, Tripoli, Saida
+  location: string; // e.g. North, Central, South regions and Online
   education: string; // e.g. "AUB MSc Mathematics", "USJ Faculté de Pédagogie", "LU Physics"
-  schoolExperience: string; // e.g. "Grand Lycée Franco-Libanais", "International College (IC)", "Collège Notre-Dame de Jamhour"
+  schoolExperience: string; // e.g. "International School", "International College (IC)", "Collège Notre-Dame de Jamhour"
   streams: ('Francophone' | 'Anglophone' | 'Bilingual')[];
   subjects: ExamSubject[];
   tracks: AcademicTrack[];
