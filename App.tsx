@@ -290,6 +290,7 @@ const registerSignOutCleanup = useCallback(
   };
 
   const handleRegisterSuccess = (account: CloudflareAccount, token: string, chatOnly = false) => {
+    setChatOnlyMode(chatOnly);
     if (account.role === 'owner') {
       handleOwnerLogin(account, token);
       return;
