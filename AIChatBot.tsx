@@ -132,6 +132,17 @@ export const AIChatBot: React.FC<AIChatBotProps> = ({ currentLang, schoolId, sch
  const [schoolContext, setSchoolContext] = useState<SchoolPublicContext | null>(null);
  useEffect(() => { if (chatOnlyMode) { setIsOpen(true); setFounderMode(true); } }, [chatOnlyMode]);
  useEffect(() => {
+  if (!isOpen) return;
+  const closeOnEscape = (event: KeyboardEvent) => {
+   if (event.key === 'Escape') {
+    setFounderMode(false);
+    setIsOpen(false);
+   }
+  };
+  window.addEventListener('keydown', closeOnEscape);
+  return () => window.removeEventListener('keydown', closeOnEscape);
+ }, [isOpen]);
+ useEffect(() => {
   if (!founderMode || !sessionToken || !account || isOwner) return;
   let active = true;
   const refresh = async () => {
@@ -529,11 +540,11 @@ export const AIChatBot: React.FC<AIChatBotProps> = ({ currentLang, schoolId, sch
     'مراسلة المالك', 'كيف أتواصل مع المؤسس', 'كيف اتواصل مع المالك'
   ].some((keyword) => q.includes(keyword));
   if (founderContactQuestion) {
-    if (responseLang === 'ar') return 'افتح «المساعد الذكي» واضغط زر «التواصل مع المؤسس» بجانب خانة السؤال. سجّل الدخول بحسابك أولاً لإرسال الرسالة ومتابعة الردود. إذا كان حسابك بانتظار التفعيل، يمكنك استخدام هذه المحادثة وحدها حتى يفعّله المالك. تظهر الرسائل الواردة للمؤسس في مركز تحكم المالك ضمن قوائم المديرين والمعلمين والطلاب.';
-    if (responseLang === 'fr') return 'Ouvrez l’« Assistant IA » et cliquez sur « Contacter le fondateur » à côté du champ de question. Connectez-vous d’abord pour envoyer un message et suivre les réponses. Si votre compte attend son activation, cette conversation reste disponible jusqu’à l’activation par le propriétaire. Les messages reçus apparaissent dans le Centre de contrôle du propriétaire, dans les listes des directeurs, éducateurs et élèves.';
-    if (responseLang === 'es') return 'Abre el «Asistente de IA» y pulsa «Contactar al fundador» junto al campo de preguntas. Primero inicia sesión para enviar mensajes y consultar las respuestas. Si tu cuenta está pendiente de activación, podrás usar este chat hasta que el propietario la active. Los mensajes recibidos aparecen en el Centro de control del propietario, en las listas de directores, educadores y estudiantes.';
-    if (responseLang === 'it') return 'Apri l’«Assistente IA» e premi «Contatta il fondatore» accanto al campo della domanda. Accedi prima per inviare messaggi e leggere le risposte. Se l’account è in attesa di attivazione, questa chat resta disponibile finché il proprietario non lo attiva. I messaggi ricevuti appaiono nel Centro di controllo del proprietario, negli elenchi di direttori, educatori e studenti.';
-    return 'Open the AI Assistant and select Contact Founder beside the question field. Sign in first to send a message and follow replies. If your account is awaiting activation, this chat remains available until the Owner activates it. Incoming messages appear in Owner Control Center under the Directors, Educators and Students lists.';
+    if (responseLang === 'ar') return 'افتح «المساعد الذكي» واضغط زر «التواصل مع المؤسس» الكامل الظاهر فوق خانة السؤال. سجّل الدخول بحسابك أولاً لإرسال الرسالة ومتابعة الردود. إذا كان حسابك بانتظار التفعيل، يمكنك استخدام هذه المحادثة وحدها حتى يفعّله المالك. تظهر الرسائل الواردة للمؤسس في مركز تحكم المالك ضمن قوائم المديرين والمعلمين والطلاب.';
+    if (responseLang === 'fr') return 'Ouvrez l’« Assistant IA » et cliquez sur le bouton « Contacter le fondateur », affiché en pleine largeur au-dessus du champ de question. Connectez-vous d’abord pour envoyer un message et suivre les réponses. Si votre compte attend son activation, cette conversation reste disponible jusqu’à l’activation par le propriétaire. Les messages reçus apparaissent dans le Centre de contrôle du propriétaire, dans les listes des directeurs, éducateurs et élèves.';
+    if (responseLang === 'es') return 'Abre el «Asistente de IA» y pulsa el botón «Contactar al fundador», que aparece a todo lo ancho encima del campo de preguntas. Primero inicia sesión para enviar mensajes y consultar las respuestas. Si tu cuenta está pendiente de activación, podrás usar este chat hasta que el propietario la active. Los mensajes recibidos aparecen en el Centro de control del propietario, en las listas de directores, educadores y estudiantes.';
+    if (responseLang === 'it') return 'Apri l’«Assistente IA» e premi il pulsante «Contatta il fondatore», visualizzato a tutta larghezza sopra il campo della domanda. Accedi prima per inviare messaggi e leggere le risposte. Se l’account è in attesa di attivazione, questa chat resta disponibile finché il proprietario non lo attiva. I messaggi ricevuti appaiono nel Centro di controllo del proprietario, negli elenchi di direttori, educatori e studenti.';
+    return 'Open the AI Assistant and select the full-width Contact Founder button above the question field. Sign in first to send a message and follow replies. If your account is awaiting activation, this chat remains available until the Owner activates it. Incoming messages appear in Owner Control Center under the Directors, Educators and Students lists.';
   }
 
   const contactQuestion = [
