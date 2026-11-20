@@ -716,6 +716,53 @@ test('registration hashes credentials and rejects duplicate usernames', async ()
   assert.equal((await sharedStream.json()).status, 'waiting');
 });
 
+test('An inactive Director can sign in only to the Founder chat until Owner activation', async () => {
+  const { env, accounts, schools } = fakeEnvironment();
+  const directorId = 'pending-director-000000000000000';
+  const schoolId = 'pending-school-0000000000000000';
+  accounts.set(directorId, {
+    id: directorId,
+    username: 'director.pending',
+    password_hash: hashPassword('pending-director-password'),
+    role: 'director',
+    school_id: schoolId,
+    full_name: 'Pending Director',
+    email: 'pending.director@example.com',
+    phone: '',
+    school_or_subject: '',
+    grade_id: '',
+    registered_session_id: null,
+    created_at: '2026-11-19 09:00:00',
+    expires_at: '2027-11-19 09:00:00',
+    activated: 0,
+    paid: 0,
+  });
+  schools.set(schoolId, {
+    id: schoolId,
+    name: 'Pending School',
+    director_id: directorId,
+    license_active: 0,
+    license_expires_at: '2027-11-19 09:00:00',
+  });
+
+  const login = await send(env, '/api/auth/login', {
+    method: 'POST',
+    body: { username: 'director.pending', password: 'pending-director-password' },
+  });
+  assert.equal(login.status, 200);
+  const session = await login.json();
+  assert.equal(session.chatOnly, true);
+  assert.equal(session.account.role, 'director');
+  assert.equal(session.account.activated, false);
+
+  const profile = await send(env, '/api/auth/me?schoolId=' + schoolId, { token: session.token });
+  assert.equal(profile.status, 200);
+  assert.equal((await profile.json()).chatOnly, true);
+
+  const dashboard = await send(env, '/api/director/sessions', { token: session.token });
+  assert.ok([401, 403].includes(dashboard.status));
+});
+
 test('Student registration saves their chosen custom grade label without changing the educator live-session grade', async () => {
   const { env, accounts } = fakeEnvironment();
   accounts.set('00000000-0000-4000-8000-000000000001', {
