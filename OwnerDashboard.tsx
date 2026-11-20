@@ -1,12 +1,12 @@
 import React, { useEffect, useState } from 'react';
-import { ShieldCheck, RefreshCw, Building2, Users, Copy, ExternalLink, Trash2, KeyRound, MessageCircle, Send } from 'lucide-react';
+import { ShieldCheck, RefreshCw, Building2, Users, Copy, ExternalLink, Trash2, KeyRound } from 'lucide-react';
 import type { Language } from '../types';
 import {
   createOwnerDirector, deleteOwnerDirector, getOwnerDirectors, saveOwnerDirectorStatuses,
   issueDirectorSetupLink, updateOwnerDirector, resetOwnerDirectorPhonePassword,
-  getOwnerFounderThreads, getOwnerFounderMessages, replyToFounderThread, deleteFounderThread,
+  getOwnerFounderThreads,
 } from '../services/cloudflareApi';
-import type { OwnerDirector, FounderThread, FounderMessage } from '../services/cloudflareApi';
+import type { OwnerDirector, FounderThread } from '../services/cloudflareApi';
 
 const labels = {
   en: { title:'Owner Control Center', subtitle:'Manage Directors and their school licences', directors:'Directors', school:'School', director:'Director', phone:'Phone', email:'Email', joined:'Joining date', account:'Account', paymentState:'Paid status', paidLabel:'Paid', unpaid:'Unpaid', accountActive:'Active', accountInactive:'Inactive', activateAccount:'Activate account', deactivateAccount:'Deactivate account', markPaid:'Mark paid', markUnpaid:'Mark unpaid', students:'Students', educators:'Educators', expiry:'Licence expiry', status:'Status', schoolLink:'School link', paymentLink:'Director payment / contact link', actions:'Owner controls', active:'Active', suspended:'Suspended', setupPending:'Password not set', setupDone:'Account set up', phoneEnabled:'Phone initial password enabled', phoneDisabled:'Personal password is active', add:'Add Director', fullName:'Director full name', schoolName:'School name', phoneLabel:'Director phone', emailLabel:'Director email', paid:'I confirm receipt of the one-time USD 150 school licence payment.', notice:'The Director chooses a username using a private setup link. Their initial password is the phone number entered by the Owner; they can change it after signing in. The licence runs for one year.', create:'Create school and Director', cancel:'Cancel', creating:'Creating…', created:'Director and school created. Send the private setup link to the Director.', setupLink:'Private account setup link', smsMessage:'SMS message to send to the Director', copySms:'Copy SMS message', initialPasswordNotice:'The phone number entered above will be the Director’s initial password. The Director can change it after signing in.', copy:'Copy', renew:'Renew one year', suspend:'Suspend licence', activate:'Activate licence', resend:'Generate new setup link', resetPhonePassword:'Reset initial password to phone', copyLoginSms:'Copy login SMS', smsCopied:'Login SMS copied. Send it to the Director.', delete:'Delete Director and school', confirmDelete:'Permanently delete this Director, the school, all accounts, sessions and stored school media?', deleted:'Director and school deleted.', saved:'Changes saved.',saveChanges:'Save all changes',saving:'Saving…',unsaved:'Unsaved changes', loading:'Loading Directors…', empty:'No Directors registered yet.', noPayment:'Not provided by Director', payment:'Payment / contact', open:'Open', error:'Could not complete the request.' },
@@ -34,6 +34,7 @@ function dateLabel(value: string | null, lang: Language): string {
 export const OwnerDashboard: React.FC<{ currentLang:Language; token:string; onSignOut:()=>void; onManageMySchool:()=>void; onDirectorSignIn:()=>void; onEnterGuestClassroom:()=>void }> = ({ currentLang, token, onSignOut, onManageMySchool, onDirectorSignIn, onEnterGuestClassroom }) => {
   const t: Labels = labels[currentLang] || labels.en;
   const [rows,setRows] = useState<OwnerDirector[]>([]);
+  const [founderThreads,setFounderThreads] = useState<FounderThread[]>([]);
   const [pendingStatuses,setPendingStatuses] = useState<Record<string,{activated:boolean;paid:boolean}>>({});
   const [loading,setLoading] = useState(true);
   const [busy,setBusy] = useState('');
@@ -43,13 +44,6 @@ export const OwnerDashboard: React.FC<{ currentLang:Language; token:string; onSi
   const [createdSetupLink,setCreatedSetupLink] = useState('');
   const [createdSms,setCreatedSms] = useState('');
   const [form,setForm] = useState({fullName:'',schoolName:'',email:'',phone:'',paymentReceived:false});
-  const [founderThreads,setFounderThreads] = useState<FounderThread[]>([]);
-  const [openFounderThread,setOpenFounderThread] = useState<FounderThread | null>(null);
-  const [founderConversation,setFounderConversation] = useState<FounderMessage[]>([]);
-  const [founderReply,setFounderReply] = useState('');
-  const [founderLoading,setFounderLoading] = useState(false);
-  const [founderActionBusy,setFounderActionBusy] = useState(false);
-  const [founderError,setFounderError] = useState('');
 
   const refresh = async () => {
     setLoading(true);
@@ -58,61 +52,14 @@ export const OwnerDashboard: React.FC<{ currentLang:Language; token:string; onSi
       setRows(result.directors);
       setFounderThreads(inbox.threads || []);
       setError('');
-    }
-    catch (e) { setError(e instanceof Error ? e.message : t.error); }
+    } catch (e) { setError(e instanceof Error ? e.message : t.error); }
     finally { setLoading(false); }
   };
-  useEffect(() => { void refresh(); }, [token]);
   useEffect(() => {
-    let active = true;
-    const pollInbox = async () => {
-      try {
-        const inbox = await getOwnerFounderThreads(token);
-        if (active) setFounderThreads(inbox.threads || []);
-      } catch (e) {
-        if (active) setFounderError(e instanceof Error ? e.message : t.error);
-      }
-    };
-    const intervalId = window.setInterval(() => void pollInbox(), 10000);
-    return () => { active = false; window.clearInterval(intervalId); };
+    void refresh();
+    const intervalId = window.setInterval(() => { void refresh(); }, 15000);
+    return () => window.clearInterval(intervalId);
   }, [token]);
-
-  const openFounderConversation = async (thread:FounderThread) => {
-    setFounderLoading(true); setFounderError(''); setOpenFounderThread(thread);
-    try {
-      const result = await getOwnerFounderMessages(token, thread.accountId);
-      setFounderConversation(result.messages || []);
-      const inbox = await getOwnerFounderThreads(token);
-      setFounderThreads(inbox.threads || []);
-    } catch (e) { setFounderError(e instanceof Error ? e.message : t.error); }
-    finally { setFounderLoading(false); }
-  };
-  const sendFounderReply = async (event:React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    if (!openFounderThread || !founderReply.trim() || founderActionBusy) return;
-    setFounderActionBusy(true); setFounderError('');
-    try {
-      await replyToFounderThread(token, openFounderThread.accountId, founderReply.trim());
-      setFounderReply('');
-      const result = await getOwnerFounderMessages(token, openFounderThread.accountId);
-      setFounderConversation(result.messages || []);
-      const inbox = await getOwnerFounderThreads(token);
-      setFounderThreads(inbox.threads || []);
-    } catch (e) { setFounderError(e instanceof Error ? e.message : t.error); }
-    finally { setFounderActionBusy(false); }
-  };
-  const removeFounderConversation = async (thread:FounderThread) => {
-    const confirmText = currentLang === 'ar' ? 'حذف جميع رسائل هذه المحادثة؟' : currentLang === 'fr' ? 'Supprimer tous les messages de cette conversation ?' : currentLang === 'es' ? '¿Eliminar todos los mensajes de esta conversación?' : currentLang === 'it' ? 'Eliminare tutti i messaggi di questa conversazione?' : 'Delete all messages in this conversation?';
-    if (!window.confirm(confirmText)) return;
-    setFounderActionBusy(true); setFounderError('');
-    try {
-      await deleteFounderThread(token, thread.accountId);
-      const inbox = await getOwnerFounderThreads(token);
-      setFounderThreads(inbox.threads || []);
-      if (openFounderThread?.accountId === thread.accountId) { setOpenFounderThread(null); setFounderConversation([]); }
-    } catch (e) { setFounderError(e instanceof Error ? e.message : t.error); }
-    finally { setFounderActionBusy(false); }
-  };
 
   const create = async (event:React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -197,84 +144,15 @@ export const OwnerDashboard: React.FC<{ currentLang:Language; token:string; onSi
       <div className="rounded-2xl border bg-white p-4"><Users/><b className="block text-2xl">{rows.reduce((n,r)=>n+r.educatorCount,0)}</b>{t.educators}</div>
     </div>
 
-    <section className="overflow-hidden rounded-2xl border-2 border-indigo-200 bg-white shadow-md">
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-indigo-100 bg-indigo-50/70 p-4">
-        <div>
-          <h2 className="font-black text-slate-900">{currentLang==='ar'?'رسائل المؤسس':currentLang==='fr'?'Messages au fondateur':currentLang==='es'?'Mensajes al fundador':currentLang==='it'?'Messaggi al fondatore':'Founder messages'}</h2>
-          <p className="mt-1 text-xs text-slate-600">{currentLang==='ar'?'محادثات المديرين والمعلمين والطلاب، بما في ذلك الحسابات التي تنتظر التفعيل.':currentLang==='fr'?'Conversations des directeurs, éducateurs et élèves, y compris les comptes en attente d’activation.':currentLang==='es'?'Conversaciones de directores, educadores y estudiantes, incluidas las cuentas pendientes de activación.':currentLang==='it'?'Conversazioni di direttori, educatori e studenti, inclusi gli account in attesa di attivazione.':'Messages from Directors, Educators and Students, including accounts awaiting activation.'}</p>
-        </div>
-        <button type="button" onClick={()=>void refresh()} className="inline-flex items-center gap-2 rounded-lg border border-indigo-200 bg-white px-3 py-2 text-xs font-bold text-indigo-800"><RefreshCw size={14}/>{currentLang==='ar'?'تحديث':currentLang==='fr'?'Actualiser':currentLang==='es'?'Actualizar':currentLang==='it'?'Aggiorna':'Refresh inbox'}</button>
-      </div>
-      {(['director','educator','student'] as const).map((role) => {
-        const group = founderThreads.filter((thread) => thread.role === role);
-        const roleLabel = role === 'director' ? t.directors : role === 'educator' ? t.educators : t.students;
-        return <div key={role} className="border-b border-slate-200 last:border-b-0">
-          <div className="flex items-center justify-between bg-slate-50 px-4 py-2 text-xs font-black text-slate-700"><span>{roleLabel}</span><span>{group.length}</span></div>
-          {group.length === 0
-            ? <p className="px-4 py-4 text-xs text-slate-400">{currentLang==='ar'?'لا توجد حسابات في هذه الفئة.':currentLang==='fr'?'Aucun compte dans cette catégorie.':currentLang==='es'?'No hay cuentas en esta categoría.':currentLang==='it'?'Nessun account in questa categoria.':'No accounts in this category.'}</p>
-            : <div className="grid gap-3 p-3 sm:grid-cols-2 xl:grid-cols-3">
-              {group.map((thread) => (
-                <article key={thread.accountId} className={thread.unreadIncoming > 0 ? 'rounded-xl border-2 border-rose-300 bg-rose-50 p-3 shadow-sm' : 'rounded-xl border border-slate-200 bg-white p-3'}>
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-black text-slate-900">{thread.fullName}</p>
-                      <p className="mt-0.5 truncate text-[10px] text-slate-500">@{thread.username} · {thread.schoolName || 'Agenda'}</p>
-                    </div>
-                    {thread.unreadIncoming > 0 && <span className="shrink-0 rounded-full bg-rose-600 px-2 py-1 text-[9px] font-black text-white">{currentLang==='ar'?'جديد':currentLang==='fr'?'NOUVEAU':currentLang==='es'?'NUEVO':currentLang==='it'?'NUOVO':'NEW'}</span>}
-                  </div>
-                  <div className="mt-3 grid grid-cols-2 divide-x divide-slate-200 overflow-hidden rounded-lg border border-slate-200 bg-slate-50">
-                    <div className="px-3 py-2 text-center">
-                      <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">{currentLang==='ar'?'وارد':'Chat in'}</p>
-                      <p className={thread.unreadIncoming > 0 ? 'mt-0.5 text-xl font-black tabular-nums text-rose-700' : 'mt-0.5 text-xl font-black tabular-nums text-slate-800'}>{thread.incomingCount || 0}</p>
-                      {thread.unreadIncoming > 0 && <p className="text-[9px] font-bold text-rose-700">{thread.unreadIncoming} {currentLang==='ar'?'غير مقروء':'unread'}</p>}
-                    </div>
-                    <div className="px-3 py-2 text-center">
-                      <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">{currentLang==='ar'?'صادر':'Chat out'}</p>
-                      <p className="mt-0.5 text-xl font-black tabular-nums text-indigo-700">{thread.outgoingCount || 0}</p>
-                    </div>
-                  </div>
-                  <p className="mt-2 text-[10px] text-slate-500">{currentLang==='ar'?'آخر رسالة:':currentLang==='fr'?'Dernier message :':currentLang==='es'?'Último mensaje:':currentLang==='it'?'Ultimo messaggio:':'Last message:'} {thread.lastMessageAt ? dateLabel(thread.lastMessageAt,currentLang) : '—'}</p>
-                  <div className="mt-3 grid grid-cols-2 gap-2">
-                    <button type="button" onClick={()=>void openFounderConversation(thread)} className="rounded-lg bg-indigo-700 px-3 py-2 text-[11px] font-black text-white hover:bg-indigo-800">{currentLang==='ar'?'فتح والرد':currentLang==='fr'?'Ouvrir et répondre':currentLang==='es'?'Abrir y responder':currentLang==='it'?'Apri e rispondi':'Open & reply'}</button>
-                    <button type="button" disabled={founderActionBusy} onClick={()=>void removeFounderConversation(thread)} className="inline-flex items-center justify-center gap-1 rounded-lg border border-rose-200 bg-white px-3 py-2 text-[11px] font-bold text-rose-700 hover:bg-rose-50 disabled:opacity-40"><Trash2 size={13}/>{currentLang==='ar'?'حذف المحادثة':currentLang==='fr'?'Supprimer':currentLang==='es'?'Eliminar':currentLang==='it'?'Elimina':'Delete chat'}</button>
-                  </div>
-                </article>
-              ))}
-            </div>}
-        </div>;
-      })}
-      {founderError && <p role="alert" className="m-3 rounded-lg bg-rose-50 p-3 text-xs text-rose-700">{founderError}</p>}
-      {openFounderThread && <div className="border-t-2 border-indigo-200 bg-indigo-50/50 p-3 sm:p-4">
-        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-          <div><h3 className="font-black text-slate-900">{openFounderThread.fullName}</h3><p className="text-[10px] text-slate-500">@{openFounderThread.username} · {openFounderThread.schoolName || 'Agenda'}</p></div>
-          <button type="button" onClick={()=>{setOpenFounderThread(null);setFounderConversation([]);}} className="rounded-lg border bg-white px-3 py-1.5 text-xs font-bold">{currentLang==='ar'?'إغلاق المحادثة':currentLang==='fr'?'Fermer':currentLang==='es'?'Cerrar':currentLang==='it'?'Chiudi':'Close chat'}</button>
-        </div>
-        <div className="max-h-80 space-y-2 overflow-y-auto rounded-xl border border-slate-200 bg-white p-3">
-          {founderLoading ? <p className="text-xs text-slate-500">{currentLang==='ar'?'جارٍ التحميل...':'Loading conversation…'}</p> : founderConversation.length === 0 ? <p className="text-xs text-slate-400">{currentLang==='ar'?'لا توجد رسائل في هذه المحادثة بعد.':'No messages in this conversation yet.'}</p> : founderConversation.map((message)=>(
-            <div key={message.id} className={message.senderRole==='owner'?'flex justify-end':'flex justify-start'}>
-              <div className={message.senderRole==='owner'?'max-w-[88%] rounded-xl bg-indigo-700 p-3 text-xs text-white':'max-w-[88%] rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-800'}>
-                <p className="mb-1 text-[9px] font-black opacity-70">{message.senderRole==='owner'?(currentLang==='ar'?'المالك':currentLang==='fr'?'Propriétaire':currentLang==='es'?'Propietario':currentLang==='it'?'Proprietario':'Owner'):openFounderThread.fullName}</p>
-                <p className="whitespace-pre-wrap">{message.message}</p>
-                <time className="mt-1 block text-end text-[9px] opacity-60">{new Date(message.createdAt).toLocaleString(currentLang,{dateStyle:'short',timeStyle:'short'})}</time>
-              </div>
-            </div>
-          ))}
-        </div>
-        <form onSubmit={sendFounderReply} className="mt-3 flex items-end gap-2">
-          <textarea value={founderReply} onChange={e=>setFounderReply(e.target.value)} rows={2} maxLength={4000} placeholder={currentLang==='ar'?'اكتب ردك...':currentLang==='fr'?'Écrire une réponse...':currentLang==='es'?'Escribir respuesta...':currentLang==='it'?'Scrivi una risposta...':'Write a reply...'} className="min-h-14 min-w-0 flex-1 rounded-xl border border-slate-200 bg-white p-3 text-xs outline-indigo-600"/>
-          <button type="submit" disabled={!founderReply.trim()||founderActionBusy} className="rounded-xl bg-indigo-700 p-3 text-white disabled:opacity-40" aria-label={currentLang==='ar'?'إرسال الرد':'Send reply'}><Send size={15}/></button>
-        </form>
-      </div>}
-    </section>
-
-
-
     <section className="rounded-2xl border bg-white overflow-hidden">
       <div className="p-4 flex flex-wrap justify-between items-center gap-3"><h2 className="font-black">{t.directors}</h2><div className="flex gap-2"><button onClick={()=>setShowCreate(v=>!v)} className="rounded-lg bg-indigo-700 px-3 py-2 text-xs font-bold text-white">{t.add}</button><button onClick={()=>void refresh()} aria-label="Refresh"><RefreshCw size={17}/></button></div></div>
       {loading ? <p className="p-4">{t.loading}</p> : <div className="overflow-x-auto">
         <table className="w-full text-sm min-w-[1450px]">
-          <thead className="bg-slate-50"><tr>{[t.school,t.director,t.phone,t.email,t.students,t.educators,t.joined,t.expiry,t.account,t.paymentState,t.schoolLink,t.paymentLink,t.actions].map(x=><th key={x} className="p-3 text-start whitespace-nowrap">{x}</th>)}</tr></thead>
-          <tbody>{rows.length===0 ? <tr><td colSpan={13} className="p-4 text-center text-slate-500">{t.empty}</td></tr> : rows.map(row=>{
+          <thead className="bg-slate-50"><tr>{[t.school,t.director,t.phone,t.email,currentLang==='ar'?'الوارد':currentLang==='fr'?'Messages reçus':currentLang==='es'?'Chat entrante':currentLang==='it'?'Chat in':'Chat in',currentLang==='ar'?'الصادر':currentLang==='fr'?'Messages envoyés':currentLang==='es'?'Chat saliente':currentLang==='it'?'Chat out':'Chat out',t.students,t.educators,t.joined,t.expiry,t.account,t.paymentState,t.schoolLink,t.paymentLink,t.actions].map(x=><th key={x} className="p-3 text-start whitespace-nowrap">{x}</th>)}</tr></thead>
+          <tbody>{rows.length===0 ? <tr><td colSpan={15} className="p-4 text-center text-slate-500">{t.empty}</td></tr> : rows.map(row=>{
+            const schoolThreads = founderThreads.filter(thread => thread.schoolId === row.schoolId);
+            const chatIn = schoolThreads.reduce((total, thread) => total + (thread.incomingCount || 0), 0);
+            const chatOut = schoolThreads.reduce((total, thread) => total + (thread.outgoingCount || 0), 0);
             const link=destination(row);
             const contactLabel=row.paymentMethod==='whatsapp'?'WhatsApp':row.paymentMethod==='phone'?t.phone:row.paymentMethod==='email'?t.email:row.paymentMethod==='bank'?'Bank':row.paymentMethod==='suyool'?'Suyool':'—';
             return <tr key={row.id} className="border-t align-top">
@@ -282,6 +160,8 @@ export const OwnerDashboard: React.FC<{ currentLang:Language; token:string; onSi
               <td className="p-3"><b>{row.fullName}</b><small className="block text-slate-500">@{row.username}</small><small className="block text-slate-500">{row.setupPending?t.setupPending:t.setupDone}</small><small className={row.phonePasswordEnabled?'block text-emerald-700':'block text-slate-500'}>{row.phonePasswordEnabled?t.phoneEnabled:t.phoneDisabled}</small></td>
               <td className="p-3 whitespace-nowrap">{row.phone||'—'}</td>
               <td className="p-3">{row.email||'—'}</td>
+              <td className="p-3 text-center"><span className={schoolThreads.some(thread=>thread.unreadIncoming>0)?'inline-flex min-w-8 justify-center rounded-full bg-rose-100 px-2 py-1 font-black text-rose-700':'font-semibold text-slate-700'} title={schoolThreads.reduce((n,thread)=>n+(thread.unreadIncoming||0),0)+' unread'}>{chatIn}</span></td>
+              <td className="p-3 text-center font-semibold text-indigo-700">{chatOut}</td>
               <td className="p-3">{row.studentCount}</td><td className="p-3">{row.educatorCount}</td>
               <td className="p-3 whitespace-nowrap">{dateLabel(row.createdAt,currentLang)}</td>
               <td className="p-3 whitespace-nowrap">{dateLabel(row.expiresAt,currentLang)}</td>
