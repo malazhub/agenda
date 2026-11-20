@@ -191,6 +191,11 @@ const registerSignOutCleanup = useCallback(
           setRegisteredAccount(account);
           setActiveSchoolId('default-agenda-school');
           setUserProfile((previous) => ({ ...previous, name: '', email: '', role: 'student' }));
+          const agendaHome = 'https://agenda.mycamp.workers.dev/';
+          if (window.location.href !== agendaHome) {
+            window.location.replace(agendaHome);
+            return;
+          }
           return;
         }
         setChatOnlyMode(false);
