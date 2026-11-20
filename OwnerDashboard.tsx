@@ -433,17 +433,19 @@ export const OwnerDashboard: React.FC<{ currentLang:Language; token:string; onSi
           <h2 className="font-black">{roleTitle} <span className="ms-1 text-xs font-semibold text-slate-500">({group.length})</span></h2>
           <span className="text-[11px] text-slate-500">{currentLang==='ar'?'إدارة حسابات المدرسة':currentLang==='fr'?'Gestion des comptes scolaires':currentLang==='es'?'Gestión de cuentas escolares':currentLang==='it'?'Gestione degli account scolastici':'School account management'}</span>
         </div>
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[1550px] text-xs">
-            <thead className="bg-white"><tr>{headers.map((header) => <th key={header} className="whitespace-nowrap p-3 text-start">{header}</th>)}</tr></thead>
-            <tbody>
-              {group.length===0
-                ? <tr><td colSpan={13} className="p-4 text-center text-slate-400">{emptyLabel}</td></tr>
-                : group.map((thread) => {
+        {group.length===0
+          ? <p className="p-4 text-center text-slate-400">{emptyLabel}</p>
+          : <div className="divide-y divide-slate-100">
+              {group.map((thread) => {
                   const stagedAccount = pendingSchoolAccountUpdates[thread.accountId] || thread;
                   const activated = stagedAccount.activated === true || Number(stagedAccount.activated || 0) === 1;
                   const paid = stagedAccount.paid === true || Number(stagedAccount.paid || 0) === 1;
-                  return <tr key={thread.accountId} className={thread.unreadIncoming>0?'border-t bg-rose-50':'border-t border-slate-100'}>
+                  return <div key={thread.accountId} className="bg-white">
+                    <div className="overflow-x-auto">
+                      <table className="w-full min-w-[1550px] text-xs">
+                        <thead className="bg-slate-50"><tr>{headers.map((header) => <th key={header} className="whitespace-nowrap p-3 text-start">{header}</th>)}</tr></thead>
+                        <tbody>
+                          <tr className={thread.unreadIncoming>0?'bg-rose-50':'bg-white'}>
                     <td className="p-3">
                       <button type="button" onClick={()=>void openFounderConversation(thread)} className="text-start font-bold text-indigo-800 underline decoration-indigo-300 underline-offset-2">{thread.fullName || '—'}</button>
                       <small className={thread.unreadIncoming>0?'mt-1 block font-black text-rose-700':'mt-1 block text-slate-500'}>
@@ -486,11 +488,13 @@ export const OwnerDashboard: React.FC<{ currentLang:Language; token:string; onSi
                     <td className="p-3">
                       <button type="button" disabled={founderActionBusy} onClick={()=>void deleteSchoolAccount(thread)} className="rounded-lg p-2 text-rose-700 hover:bg-rose-50 disabled:opacity-40" aria-label={headers[12]} title={headers[12]}><Trash2 size={16}/></button>
                     </td>
-                  </tr>;
-                })}
-            </tbody>
-          </table>
-        </div>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>;
+              })}
+            </div>}
       </section>;
     })}
 
