@@ -713,7 +713,8 @@ Platform architecture and navigation:
 
  {/* Floating AI Chat Window */}
  {isOpen && (
- <div className="fixed bottom-6 right-4 sm:right-6 z-50 w-[95vw] sm:w-[400px] max-h-[80vh] h-[540px] bg-white relative rounded-3xl shadow-2xl border border-slate-200 flex flex-col overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-200 text-start">
+ <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/40 p-2 sm:p-4" onClick={() => setIsOpen(false)}>
+ <div role="dialog" aria-modal="true" aria-label={currentLang === 'ar' ? 'المساعد الذكي' : currentLang === 'fr' ? 'Assistant IA' : currentLang === 'es' ? 'Asistente de IA' : currentLang === 'it' ? 'Assistente IA' : 'AI Assistant'} onClick={(event) => event.stopPropagation()} className="relative flex h-[min(88dvh,740px)] max-h-[calc(100dvh-1rem)] w-full max-w-[460px] flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white text-start shadow-2xl animate-in fade-in zoom-in-95 duration-200">
  {/* Header */}
  <div className="bg-linear-to-r from-slate-900 via-indigo-950 to-blue-950 text-white p-4 flex items-center justify-between border-b border-white/10 shrink-0">
  <div className="flex items-center gap-2.5">
@@ -817,6 +818,15 @@ Platform architecture and navigation:
  <div ref={messagesEndRef} />
  </div>
 
+ {!isOwner && (
+  <div className="shrink-0 border-t border-slate-100 bg-white px-3 pt-2">
+   <button type="button" onClick={() => account && sessionToken ? setFounderMode(true) : onOpenSignIn?.()} className="flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2.5 text-sm font-bold text-amber-900 transition hover:bg-amber-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-600">
+    <span aria-hidden="true">✉</span>
+    <span>{currentLang === 'ar' ? 'التواصل مع المؤسس' : currentLang === 'fr' ? 'Contacter le fondateur' : currentLang === 'es' ? 'Contactar al fundador' : currentLang === 'it' ? 'Contatta il fondatore' : 'Contact Founder'}</span>
+   </button>
+  </div>
+ )}
+
  {/* Input Form */}
  <form
  onSubmit={(e) => {
@@ -845,7 +855,6 @@ Platform architecture and navigation:
  dir={currentLang === 'ar' ? 'rtl' : 'auto'}
  className="flex-1 text-xs sm:text-sm p-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-indigo-600 font-medium"
  />
- {!isOwner && <button type="button" onClick={() => account && sessionToken ? setFounderMode(true) : onOpenSignIn?.()} className="shrink-0 rounded-lg border border-amber-300 bg-amber-50 px-2.5 py-2 text-[10px] font-black text-amber-900">{currentLang === 'ar' ? 'التواصل مع المؤسس' : currentLang === 'fr' ? 'Contacter le fondateur' : currentLang === 'es' ? 'Contactar al fundador' : currentLang === 'it' ? 'Contatta il fondatore' : 'Contact Founder'}</button>}
             <button
  type="submit"
  disabled={!inputText.trim() || isTyping}
@@ -861,7 +870,10 @@ Platform architecture and navigation:
    <div className="flex items-center justify-between gap-2 border-b border-slate-200 bg-slate-950 p-4 text-white">
     <div><h5 className="text-sm font-black">{currentLang === 'ar' ? 'التواصل مع المؤسس' : currentLang === 'fr' ? 'Contacter le fondateur' : currentLang === 'es' ? 'Contactar al fundador' : currentLang === 'it' ? 'Contatta il fondatore' : 'Contact Founder'}</h5>
     <p className="mt-0.5 text-[10px] text-slate-300">{currentLang === 'ar' ? 'أرسل سؤالك وتابع الرد هنا.' : currentLang === 'fr' ? 'Envoyez votre question et suivez la réponse ici.' : currentLang === 'es' ? 'Envía tu pregunta y consulta la respuesta aquí.' : currentLang === 'it' ? 'Invia la domanda e consulta qui la risposta.' : 'Send your question and follow the reply here.'}</p></div>
-    <button type="button" onClick={() => setFounderMode(false)} className="rounded-lg bg-white/10 px-3 py-2 text-xs font-bold">{currentLang === 'ar' ? 'عودة' : currentLang === 'fr' ? 'Retour' : currentLang === 'es' ? 'Volver' : currentLang === 'it' ? 'Indietro' : 'Back'}</button>
+    <div className="flex shrink-0 items-center gap-2">
+     <button type="button" onClick={() => setFounderMode(false)} className="rounded-lg bg-white/10 px-3 py-2 text-xs font-bold">{currentLang === 'ar' ? 'عودة' : currentLang === 'fr' ? 'Retour' : currentLang === 'es' ? 'Volver' : currentLang === 'it' ? 'Indietro' : 'Back'}</button>
+     <button type="button" onClick={() => { setFounderMode(false); setIsOpen(false); }} aria-label={chatLabels.close} title={chatLabels.close} className="rounded-lg bg-white/10 p-2 text-white transition hover:bg-white/20"><X className="h-4 w-4"/></button>
+    </div>
    </div>
    <div className="flex-1 space-y-3 overflow-y-auto bg-slate-50 p-4">
     {!account || !sessionToken ? (
@@ -892,6 +904,7 @@ Platform architecture and navigation:
   </div>
  )}
 
+ </div>
  </div>
  )}
  </>
