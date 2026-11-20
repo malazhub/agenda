@@ -63,6 +63,19 @@ export const OwnerDashboard: React.FC<{ currentLang:Language; token:string; onSi
     finally { setLoading(false); }
   };
   useEffect(() => { void refresh(); }, [token]);
+  useEffect(() => {
+    let active = true;
+    const pollInbox = async () => {
+      try {
+        const inbox = await getOwnerFounderThreads(token);
+        if (active) setFounderThreads(inbox.threads || []);
+      } catch (e) {
+        if (active) setFounderError(e instanceof Error ? e.message : t.error);
+      }
+    };
+    const intervalId = window.setInterval(() => void pollInbox(), 10000);
+    return () => { active = false; window.clearInterval(intervalId); };
+  }, [token]);
 
   const openFounderConversation = async (thread:FounderThread) => {
     setFounderLoading(true); setFounderError(''); setOpenFounderThread(thread);
@@ -94,7 +107,8 @@ export const OwnerDashboard: React.FC<{ currentLang:Language; token:string; onSi
     setFounderActionBusy(true); setFounderError('');
     try {
       await deleteFounderThread(token, thread.accountId);
-      setFounderThreads((items) => items.map((item) => item.accountId === thread.accountId ? { ...item, messageCount:0, unreadIncoming:0, outgoingCount:0, lastMessageAt:null } : item));
+      const inbox = await getOwnerFounderThreads(token);
+      setFounderThreads(inbox.threads || []);
       if (openFounderThread?.accountId === thread.accountId) { setOpenFounderThread(null); setFounderConversation([]); }
     } catch (e) { setFounderError(e instanceof Error ? e.message : t.error); }
     finally { setFounderActionBusy(false); }
@@ -183,6 +197,78 @@ export const OwnerDashboard: React.FC<{ currentLang:Language; token:string; onSi
       <div className="rounded-2xl border bg-white p-4"><Users/><b className="block text-2xl">{rows.reduce((n,r)=>n+r.educatorCount,0)}</b>{t.educators}</div>
     </div>
 
+    <section className="overflow-hidden rounded-2xl border-2 border-indigo-200 bg-white shadow-md">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-indigo-100 bg-indigo-50/70 p-4">
+        <div>
+          <h2 className="font-black text-slate-900">{currentLang==='ar'?'رسائل المؤسس':currentLang==='fr'?'Messages au fondateur':currentLang==='es'?'Mensajes al fundador':currentLang==='it'?'Messaggi al fondatore':'Founder messages'}</h2>
+          <p className="mt-1 text-xs text-slate-600">{currentLang==='ar'?'محادثات المديرين والمعلمين والطلاب، بما في ذلك الحسابات التي تنتظر التفعيل.':currentLang==='fr'?'Conversations des directeurs, éducateurs et élèves, y compris les comptes en attente d’activation.':currentLang==='es'?'Conversaciones de directores, educadores y estudiantes, incluidas las cuentas pendientes de activación.':currentLang==='it'?'Conversazioni di direttori, educatori e studenti, inclusi gli account in attesa di attivazione.':'Messages from Directors, Educators and Students, including accounts awaiting activation.'}</p>
+        </div>
+        <button type="button" onClick={()=>void refresh()} className="inline-flex items-center gap-2 rounded-lg border border-indigo-200 bg-white px-3 py-2 text-xs font-bold text-indigo-800"><RefreshCw size={14}/>{currentLang==='ar'?'تحديث':currentLang==='fr'?'Actualiser':currentLang==='es'?'Actualizar':currentLang==='it'?'Aggiorna':'Refresh inbox'}</button>
+      </div>
+      {(['director','educator','student'] as const).map((role) => {
+        const group = founderThreads.filter((thread) => thread.role === role);
+        const roleLabel = role === 'director' ? t.directors : role === 'educator' ? t.educators : t.students;
+        return <div key={role} className="border-b border-slate-200 last:border-b-0">
+          <div className="flex items-center justify-between bg-slate-50 px-4 py-2 text-xs font-black text-slate-700"><span>{roleLabel}</span><span>{group.length}</span></div>
+          {group.length === 0
+            ? <p className="px-4 py-4 text-xs text-slate-400">{currentLang==='ar'?'لا توجد حسابات في هذه الفئة.':currentLang==='fr'?'Aucun compte dans cette catégorie.':currentLang==='es'?'No hay cuentas en esta categoría.':currentLang==='it'?'Nessun account in questa categoria.':'No accounts in this category.'}</p>
+            : <div className="grid gap-3 p-3 sm:grid-cols-2 xl:grid-cols-3">
+              {group.map((thread) => (
+                <article key={thread.accountId} className={thread.unreadIncoming > 0 ? 'rounded-xl border-2 border-rose-300 bg-rose-50 p-3 shadow-sm' : 'rounded-xl border border-slate-200 bg-white p-3'}>
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-black text-slate-900">{thread.fullName}</p>
+                      <p className="mt-0.5 truncate text-[10px] text-slate-500">@{thread.username} · {thread.schoolName || 'Agenda'}</p>
+                    </div>
+                    {thread.unreadIncoming > 0 && <span className="shrink-0 rounded-full bg-rose-600 px-2 py-1 text-[9px] font-black text-white">{currentLang==='ar'?'جديد':currentLang==='fr'?'NOUVEAU':currentLang==='es'?'NUEVO':currentLang==='it'?'NUOVO':'NEW'}</span>}
+                  </div>
+                  <div className="mt-3 grid grid-cols-2 divide-x divide-slate-200 overflow-hidden rounded-lg border border-slate-200 bg-slate-50">
+                    <div className="px-3 py-2 text-center">
+                      <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">{currentLang==='ar'?'وارد':'Chat in'}</p>
+                      <p className={thread.unreadIncoming > 0 ? 'mt-0.5 text-xl font-black tabular-nums text-rose-700' : 'mt-0.5 text-xl font-black tabular-nums text-slate-800'}>{thread.incomingCount || 0}</p>
+                      {thread.unreadIncoming > 0 && <p className="text-[9px] font-bold text-rose-700">{thread.unreadIncoming} {currentLang==='ar'?'غير مقروء':'unread'}</p>}
+                    </div>
+                    <div className="px-3 py-2 text-center">
+                      <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">{currentLang==='ar'?'صادر':'Chat out'}</p>
+                      <p className="mt-0.5 text-xl font-black tabular-nums text-indigo-700">{thread.outgoingCount || 0}</p>
+                    </div>
+                  </div>
+                  <p className="mt-2 text-[10px] text-slate-500">{currentLang==='ar'?'آخر رسالة:':currentLang==='fr'?'Dernier message :':currentLang==='es'?'Último mensaje:':currentLang==='it'?'Ultimo messaggio:':'Last message:'} {thread.lastMessageAt ? dateLabel(thread.lastMessageAt,currentLang) : '—'}</p>
+                  <div className="mt-3 grid grid-cols-2 gap-2">
+                    <button type="button" onClick={()=>void openFounderConversation(thread)} className="rounded-lg bg-indigo-700 px-3 py-2 text-[11px] font-black text-white hover:bg-indigo-800">{currentLang==='ar'?'فتح والرد':currentLang==='fr'?'Ouvrir et répondre':currentLang==='es'?'Abrir y responder':currentLang==='it'?'Apri e rispondi':'Open & reply'}</button>
+                    <button type="button" disabled={founderActionBusy} onClick={()=>void removeFounderConversation(thread)} className="inline-flex items-center justify-center gap-1 rounded-lg border border-rose-200 bg-white px-3 py-2 text-[11px] font-bold text-rose-700 hover:bg-rose-50 disabled:opacity-40"><Trash2 size={13}/>{currentLang==='ar'?'حذف المحادثة':currentLang==='fr'?'Supprimer':currentLang==='es'?'Eliminar':currentLang==='it'?'Elimina':'Delete chat'}</button>
+                  </div>
+                </article>
+              ))}
+            </div>}
+        </div>;
+      })}
+      {founderError && <p role="alert" className="m-3 rounded-lg bg-rose-50 p-3 text-xs text-rose-700">{founderError}</p>}
+      {openFounderThread && <div className="border-t-2 border-indigo-200 bg-indigo-50/50 p-3 sm:p-4">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <div><h3 className="font-black text-slate-900">{openFounderThread.fullName}</h3><p className="text-[10px] text-slate-500">@{openFounderThread.username} · {openFounderThread.schoolName || 'Agenda'}</p></div>
+          <button type="button" onClick={()=>{setOpenFounderThread(null);setFounderConversation([]);}} className="rounded-lg border bg-white px-3 py-1.5 text-xs font-bold">{currentLang==='ar'?'إغلاق المحادثة':currentLang==='fr'?'Fermer':currentLang==='es'?'Cerrar':currentLang==='it'?'Chiudi':'Close chat'}</button>
+        </div>
+        <div className="max-h-80 space-y-2 overflow-y-auto rounded-xl border border-slate-200 bg-white p-3">
+          {founderLoading ? <p className="text-xs text-slate-500">{currentLang==='ar'?'جارٍ التحميل...':'Loading conversation…'}</p> : founderConversation.length === 0 ? <p className="text-xs text-slate-400">{currentLang==='ar'?'لا توجد رسائل في هذه المحادثة بعد.':'No messages in this conversation yet.'}</p> : founderConversation.map((message)=>(
+            <div key={message.id} className={message.senderRole==='owner'?'flex justify-end':'flex justify-start'}>
+              <div className={message.senderRole==='owner'?'max-w-[88%] rounded-xl bg-indigo-700 p-3 text-xs text-white':'max-w-[88%] rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-800'}>
+                <p className="mb-1 text-[9px] font-black opacity-70">{message.senderRole==='owner'?(currentLang==='ar'?'المالك':currentLang==='fr'?'Propriétaire':currentLang==='es'?'Propietario':currentLang==='it'?'Proprietario':'Owner'):openFounderThread.fullName}</p>
+                <p className="whitespace-pre-wrap">{message.message}</p>
+                <time className="mt-1 block text-end text-[9px] opacity-60">{new Date(message.createdAt).toLocaleString(currentLang,{dateStyle:'short',timeStyle:'short'})}</time>
+              </div>
+            </div>
+          ))}
+        </div>
+        <form onSubmit={sendFounderReply} className="mt-3 flex items-end gap-2">
+          <textarea value={founderReply} onChange={e=>setFounderReply(e.target.value)} rows={2} maxLength={4000} placeholder={currentLang==='ar'?'اكتب ردك...':currentLang==='fr'?'Écrire une réponse...':currentLang==='es'?'Escribir respuesta...':currentLang==='it'?'Scrivi una risposta...':'Write a reply...'} className="min-h-14 min-w-0 flex-1 rounded-xl border border-slate-200 bg-white p-3 text-xs outline-indigo-600"/>
+          <button type="submit" disabled={!founderReply.trim()||founderActionBusy} className="rounded-xl bg-indigo-700 p-3 text-white disabled:opacity-40" aria-label={currentLang==='ar'?'إرسال الرد':'Send reply'}><Send size={15}/></button>
+        </form>
+      </div>}
+    </section>
+
+
+
     <section className="rounded-2xl border bg-white overflow-hidden">
       <div className="p-4 flex flex-wrap justify-between items-center gap-3"><h2 className="font-black">{t.directors}</h2><div className="flex gap-2"><button onClick={()=>setShowCreate(v=>!v)} className="rounded-lg bg-indigo-700 px-3 py-2 text-xs font-bold text-white">{t.add}</button><button onClick={()=>void refresh()} aria-label="Refresh"><RefreshCw size={17}/></button></div></div>
       {loading ? <p className="p-4">{t.loading}</p> : <div className="overflow-x-auto">
@@ -216,75 +302,6 @@ export const OwnerDashboard: React.FC<{ currentLang:Language; token:string; onSi
             </td></tr>
           </tfoot>
         </table>
-      </div>}
-    </section>
-
-    <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 p-4">
-        <div><h2 className="font-black">{currentLang==='ar'?'رسائل المؤسس الواردة والصادرة':currentLang==='fr'?'Messages avec le fondateur':currentLang==='es'?'Mensajes con el fundador':currentLang==='it'?'Messaggi con il fondatore':'Founder messages'}</h2>
-          <p className="mt-1 text-xs text-slate-500">{currentLang==='ar'?'محادثات جميع المديرين والمعلمين والطلاب، بما في ذلك الحسابات غير المفعّلة.':currentLang==='fr'?'Conversations avec tous les directeurs, éducateurs et élèves, y compris les comptes non activés.':currentLang==='es'?'Conversaciones con todos los directores, educadores y estudiantes, incluidas las cuentas no activadas.':currentLang==='it'?'Conversazioni con tutti i direttori, educatori e studenti, inclusi gli account non attivati.':'Conversations with all Directors, Educators and Students, including accounts awaiting activation.'}</p>
-        </div>
-        <button type="button" onClick={()=>void refresh()} className="inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-xs font-bold"><RefreshCw size={14}/>{currentLang==='ar'?'تحديث':currentLang==='fr'?'Actualiser':currentLang==='es'?'Actualizar':currentLang==='it'?'Aggiorna':'Refresh'}</button>
-      </div>
-      {(['director','educator','student'] as const).map((role) => {
-        const group = founderThreads.filter((thread) => thread.role === role);
-        const roleLabel = role === 'director' ? t.directors : role === 'educator' ? t.educators : t.students;
-        return <div key={role} className="border-b border-slate-200 last:border-b-0">
-          <div className="bg-slate-50 px-4 py-2 text-xs font-black text-slate-700">{roleLabel} ({group.length})</div>
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[760px] text-xs">
-              <thead><tr className="text-start text-slate-500">
-                <th className="p-3 text-start">{currentLang==='ar'?'المستخدم / المدرسة':currentLang==='fr'?'Compte / école':currentLang==='es'?'Cuenta / escuela':currentLang==='it'?'Account / scuola':'Account / School'}</th>
-                <th className="p-3 text-start">{currentLang==='ar'?'وارد':currentLang==='fr'?'Entrants':currentLang==='es'?'Entrantes':currentLang==='it'?'In entrata':'Chat in'}</th>
-                <th className="p-3 text-start">{currentLang==='ar'?'صادر':currentLang==='fr'?'Sortants':currentLang==='es'?'Salientes':currentLang==='it'?'In uscita':'Chat out'}</th>
-                <th className="p-3 text-start">{currentLang==='ar'?'آخر رسالة':currentLang==='fr'?'Dernier message':currentLang==='es'?'Último mensaje':currentLang==='it'?'Ultimo messaggio':'Last message'}</th>
-                <th className="p-3 text-start">{currentLang==='ar'?'الإجراءات':currentLang==='fr'?'Actions':currentLang==='es'?'Acciones':currentLang==='it'?'Azioni':'Actions'}</th>
-              </tr></thead>
-              <tbody>
-                {group.length === 0 ? <tr><td colSpan={5} className="p-3 text-slate-400">{currentLang==='ar'?'لا توجد حسابات في هذه الفئة.':currentLang==='fr'?'Aucun compte dans cette catégorie.':currentLang==='es'?'No hay cuentas en esta categoría.':currentLang==='it'?'Nessun account in questa categoria.':'No accounts in this category.'}</td></tr> : group.map((thread) => (
-                  <tr key={thread.accountId} className={thread.unreadIncoming > 0 ? 'border-t border-rose-200 bg-rose-50' : 'border-t border-slate-100'}>
-                    <td className="p-3">
-                      <span className="block font-bold text-slate-900">{thread.fullName}</span>
-                      <span className="block text-[10px] text-slate-500">@{thread.username} · {thread.schoolName || 'Agenda'}</span>
-                    </td>
-                    <td className="p-3">
-                      <span className={thread.unreadIncoming > 0 ? 'inline-flex items-center gap-1 rounded-full bg-rose-600 px-2 py-1 font-black text-white' : 'font-semibold text-slate-600'}><MessageCircle size={12}/>{thread.incomingCount || 0}</span>
-                      {thread.unreadIncoming > 0 && <span className="ms-2 font-black text-rose-700">{currentLang==='ar'?'جديد':currentLang==='fr'?'Nouveau':currentLang==='es'?'Nuevo':currentLang==='it'?'Nuovo':'NEW'}</span>}
-                    </td>
-                    <td className="p-3 font-semibold text-slate-600">{thread.outgoingCount || 0}</td>
-                    <td className="p-3 whitespace-nowrap text-slate-500">{thread.lastMessageAt ? dateLabel(thread.lastMessageAt,currentLang) : '—'}</td>
-                    <td className="p-3"><div className="flex items-center gap-3">
-                      <button type="button" onClick={()=>void openFounderConversation(thread)} className="font-black text-indigo-700 underline">{currentLang==='ar'?'فتح المحادثة':currentLang==='fr'?'Ouvrir':currentLang==='es'?'Abrir':currentLang==='it'?'Apri':'Open chat'}</button>
-                      <button type="button" disabled={founderActionBusy} onClick={()=>void removeFounderConversation(thread)} className="inline-flex items-center gap-1 font-bold text-rose-700 underline disabled:opacity-40"><Trash2 size={12}/>{currentLang==='ar'?'حذف':currentLang==='fr'?'Supprimer':currentLang==='es'?'Eliminar':currentLang==='it'?'Elimina':'Delete chat'}</button>
-                    </div></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>;
-      })}
-      {founderError && <p role="alert" className="m-4 rounded-lg bg-rose-50 p-3 text-xs text-rose-700">{founderError}</p>}
-      {openFounderThread && <div className="border-t-2 border-indigo-200 bg-indigo-50/40 p-4">
-        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-          <div><h3 className="font-black">{openFounderThread.fullName}</h3><p className="text-[10px] text-slate-500">@{openFounderThread.username} · {openFounderThread.schoolName || 'Agenda'}</p></div>
-          <button type="button" onClick={()=>setOpenFounderThread(null)} className="rounded-lg border bg-white px-3 py-1.5 text-xs font-bold">{currentLang==='ar'?'إغلاق':currentLang==='fr'?'Fermer':currentLang==='es'?'Cerrar':currentLang==='it'?'Chiudi':'Close'}</button>
-        </div>
-        <div className="max-h-72 space-y-2 overflow-y-auto rounded-xl border bg-white p-3">
-          {founderLoading ? <p className="text-xs text-slate-500">{currentLang==='ar'?'جارٍ التحميل...':'Loading conversation…'}</p> : founderConversation.length === 0 ? <p className="text-xs text-slate-400">{currentLang==='ar'?'لا توجد رسائل في هذه المحادثة بعد.':'No messages in this conversation yet.'}</p> : founderConversation.map((message)=>(
-            <div key={message.id} className={message.senderRole==='owner'?'flex justify-end':'flex justify-start'}>
-              <div className={message.senderRole==='owner'?'max-w-[85%] rounded-xl bg-indigo-700 p-3 text-xs text-white':'max-w-[85%] rounded-xl border bg-slate-50 p-3 text-xs text-slate-800'}>
-                <p className="mb-1 text-[9px] font-black opacity-70">{message.senderRole==='owner'?(currentLang==='ar'?'المالك':currentLang==='fr'?'Propriétaire':currentLang==='es'?'Propietario':currentLang==='it'?'Proprietario':'Owner'):openFounderThread.fullName}</p>
-                <p className="whitespace-pre-wrap">{message.message}</p>
-                <time className="mt-1 block text-end text-[9px] opacity-60">{new Date(message.createdAt).toLocaleString(currentLang,{dateStyle:'short',timeStyle:'short'})}</time>
-              </div>
-            </div>
-          ))}
-        </div>
-        <form onSubmit={sendFounderReply} className="mt-3 flex items-end gap-2">
-          <textarea value={founderReply} onChange={e=>setFounderReply(e.target.value)} rows={2} maxLength={4000} placeholder={currentLang==='ar'?'اكتب ردك...':currentLang==='fr'?'Écrire une réponse...':currentLang==='es'?'Escribir respuesta...':currentLang==='it'?'Scrivi una risposta...':'Write a reply...'} className="min-h-14 flex-1 rounded-xl border bg-white p-3 text-xs outline-indigo-600"/>
-          <button type="submit" disabled={!founderReply.trim()||founderActionBusy} className="rounded-xl bg-indigo-700 p-3 text-white disabled:opacity-40" aria-label="Send reply"><Send size={15}/></button>
-        </form>
       </div>}
     </section>
 
