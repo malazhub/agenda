@@ -55,10 +55,20 @@ export const OwnerDashboard: React.FC<{ currentLang:Language; token:string; onSi
     } catch (e) { setError(e instanceof Error ? e.message : t.error); }
     finally { setLoading(false); }
   };
+  useEffect(() => { void refresh(); }, [token]);
   useEffect(() => {
-    void refresh();
-    const intervalId = window.setInterval(() => { void refresh(); }, 15000);
-    return () => window.clearInterval(intervalId);
+    let active = true;
+    const refreshFounderCounts = async () => {
+      try {
+        const inbox = await getOwnerFounderThreads(token);
+        if (active) setFounderThreads(inbox.threads || []);
+      } catch {
+        // Keep the Director table usable if the optional founder inbox is unavailable.
+      }
+    };
+    void refreshFounderCounts();
+    const intervalId = window.setInterval(() => { void refreshFounderCounts(); }, 15000);
+    return () => { active = false; window.clearInterval(intervalId); };
   }, [token]);
 
   const create = async (event:React.FormEvent<HTMLFormElement>) => {
