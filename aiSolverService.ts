@@ -13,9 +13,9 @@ export async function solveStudentExercise(
   subject?: string
 ): Promise<AISolutionResult> {
   try {
-      const prompt = `You are a Lebanese official exam corrector (CRDP / MEHE).
+      const prompt = `You are an official exam and academic-work corrector (CRDP / MEHE).
 A K-12 student has submitted a photo of their homework / exam exercise via their camera.
-Student's notes: "${userNotes || 'Solve this exercise and provide the official Lebanese Barème'}".
+Student's notes: "${userNotes || 'Solve this exercise and provide the official exam marking criteria'}".
 Subject: "${subject || 'Mathematics / Sciences'}".
 
 Please provide:
