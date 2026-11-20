@@ -356,7 +356,8 @@ async function authenticate(request, env, requiredRole) {
   // Re-check Director school licensing on every authenticated API request so a
   // suspended or expired licence cannot keep using a still-valid 12-hour token.
   // Platform Owners retain access to administer their own school.
-  if (!payload.chatOnly && authenticated.role === "director" && !authenticated.isPlatformOwner) {
+  // Contact Us is available regardless of school licence or activation state.
+  if (requiredRole !== "founder-chat" && !payload.chatOnly && authenticated.role === "director" && !authenticated.isPlatformOwner) {
     const licence = await env.DB.prepare(
       `SELECT accounts.expires_at, accounts.activated, accounts.paid,
               schools.license_active, schools.license_expires_at
@@ -1157,7 +1158,32 @@ async function ownerFounderMessages(request, env) {
       return json({ messages: messages.results || [] });
     }
     const [threads, guests] = await Promise.all([
-      env.DB.prepare(`SELECT a.id AS accountId, a.full_name AS fullName, a.username, a.role, a.school_id AS schoolId, COALESCE(s.name, '') AS schoolName, COUNT(m.id) AS messageCount, SUM(CASE WHEN m.id IS NOT NULL AND m.sender_id != ? THEN 1 ELSE 0 END) AS incomingCount, SUM(CASE WHEN m.id IS NOT NULL AND m.sender_id != ? AND m.read_at IS NULL THEN 1 ELSE 0 END) AS unreadIncoming, SUM(CASE WHEN m.id IS NOT NULL AND m.sender_id = ? THEN 1 ELSE 0 END) AS outgoingCount, MAX(m.created_at) AS lastMessageAt FROM accounts a LEFT JOIN schools s ON s.id = a.school_id LEFT JOIN founder_messages m ON m.thread_account_id = a.id WHERE a.role IN ('student','educator','director') AND NOT EXISTS (SELECT 1 FROM platform_owners p WHERE p.account_id = a.id) GROUP BY a.id, a.full_name, a.username, a.role, a.school_id, s.name ORDER BY CASE WHEN COUNT(m.id) > 0 THEN 0 ELSE 1 END, MAX(m.created_at) DESC, a.full_name COLLATE NOCASE LIMIT 5000`).bind(owner.sub, owner.sub, owner.sub).all(),
+      env.DB.prepare(`SELECT a.id AS accountId, a.full_name AS fullName, a.username,
+        a.email, a.phone, a.role, a.school_id AS schoolId, COALESCE(s.name, '') AS schoolName,
+        COALESCE(a.school_or_subject, '') AS schoolOrSubject, COALESCE(a.grade_id, '') AS gradeId,
+        a.registered_session_id AS registeredSessionId,
+        COALESCE(NULLIF(sess.title, ''), NULLIF(sess.subject, ''), a.registered_session_id, '') AS registeredSession,
+        COALESCE(educator.full_name, '') AS educatorName,
+        a.created_at AS createdAt, a.expires_at AS expiresAt,
+        a.activated AS activated, a.paid AS paid,
+        COUNT(m.id) AS messageCount,
+        SUM(CASE WHEN m.id IS NOT NULL AND m.sender_id != ? THEN 1 ELSE 0 END) AS incomingCount,
+        SUM(CASE WHEN m.id IS NOT NULL AND m.sender_id != ? AND m.read_at IS NULL THEN 1 ELSE 0 END) AS unreadIncoming,
+        SUM(CASE WHEN m.id IS NOT NULL AND m.sender_id = ? THEN 1 ELSE 0 END) AS outgoingCount,
+        MAX(m.created_at) AS lastMessageAt
+      FROM accounts a
+      LEFT JOIN schools s ON s.id = a.school_id
+      LEFT JOIN sessions sess ON sess.id = a.registered_session_id AND sess.school_id = a.school_id
+      LEFT JOIN accounts educator ON educator.id = a.registered_educator_id
+        AND educator.school_id = a.school_id AND educator.role = 'educator'
+      LEFT JOIN founder_messages m ON m.thread_account_id = a.id
+      WHERE a.role IN ('student','educator','director')
+        AND NOT EXISTS (SELECT 1 FROM platform_owners p WHERE p.account_id = a.id)
+      GROUP BY a.id, a.full_name, a.username, a.email, a.phone, a.role, a.school_id, s.name,
+        a.school_or_subject, a.grade_id, a.registered_session_id, sess.title, sess.subject,
+        educator.full_name, a.created_at, a.expires_at, a.activated, a.paid
+      ORDER BY CASE WHEN COUNT(m.id) > 0 THEN 0 ELSE 1 END,
+        MAX(m.created_at) DESC, a.full_name COLLATE NOCASE LIMIT 5000`).bind(owner.sub, owner.sub, owner.sub).all(),
       env.DB.prepare(`SELECT guest_id, COUNT(*) AS messageCount, SUM(CASE WHEN sender_role = 'guest' THEN 1 ELSE 0 END) AS incomingCount, SUM(CASE WHEN sender_role = 'guest' AND read_at IS NULL THEN 1 ELSE 0 END) AS unreadIncoming, SUM(CASE WHEN sender_role = 'owner' THEN 1 ELSE 0 END) AS outgoingCount, MAX(created_at) AS lastMessageAt FROM founder_guest_messages GROUP BY guest_id ORDER BY MAX(created_at) DESC LIMIT 5000`).all()
     ]);
     const registered = threads.results || [];
@@ -1189,6 +1215,31 @@ async function ownerFounderMessages(request, env) {
     return json({ deleted: true });
   }
   return json({ error: "Method not allowed." }, 405);
+}
+
+async function deleteOwnerAccount(request, env, accountId) {
+  const owner = await requireOwner(request, env);
+  if (!owner) return json({ error: "Owner access required." }, 401);
+  const account = await env.DB.prepare(
+    "SELECT id, role, school_id FROM accounts WHERE id = ? AND role IN ('student','educator')"
+  ).bind(accountId).first();
+  if (!account) return json({ error: "Student or Educator account not found." }, 404);
+
+  if (account.role === "educator") {
+    const lessons = await env.DB.prepare(
+      "SELECT media_key FROM educator_lessons WHERE educator_id = ? AND school_id = ?"
+    ).bind(accountId, account.school_id).all();
+    for (const lesson of lessons.results || []) {
+      if (lesson.media_key) await env.SESSION_MEDIA_BUCKET.delete(lesson.media_key);
+    }
+    await env.DB.prepare(
+      "DELETE FROM educator_lessons WHERE educator_id = ? AND school_id = ?"
+    ).bind(accountId, account.school_id).run();
+  }
+  await env.DB.prepare(
+    "DELETE FROM accounts WHERE id = ? AND school_id = ? AND role IN ('student','educator')"
+  ).bind(accountId, account.school_id).run();
+  return json({ deleted: true });
 }
 
 async function ownerDirectors(request, env) {
@@ -3841,6 +3892,8 @@ async function handle(request, env) {
   if (path === "/api/guest/contact" && ["GET", "POST"].includes(request.method)) return guestContactMessages(request, env);
   if (path === "/api/owner/founder/messages" && ["GET", "POST", "DELETE"].includes(request.method)) return ownerFounderMessages(request, env);
   if (request.method === "GET" && path === "/api/owner/directors") return ownerDirectors(request, env);
+  const ownerAccountMatch = path.match(/^\/api\/owner\/accounts\/([a-zA-Z0-9_-]{1,100})$/i);
+  if (request.method === "DELETE" && ownerAccountMatch) return deleteOwnerAccount(request, env, ownerAccountMatch[1]);
   if (request.method === "POST" && path === "/api/owner/directors") return createOwnerDirector(request, env);
   if (request.method === "POST" && path === "/api/director/claim") return claimDirectorSetup(request, env);
   if (request.method === "GET" && path === "/api/director/payment") return directorPayment(request, env);
