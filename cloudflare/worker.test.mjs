@@ -1178,6 +1178,14 @@ test('Owner creates a one-year Director school with phone initial password; Dire
     body: { activated: true, paid: true },
   });
   assert.equal(restored.status, 200);
+  const upgradedProfile = await send(env, `/api/auth/me?schoolId=${director.schoolId}`, {
+    token: limitedDirectorSession.token,
+  });
+  assert.equal(upgradedProfile.status, 200);
+  const upgradedDirectorSession = await upgradedProfile.json();
+  assert.equal(upgradedDirectorSession.chatOnly, false);
+  assert.ok(upgradedDirectorSession.token);
+
   const restoredLogin = await send(env, '/api/auth/login', {
     method: 'POST',
     body: { username: 'nostafa.director', password: 'NewPrivatePassword#2026', schoolId: director.schoolId },
