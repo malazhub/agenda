@@ -43,6 +43,7 @@ export const OwnerDashboard: React.FC<{ currentLang:Language; token:string; onSi
   const founderConversationRefreshSequence = useRef(0);
   const founderConversationEndRef = useRef<HTMLDivElement>(null);
   const [pendingStatuses,setPendingStatuses] = useState<Record<string,{activated:boolean;paid:boolean}>>({});
+  const [pendingSchoolAccountUpdates,setPendingSchoolAccountUpdates] = useState<Record<string,{activated:boolean;paid:boolean;password?:string}>>({});
   const [ownerPasswordDrafts,setOwnerPasswordDrafts] = useState<Record<string,string>>({});
   const [loading,setLoading] = useState(true);
   const [busy,setBusy] = useState('');
@@ -215,33 +216,51 @@ export const OwnerDashboard: React.FC<{ currentLang:Language; token:string; onSi
     return () => { active = false; window.clearInterval(intervalId); };
   }, [token]);
 
-  const updateSchoolAccount = async (
+  const stageSchoolAccountStatus = (
     thread: FounderThread,
-    change: { activated?: boolean; paid?: boolean; password?: string }
+    field: 'activated' | 'paid',
+    value: boolean
   ) => {
-    setBusy(thread.accountId); setError(''); setMessage('');
-    try {
-      await updateOwnerAccount(token, thread.accountId, change);
-      setFounderThreads((current) => current.map((item) => item.accountId === thread.accountId
-        ? { ...item, ...(typeof change.activated === 'boolean' ? { activated: change.activated } : {}), ...(typeof change.paid === 'boolean' ? { paid: change.paid } : {}) }
-        : item));
-      if (typeof change.password === 'string') {
-        setOwnerPasswordDrafts((current) => ({ ...current, [thread.accountId]: '' }));
+    setPendingSchoolAccountUpdates((current) => {
+      const base = current[thread.accountId] || {
+        activated: Boolean(thread.activated),
+        paid: Boolean(thread.paid),
+      };
+      const next = { ...base, [field]: value };
+      if (next.activated === Boolean(thread.activated) &&
+          next.paid === Boolean(thread.paid) &&
+          !next.password) {
+        const remaining = { ...current };
+        delete remaining[thread.accountId];
+        return remaining;
       }
-      setMessage(currentLang === 'ar' ? 'تم تحديث حساب الطالب أو المعلم.' : currentLang === 'fr' ? 'Compte élève ou éducateur mis à jour.' : currentLang === 'es' ? 'Cuenta de estudiante o educador actualizada.' : currentLang === 'it' ? 'Account studente o educatore aggiornato.' : 'Student or educator account updated.');
-    } catch (e) {
-      setError(e instanceof Error ? e.message : t.error);
-    } finally {
-      setBusy('');
-    }
+      return { ...current, [thread.accountId]: next };
+    });
+    setError('');
+    setMessage('');
   };
-  const saveSchoolAccountPassword = async (thread: FounderThread) => {
-    const password = ownerPasswordDrafts[thread.accountId] || '';
-    if (!password) {
-      setError(currentLang === 'ar' ? 'أدخل كلمة مرور جديدة أولاً.' : currentLang === 'fr' ? 'Saisissez d’abord un nouveau mot de passe.' : currentLang === 'es' ? 'Introduce primero una contraseña nueva.' : currentLang === 'it' ? 'Inserisci prima una nuova password.' : 'Enter a new password first.');
-      return;
-    }
-    await updateSchoolAccount(thread, { password });
+
+  const stageSchoolAccountPassword = (thread: FounderThread, password: string) => {
+    setOwnerPasswordDrafts((current) => ({ ...current, [thread.accountId]: password }));
+    setPendingSchoolAccountUpdates((current) => {
+      const base = current[thread.accountId] || {
+        activated: Boolean(thread.activated),
+        paid: Boolean(thread.paid),
+      };
+      const next = { ...base };
+      if (password.length > 0) next.password = password;
+      else delete next.password;
+      if (next.activated === Boolean(thread.activated) &&
+          next.paid === Boolean(thread.paid) &&
+          !next.password) {
+        const remaining = { ...current };
+        delete remaining[thread.accountId];
+        return remaining;
+      }
+      return { ...current, [thread.accountId]: next };
+    });
+    setError('');
+    setMessage('');
   };
 
   const create = async (event:React.FormEvent<HTMLFormElement>) => {
@@ -271,19 +290,42 @@ export const OwnerDashboard: React.FC<{ currentLang:Language; token:string; onSi
     });
     setError(''); setMessage('');
   };
-  const saveAllStatuses = async () => {
-    const updates = Object.entries(pendingStatuses).map(([id,status]) => ({ id, ...status }));
-    if (!updates.length) return;
-    setBusy('save-statuses'); setError(''); setMessage('');
+  const saveAllChanges = async () => {
+    const directorUpdates = Object.entries(pendingStatuses).map(([id, status]) => ({ id, ...status }));
+    const schoolAccountUpdates = Object.entries(pendingSchoolAccountUpdates).map(([id, update]) => ({ id, ...update }));
+    if (!directorUpdates.length && !schoolAccountUpdates.length) return;
+
+    setBusy('save-all');
+    setError('');
+    setMessage('');
     try {
-      await saveOwnerDirectorStatuses(token, updates);
-      setPendingStatuses({}); setMessage(t.saved); await refresh();
-    } catch(e) { setError(e instanceof Error ? e.message : t.error); }
-    finally { setBusy(''); }
+      if (directorUpdates.length) {
+        await saveOwnerDirectorStatuses(token, directorUpdates);
+      }
+      if (schoolAccountUpdates.length) {
+        await Promise.all(schoolAccountUpdates.map(({ id, ...update }) => updateOwnerAccount(token, id, update)));
+      }
+
+      setRows((current) => current.map((row) => {
+        const update = directorUpdates.find((item) => item.id === row.id);
+        return update ? { ...row, activated: update.activated, paid: update.paid } : row;
+      }));
+      setFounderThreads((current) => current.map((thread) => {
+        const update = schoolAccountUpdates.find((item) => item.id === thread.accountId);
+        return update ? { ...thread, activated: update.activated, paid: update.paid } : thread;
+      }));
+      setPendingStatuses({});
+      setPendingSchoolAccountUpdates({});
+      // Keep the entered password visible in this open Owner Control Center after it is saved.
+    } catch (e) {
+      setError(e instanceof Error ? e.message : t.error);
+    } finally {
+      setBusy('');
+    }
   };
   const update = async (id:string, change:{renewLicense?:boolean;licenseActive?:boolean;activated?:boolean;paid?:boolean}) => {
     setBusy(id); setError(''); setMessage('');
-    try { await updateOwnerDirector(token,id,change); setMessage(t.saved); await refresh(); }
+    try { await updateOwnerDirector(token,id,change); setMessage(''); await refresh(); }
     catch(e) { setError(e instanceof Error ? e.message : t.error); }
     finally { setBusy(''); }
   };
@@ -357,22 +399,15 @@ export const OwnerDashboard: React.FC<{ currentLang:Language; token:string; onSi
               <td className="p-3">{row.studentCount}</td><td className="p-3">{row.educatorCount}</td>
               <td className="p-3 whitespace-nowrap">{dateLabel(row.createdAt,currentLang)}</td>
               <td className="p-3 whitespace-nowrap">{dateLabel(row.expiresAt,currentLang)}</td>
-              <td className="p-3"><label className="inline-flex items-center gap-2 whitespace-nowrap"><input type="checkbox" checked={(pendingStatuses[row.id] ?? row).activated} disabled={busy==='save-statuses'} onChange={e=>stageStatus(row,'activated',e.target.checked)} aria-label={row.activated?t.deactivateAccount:t.activateAccount} className="h-4 w-4 accent-emerald-600"/><span className={(pendingStatuses[row.id] ?? row).activated?'text-emerald-700':'text-red-600'}>{(pendingStatuses[row.id] ?? row).activated?t.accountActive:t.accountInactive}</span></label></td>
-              <td className="p-3"><label className="inline-flex items-center gap-2 whitespace-nowrap"><input type="checkbox" checked={(pendingStatuses[row.id] ?? row).paid} disabled={busy==='save-statuses'} onChange={e=>stageStatus(row,'paid',e.target.checked)} aria-label={row.paid?t.markUnpaid:t.markPaid} className="h-4 w-4 accent-emerald-600"/><span className={(pendingStatuses[row.id] ?? row).paid?'text-emerald-700':'text-amber-700'}>{(pendingStatuses[row.id] ?? row).paid?t.paidLabel:t.unpaid}</span></label></td>
+              <td className="p-3"><label className="inline-flex items-center gap-2 whitespace-nowrap"><input type="checkbox" checked={(pendingStatuses[row.id] ?? row).activated} disabled={busy==='save-all'} onChange={e=>stageStatus(row,'activated',e.target.checked)} aria-label={row.activated?t.deactivateAccount:t.activateAccount} className="h-4 w-4 accent-emerald-600"/><span className={(pendingStatuses[row.id] ?? row).activated?'text-emerald-700':'text-red-600'}>{(pendingStatuses[row.id] ?? row).activated?t.accountActive:t.accountInactive}</span></label></td>
+              <td className="p-3"><label className="inline-flex items-center gap-2 whitespace-nowrap"><input type="checkbox" checked={(pendingStatuses[row.id] ?? row).paid} disabled={busy==='save-all'} onChange={e=>stageStatus(row,'paid',e.target.checked)} aria-label={row.paid?t.markUnpaid:t.markPaid} className="h-4 w-4 accent-emerald-600"/><span className={(pendingStatuses[row.id] ?? row).paid?'text-emerald-700':'text-amber-700'}>{(pendingStatuses[row.id] ?? row).paid?t.paidLabel:t.unpaid}</span></label></td>
               
               <td className="p-3"><a href={row.directorLink} target="_blank" rel="noreferrer" className="text-indigo-700 underline whitespace-nowrap">{t.open} <ExternalLink size={12} className="inline"/></a><button onClick={()=>void navigator.clipboard.writeText(row.directorLink)} className="block text-xs underline mt-1">{t.copy}</button></td>
               <td className="p-3 min-w-48">{link?<><span className="block text-xs text-slate-500">{contactLabel}</span><a href={link} target="_blank" rel="noreferrer" className="block max-w-52 break-all text-indigo-700 underline">{row.paymentValue}</a></>:<span className="text-slate-400">{t.noPayment}</span>}</td>
               <td className="p-3"><div className="flex flex-col items-start gap-2"><button disabled={busy===row.id||!row.setupPending} onClick={()=>void resend(row.id)} className="text-xs underline disabled:opacity-40"><KeyRound size={13} className="inline"/> {t.resend}</button><button disabled={busy===row.id||!row.phone} onClick={()=>void copyLoginSms(row)} className="text-xs underline disabled:opacity-40">{t.copyLoginSms}</button><button disabled={busy===row.id||!row.phone} onClick={()=>void resetPhonePassword(row)} className="text-xs underline disabled:opacity-40">{t.resetPhonePassword}</button><button disabled={busy===row.id} onClick={()=>void update(row.id,{renewLicense:true})} className="text-xs underline disabled:opacity-40">{t.renew}</button><button disabled={busy===row.id} onClick={()=>void remove(row)} className="text-xs text-red-700 underline disabled:opacity-40"><Trash2 size={13} className="inline"/> {t.delete}</button></div></td>
             </tr>;
           })}</tbody>
-          <tfoot className="bg-indigo-50 border-t-2 border-indigo-200">
-            <tr><td colSpan={15} className="p-3">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <span className="text-xs font-semibold text-slate-700">{Object.keys(pendingStatuses).length ? `${Object.keys(pendingStatuses).length} ${t.unsaved}` : t.saved}</span>
-                <button type="button" onClick={()=>void saveAllStatuses()} disabled={!Object.keys(pendingStatuses).length || busy==='save-statuses'} className="rounded-lg bg-indigo-700 px-5 py-2.5 text-sm font-bold text-white shadow-sm disabled:cursor-not-allowed disabled:opacity-40">{busy==='save-statuses'?t.saving:t.saveChanges}</button>
-              </div>
-            </td></tr>
-          </tfoot>
+  </tfoot>
         </table>
       </div>}
     </section>
@@ -406,8 +441,9 @@ export const OwnerDashboard: React.FC<{ currentLang:Language; token:string; onSi
               {group.length===0
                 ? <tr><td colSpan={13} className="p-4 text-center text-slate-400">{emptyLabel}</td></tr>
                 : group.map((thread) => {
-                  const activated = thread.activated === true || Number(thread.activated || 0) === 1;
-                  const paid = thread.paid === true || Number(thread.paid || 0) === 1;
+                  const stagedAccount = pendingSchoolAccountUpdates[thread.accountId] || thread;
+                  const activated = stagedAccount.activated === true || Number(stagedAccount.activated || 0) === 1;
+                  const paid = stagedAccount.paid === true || Number(stagedAccount.paid || 0) === 1;
                   return <tr key={thread.accountId} className={thread.unreadIncoming>0?'border-t bg-rose-50':'border-t border-slate-100'}>
                     <td className="p-3">
                       <button type="button" onClick={()=>void openFounderConversation(thread)} className="text-start font-bold text-indigo-800 underline decoration-indigo-300 underline-offset-2">{thread.fullName || '—'}</button>
@@ -421,16 +457,13 @@ export const OwnerDashboard: React.FC<{ currentLang:Language; token:string; onSi
                     <td className="p-3">{thread.username || thread.email || '—'}</td>
                     <td className="p-3">
                       <div className="flex min-w-52 items-center gap-2">
-                        <input type="text" autoComplete="off" maxLength={128}
+                        <input type="text" autoComplete="off" spellCheck={false} maxLength={128} disabled={busy==='save-all'}
                           value={ownerPasswordDrafts[thread.accountId] || ''}
-                          onChange={(event) => setOwnerPasswordDrafts((current) => ({ ...current, [thread.accountId]: event.target.value }))}
-                          placeholder={currentLang==='ar'?'كلمة مرور جديدة':currentLang==='fr'?'Nouveau mot de passe':currentLang==='es'?'Nueva contraseña':currentLang==='it'?'Nuova password':'New password'}
-                          aria-label={(thread.fullName || thread.username) + ' new password'}
-                          className="min-w-0 w-36 rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-xs text-slate-900"
+                          onChange={(event) => stageSchoolAccountPassword(thread, event.target.value)}
+                          placeholder={currentLang==='ar'?'أدخل كلمة المرور':currentLang==='fr'?'Saisir le mot de passe':currentLang==='es'?'Introduce la contraseña':currentLang==='it'?'Inserisci la password':'Enter password'}
+                          aria-label={(thread.fullName || thread.username) + ' password'}
+                          className="min-w-0 w-36 rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-xs text-slate-900 disabled:bg-slate-100"
                         />
-                        <button type="button" disabled={busy===thread.accountId || !(ownerPasswordDrafts[thread.accountId] || '')} onClick={() => void saveSchoolAccountPassword(thread)} className="rounded-lg bg-indigo-700 px-2 py-1.5 text-[10px] font-bold text-white disabled:opacity-40">
-                          {currentLang==='ar'?'حفظ':currentLang==='fr'?'Enregistrer':currentLang==='es'?'Guardar':currentLang==='it'?'Salva':'Save'}
-                        </button>
                       </div>
                     </td>
                     <td className="p-3">{thread.email || '—'}</td>
@@ -441,13 +474,13 @@ export const OwnerDashboard: React.FC<{ currentLang:Language; token:string; onSi
                     <td className="whitespace-nowrap p-3">{dateLabel(thread.expiresAt || null,currentLang)}</td>
                     <td className="p-3">
                       <label className="inline-flex items-center gap-2 whitespace-nowrap">
-                        <input type="checkbox" checked={activated} disabled={busy===thread.accountId} onChange={(event) => void updateSchoolAccount(thread, { activated: event.target.checked })} aria-label={thread.fullName + ' activate account'} className="h-4 w-4 accent-emerald-600"/>
+                        <input type="checkbox" checked={activated} disabled={busy==='save-all'} onChange={(event) => stageSchoolAccountStatus(thread, 'activated', event.target.checked)} aria-label={thread.fullName + ' activate account'} className="h-4 w-4 accent-emerald-600"/>
                         <span className={activated?'font-bold text-emerald-700':'font-bold text-rose-700'}>{activated?yes:no}</span>
                       </label>
                     </td>
                     <td className="p-3">
                       <label className="inline-flex items-center gap-2 whitespace-nowrap">
-                        <input type="checkbox" checked={paid} disabled={busy===thread.accountId} onChange={(event) => void updateSchoolAccount(thread, { paid: event.target.checked })} aria-label={thread.fullName + ' mark paid'} className="h-4 w-4 accent-emerald-600"/>
+                        <input type="checkbox" checked={paid} disabled={busy==='save-all'} onChange={(event) => stageSchoolAccountStatus(thread, 'paid', event.target.checked)} aria-label={thread.fullName + ' mark paid'} className="h-4 w-4 accent-emerald-600"/>
                         <span className={paid?'font-bold text-emerald-700':'font-bold text-amber-700'}>{paid?yes:no}</span>
                       </label>
                     </td>
@@ -504,6 +537,21 @@ export const OwnerDashboard: React.FC<{ currentLang:Language; token:string; onSi
     </section>}
 
     {createdSetupLink&&<section className="rounded-2xl border border-emerald-200 bg-white p-4 space-y-3"><div className="text-sm font-bold">{t.setupLink}</div><a href={createdSetupLink} target="_blank" rel="noreferrer" className="block break-all text-sm text-indigo-700 underline">{createdSetupLink}</a><button type="button" onClick={()=>void navigator.clipboard.writeText(createdSetupLink)} className="text-xs underline"><Copy size={13} className="inline"/> {t.copy}</button>{createdSms&&<div className="border-t pt-3 space-y-2"><div className="text-sm font-bold">{t.smsMessage}</div><p className="rounded-lg bg-slate-50 p-3 text-sm whitespace-pre-wrap">{createdSms}</p><button type="button" onClick={()=>void navigator.clipboard.writeText(createdSms)} className="text-xs font-bold text-indigo-700 underline"><Copy size={13} className="inline"/> {t.copySms}</button></div>}</section>}
+    <div className="sticky bottom-0 z-20 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-indigo-200 bg-white/95 p-4 shadow-lg backdrop-blur">
+      <span className="text-xs font-semibold text-slate-700">
+        {(Object.keys(pendingStatuses).length + Object.keys(pendingSchoolAccountUpdates).length) > 0
+          ? `${Object.keys(pendingStatuses).length + Object.keys(pendingSchoolAccountUpdates).length} ${t.unsaved}`
+          : ''}
+      </span>
+      <button
+        type="button"
+        onClick={() => void saveAllChanges()}
+        disabled={(Object.keys(pendingStatuses).length + Object.keys(pendingSchoolAccountUpdates).length) === 0 || busy === 'save-all'}
+        className="rounded-xl bg-indigo-700 px-6 py-3 text-sm font-black text-white shadow-sm transition hover:bg-indigo-800 disabled:cursor-not-allowed disabled:opacity-40"
+      >
+        {busy === 'save-all' ? t.saving : t.saveChanges}
+      </button>
+    </div>
     {error&&<p role="alert" className="text-sm text-red-700">{error}</p>}
     {message&&<p role="status" className="text-sm text-emerald-700">{message}</p>}
   </div>;
