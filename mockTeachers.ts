@@ -53,7 +53,7 @@ export const MOCK_TEACHERS: Teacher[] = [
  availableSlots: ["Today 6:00 PM", "Tomorrow 4:30 PM", "Wednesday 5:00 PM"],
  bio: {
  en: "Passionate AUB educator helping students conquer Mechanics, RLC Circuits, and Chemical Equilibrium. I break down difficult past official exam problems into simple repeatable methods.",
- fr: "Enseignante diplômée de l'AUB. Méthode structurée pour maîtriser l'induction électromagnétique, les circuits oscillants et les équilibres chimiques du programme libanais.",
+ fr: "Enseignante diplômée de l'AUB. Méthode structurée pour maîtriser l'induction électromagnétique, les circuits oscillants et les équilibres chimiques du programme scolaire.",
  ar: "أستاذة متخرجة من الجامعة الأميركية في بيروت (AUB). أساعد الطلاب على تفكيك مسائل الميكانيك والكهرباء والكيمياء العضوية المعقدة في الامتحانات الرسمية بأسلوب سلس ومباشر.",
  it: "Educatrice AUB appassionata, aiuta gli studenti a comprendere meccanica, circuiti RLC ed equilibrio chimico. Trasforma gli esercizi difficili degli esami ufficiali in metodi semplici e ripetibili.",
  es: "Educadora de AUB apasionada por ayudar a los estudiantes con mecánica, circuitos RLC y equilibrio químico. Convierte los ejercicios difíciles de exámenes oficiales en métodos sencillos y repetibles."
@@ -113,7 +113,7 @@ export const MOCK_TEACHERS: Teacher[] = [
  en: "Economics and Sociology specialist for Bac SE. Teaches students how to construct the perfect official synthesis essay with macroeconomic models and real case studies.",
  fr: "Spécialiste de la synthèse économique et sociologique pour le Bac SE. Méthode infaillible d'analyse documentaire et d'argumentation structurée selon le barème CRDP.",
  ar: "متخصصة في مادتي الاقتصاد وعلم الاجتماع لفرع SE. تدريب مكثف على كتابة الموضوع الاقتصادي المتكامل وتحليل المستندات والسياسات المالية والنقدية.",
- it: "Specialista in economia e sociologia per Bac SE. Insegna agli studenti a costruire saggi di sintesi ufficiali con modelli macroeconomici e casi di studio libanesi.",
+ it: "Specialista in economia e sociologia per Bac SE. Insegna agli studenti a costruire saggi di sintesi ufficiali con modelli macroeconomici e casi di studio scolastici.",
  es: "Especialista en economía y sociología para Bac SE. Enseña a elaborar ensayos oficiales de síntesis con modelos macroeconómicos y casos reales del Líbano."
  }
  },
@@ -140,7 +140,7 @@ export const MOCK_TEACHERS: Teacher[] = [
  availableSlots: ["Today 5:00 PM", "Tomorrow 3:30 PM", "Friday 5:30 PM"],
  bio: {
  en: "Doctorate in Arabic literature with 16 years coaching students across all Baccalaureate branches (SG, SV, SE, LH) and Brevet. Transforms Arabic from a stressful chore into an easy A.",
- fr: "Docteur en littérature arabe. 16 ans d'accompagnement de tous les bacheliers libanais et candidats au Brevet. Excellente méthode d'analyse de texte et d'expression écrite.",
+ fr: "Docteur en littérature arabe. 16 ans d'accompagnement de tous les candidats au baccalauréat et candidats aux examens. Excellente méthode d'analyse de texte et d'expression écrite.",
  ar: "دكتور في اللغة العربية وآدابها. خبرة ١٦ عاماً في إعداد طلاب الشهادات الرسمية لكافة الفروع. أضمن للطالب اكتساب مهارات التحليل البلاغي والإعراب والتعبير الكتابي بيسر واحترافية.",
  it: "Dottore in letteratura araba con 16 anni di esperienza nella preparazione degli studenti di tutti gli indirizzi del Baccalaureato e del Brevet. Rende l'arabo una materia accessibile e stimolante.",
  es: "Doctor en literatura árabe con 16 años preparando estudiantes de todas las ramas del Bachillerato y del Brevet. Convierte el árabe en una materia accesible y motivadora."
