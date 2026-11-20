@@ -1,20 +1,20 @@
 {
-  "name": "Agenda",
-  "short_name": "Agenda",
-  "description": "Agenda — Lebanese school agenda, official exams, and tutoring.",
-  "id": "./?schoolId=default-agenda-school",
-  "start_url": "./?schoolId=default-agenda-school",
-  "scope": "./",
-  "display": "standalone",
-  "orientation": "any",
-  "background_color": "#f8fafc",
-  "theme_color": "#0f172a",
-  "icons": [
-    {
-      "src": "./agenda-icon.svg",
-      "sizes": "any",
-      "type": "image/svg+xml",
-      "purpose": "any maskable"
-    }
-  ]
+ "name": "Agenda",
+ "short_name": "Agenda",
+ "description": "Agenda — school agenda, official exams, and tutoring.",
+ "id": "./?schoolId=default-agenda-school",
+ "start_url": "./?schoolId=default-agenda-school",
+ "scope": "./",
+ "display": "standalone",
+ "orientation": "any",
+ "background_color": "#f8fafc",
+ "theme_color": "#0f172a",
+ "icons": [
+ {
+ "src": "./agenda-icon.svg",
+ "sizes": "any",
+ "type": "image/svg+xml",
+ "purpose": "any maskable"
+ }
+ ]
 }
