@@ -26,7 +26,7 @@ interface RegisterModalProps {
   onClose: () => void;
   currentLang: Language;
   schoolId: string;
-  onRegisterSuccess: (account: CloudflareAccount, token: string) => void;
+  onRegisterSuccess: (account: CloudflareAccount, token: string, chatOnly?: boolean) => void;
 }
 export const RegisterModal: React.FC<RegisterModalProps> = ({
   isOpen,
@@ -315,7 +315,7 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
             // Every educator creates a dedicated class that the API assigns to the account.
             className: role === 'educator' ? newClassName.trim() : undefined,
           });
-      const { account, token, directorLink } = authResult;
+      const { account, token, directorLink, chatOnly } = authResult;
       if (isLogin && account.role === 'director') {
         sessionStorage.setItem('agenda-director-token', token);
         sessionStorage.setItem('agenda-session-token', token);
@@ -330,7 +330,7 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
         window.location.replace(targetUrl.toString());
         return;
       }
-      onRegisterSuccess(account, token);
+      onRegisterSuccess(account, token, Boolean(chatOnly));
       handleClose();
     } catch (requestError) {
       const message = requestError instanceof Error ? requestError.message : '';
