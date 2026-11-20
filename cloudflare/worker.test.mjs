@@ -703,14 +703,19 @@ test('registration hashes credentials and rejects duplicate usernames', async ()
     token: directorToken,
     body: { activated: true, paid: true },
   });
-  const login = await send(env, '/api/auth/login', {
-    method: 'POST',
-    body: { username: registration.username, password: registration.password },
+
+  // The same restricted session is promoted automatically after approval.
+  const promotedProfile = await send(env, '/api/auth/me?schoolId=default-agenda-school', {
+    token: pendingSession.token,
   });
-  assert.equal(login.status, 200);
+  assert.equal(promotedProfile.status, 200);
+  const promotedSession = await promotedProfile.json();
+  assert.equal(promotedSession.chatOnly, false);
+  assert.ok(promotedSession.token);
+
   sessions.get(registration.registeredSessionId).is_live = 1;
   const sharedStream = await send(env, `/api/live-stream?sessionId=${registration.registeredSessionId}`, {
-    token: (await login.json()).token,
+    token: promotedSession.token,
   });
   assert.equal(sharedStream.status, 200);
   assert.equal((await sharedStream.json()).status, 'waiting');
