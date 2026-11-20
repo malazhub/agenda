@@ -611,11 +611,11 @@ export const AIChatBot: React.FC<AIChatBotProps> = ({ currentLang, schoolId, sch
     'مراسلة المالك', 'كيف أتواصل مع المؤسس', 'كيف اتواصل مع المالك'
   ].some((keyword) => q.includes(keyword));
   if (usContactQuestion) {
-    if (responseLang === 'ar') return 'افتح «المساعد الذكي» واضغط زر «تواصل معنا». إذا لم يكن لديك حساب، أنشئ حساباً لتتمكن من الدردشة معنا. إذا كان لديك حساب بالفعل، سجّل الدخول ثم أرسل رسالتك من المحادثة نفسها. تظهر الرسائل والردود بالترتيب في حسابك وفي مركز تحكم المالك.';
-    if (responseLang === 'fr') return 'Ouvrez l’« Assistant IA » et cliquez sur « Contactez-nous ». Si vous n’avez pas encore de compte, créez-en un pour discuter avec nous. Si vous avez déjà un compte, connectez-vous puis envoyez votre message dans cette même conversation. Les messages et les réponses s’affichent dans l’ordre, dans votre compte et dans le Centre de contrôle du propriétaire.';
-    if (responseLang === 'es') return 'Abre el «Asistente de IA» y pulsa «Contáctanos». Si todavía no tienes una cuenta, crea una para poder chatear con nosotros. Si ya tienes una cuenta, inicia sesión y envía tu mensaje en esta misma conversación. Los mensajes y las respuestas aparecen en orden tanto en tu cuenta como en el Centro de control del propietario.';
-    if (responseLang === 'it') return 'Apri l’«Assistente IA» e premi «Contattaci». Se non hai ancora un account, creane uno per poter chattare con noi. Se hai già un account, accedi e invia il messaggio nella stessa conversazione. I messaggi e le risposte vengono visualizzati in ordine sia nel tuo account sia nel Centro di controllo del proprietario.';
-    return 'Open the AI Assistant and select Contact us. If you do not have an account, create one to chat with us. If you already have an account, sign in and send your message in this same conversation. Messages and replies appear in order in your account and in Owner Control Center.';
+    if (responseLang === 'ar') return 'افتح «المساعد الذكي» واضغط «تواصل معنا» لإرسال رسالتك مباشرة، حتى إذا لم يكن لديك حساب أو لم تسجّل الدخول. ستصل رسالتك إلى فريق Agenda ويمكنك متابعة الرد من الجهاز والمتصفح نفسيهما.';
+    if (responseLang === 'fr') return 'Ouvrez l’« Assistant IA » et cliquez sur « Contactez-nous » pour nous écrire directement, même sans compte ni connexion. Votre message sera transmis à l’équipe Agenda et vous pourrez suivre la réponse depuis le même appareil et le même navigateur.';
+    if (responseLang === 'es') return 'Abre el «Asistente de IA» y pulsa «Contáctanos» para escribirnos directamente, incluso si no tienes cuenta ni has iniciado sesión. Tu mensaje llegará al equipo de Agenda y podrás consultar la respuesta desde el mismo dispositivo y navegador.';
+    if (responseLang === 'it') return 'Apri l’«Assistente IA» e premi «Contattaci» per scriverci direttamente, anche senza account o accesso. Il messaggio arriverà al team Agenda e potrai controllare la risposta dallo stesso dispositivo e browser.';
+    return 'Open the AI Assistant and select Contact us to message us directly, even if you do not have an account or are not signed in. Your message will reach the Agenda team, and you can follow the reply from the same device and browser.';
   }
 
   const contactQuestion = [
