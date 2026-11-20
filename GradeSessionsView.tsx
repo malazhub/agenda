@@ -1953,7 +1953,7 @@ const handleClearChatMessages = async () => {
                   className={`${isPrimaryVideoExpanded ? 'fixed inset-0 z-[100] bg-black p-3 sm:p-6' : 'relative flex-1 min-h-[240px] bg-black rounded-2xl overflow-hidden border border-slate-700'} cursor-zoom-in`}
                 >
 
-          <button type="button" onClick={() => setIsPrimaryVideoExpanded((expanded) => !expanded)} className="absolute right-3 top-3 z-20 rounded-lg bg-black/75 p-2 text-white hover:bg-black" title={isPrimaryVideoExpanded ? 'Close enlarged video' : 'Click to enlarge classroom video'} aria-label={isPrimaryVideoExpanded ? 'Minimize classroom video' : 'Enlarge classroom video'}>
+          <button type="button" onClick={(event) => { event.stopPropagation(); setIsPrimaryVideoExpanded((expanded) => !expanded); }} className="absolute right-3 top-3 z-20 rounded-lg bg-black/75 p-2 text-white hover:bg-black" title={isPrimaryVideoExpanded ? 'Close enlarged video' : 'Click to enlarge classroom video'} aria-label={isPrimaryVideoExpanded ? 'Minimize classroom video' : 'Enlarge classroom video'}>
             {isPrimaryVideoExpanded ? <Minimize className="h-4 w-4"/> : <Maximize2 className="h-4 w-4"/>}
           </button>
           {streamCall && primaryVideoParticipant && (
