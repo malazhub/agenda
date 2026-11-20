@@ -161,7 +161,7 @@ export const AIChatBot: React.FC<AIChatBotProps> = ({ currentLang, schoolId, sch
    }
   };
   void refresh();
-  const intervalId = window.setInterval(() => void refresh(), 12000);
+  const intervalId = window.setInterval(() => void refresh(), 3000);
   return () => { active = false; window.clearInterval(intervalId); };
  }, [usMode, sessionToken, account?.id, isOwner]);
  const submitFounderMessage = async () => {
@@ -182,14 +182,20 @@ export const AIChatBot: React.FC<AIChatBotProps> = ({ currentLang, schoolId, sch
   setUsError('');
   setUsDraft('');
   ++usRefreshSequenceRef.current; // Invalidate polls started before this send.
+  let saved = false;
   try {
    await sendFounderMessage(sessionToken, message);
+   saved = true;
    const sequence = ++usRefreshSequenceRef.current;
    const response = await getFounderMessages(sessionToken);
    if (sequence === usRefreshSequenceRef.current) setFounderMessages(response.messages || []);
   } catch (error) {
-   setFounderMessages((previous) => previous.filter((item) => item.id !== optimisticId));
-   setUsDraft(message);
+   if (!saved) {
+    setFounderMessages((previous) => previous.filter((item) => item.id !== optimisticId));
+    setUsDraft(message);
+   }
+   // If the POST succeeded but its follow-up GET failed, keep the actual
+   // sent message on screen; the next poll reconciles the saved transcript.
    setUsError(error instanceof Error ? error.message : 'Unable to send your message. Please try again.');
   } finally {
    setUsBusy(false);
