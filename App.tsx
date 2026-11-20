@@ -60,6 +60,7 @@ export default function App() {
   // Register Modal State
   const [isRegisterOpen, setIsRegisterOpen] = useState(false);
   const [registeredAccount, setRegisteredAccount] = useState<CloudflareAccount | null>(null);
+  const [chatOnlyMode, setChatOnlyMode] = useState(false);
   const [sessionToken, setSessionToken] = useState('');
   const [ownerAccount, setOwnerAccount] = useState<CloudflareAccount | null>(null);
   const [ownerToken, setOwnerToken] = useState('');
@@ -153,8 +154,15 @@ const registerSignOutCleanup = useCallback(
     let active = true;
     const refreshAccount = async () => {
       try {
-        const { account, directorLink, schoolSwitchRequired } = await getCurrentAccount(sessionToken, activeSchoolId);
+        const { account, directorLink, schoolSwitchRequired, chatOnly } = await getCurrentAccount(sessionToken, activeSchoolId);
         if (!active) return;
+        if (chatOnly) {
+          setChatOnlyMode(true);
+          setRegisteredAccount(account);
+          setUserProfile((previous) => ({ ...previous, name: account.fullName, email: account.email, role: account.role === 'educator' ? 'teacher' : 'student' }));
+          return;
+        }
+        setChatOnlyMode(false);
         if (account.role === 'owner') {
           setOwnerAccount(account);
           setOwnerToken(sessionToken);
@@ -281,7 +289,7 @@ const registerSignOutCleanup = useCallback(
     setIsClassroomActive(true);
   };
 
-  const handleRegisterSuccess = (account: CloudflareAccount, token: string) => {
+  const handleRegisterSuccess = (account: CloudflareAccount, token: string, chatOnly = false) => {
     if (account.role === 'owner') {
       handleOwnerLogin(account, token);
       return;
@@ -295,6 +303,7 @@ const registerSignOutCleanup = useCallback(
       showToast(`${account.fullName}: ${currentLang === 'ar' ? 'تم تسجيل دخول المدير.' : 'Director signed in successfully.'}`);
       return;
     }
+    setChatOnlyMode(chatOnly);
     const role = account.role === 'educator' ? 'teacher' : 'student';
     sessionStorage.setItem('agenda-session-token', token);
     setSessionToken(token);
@@ -319,6 +328,7 @@ const registerSignOutCleanup = useCallback(
     sessionStorage.removeItem('agenda-director-token');
 
     setSessionToken('');
+    setChatOnlyMode(false);
     setDirectorAccessToken('');
     setDirectorSetupToken('');
     setRegisteredAccount(null);
@@ -384,7 +394,12 @@ const registerSignOutCleanup = useCallback(
 
       {/* Main Content: Courses Hub or Live Classroom */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8 flex-1 w-full">
-        {directorSetupToken ? (
+        {chatOnlyMode ? (
+          <section className="mx-auto max-w-2xl rounded-3xl border border-amber-200 bg-amber-50 p-6 sm:p-8 text-center shadow-sm">
+            <h1 className="text-xl font-black text-slate-900">{currentLang === 'ar' ? 'حسابك بانتظار التفعيل' : currentLang === 'fr' ? 'Votre compte attend son activation' : currentLang === 'es' ? 'Tu cuenta está pendiente de activación' : currentLang === 'it' ? 'Il tuo account è in attesa di attivazione' : 'Your account is awaiting activation'}</h1>
+            <p className="mt-3 text-sm leading-6 text-slate-700">{currentLang === 'ar' ? 'يمكنك الآن مراسلة مؤسس المنصة ومتابعة الردود. ستُفتح جميع وظائف المدرسة بعد تفعيل حسابك.' : currentLang === 'fr' ? 'Vous pouvez écrire au fondateur de la plateforme et lire ses réponses. Les fonctions de votre établissement seront disponibles après activation.' : currentLang === 'es' ? 'Ahora puedes escribir al fundador de la plataforma y leer sus respuestas. Las funciones de tu escuela estarán disponibles cuando se active tu cuenta.' : currentLang === 'it' ? 'Ora puoi scrivere al fondatore della piattaforma e leggere le risposte. Le funzioni scolastiche saranno disponibili dopo l’attivazione.' : 'You can now message the platform founder and read replies. Your school features will become available after your account is activated.'}</p>
+          </section>
+        ) : directorSetupToken ? (
           <DirectorSetupPage
             token={directorSetupToken}
             currentLang={currentLang}
@@ -615,7 +630,17 @@ const registerSignOutCleanup = useCallback(
       </footer>
 
       {/* AI Assistant Chatbot: Auto responds about pricing, agenda, live sessions, and saved issues */}
-      <AIChatBot currentLang={currentLang} schoolId={activeSchoolId} schoolName={activeSchoolName} />
+      <AIChatBot
+        currentLang={currentLang}
+        schoolId={activeSchoolId}
+        schoolName={activeSchoolName}
+        account={registeredAccount}
+        sessionToken={sessionToken}
+        chatOnlyMode={chatOnlyMode}
+        isOwner={Boolean(ownerAccount)}
+        ownerToken={ownerToken}
+        onOpenSignIn={() => setIsRegisterOpen(true)}
+      />
     </div>
   );
 }
