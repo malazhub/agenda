@@ -326,6 +326,11 @@ async function authenticate(request, env, requiredRole) {
   const payload = await verifyToken(match[1], env.SESSION_SIGNING_KEY);
   if (!payload) return null;
 
+  // Chat-only sessions issued to accounts awaiting activation are deliberately
+  // accepted only by the founder-messaging API. They cannot use classrooms,
+  // account APIs, school management, or any other application endpoint.
+  if (payload.chatOnly && requiredRole !== "founder-chat") return null;
+
   let authenticated = payload;
   // A platform Owner may also manage their own school when their account is
   // explicitly registered as that school's Director. The subject remains the
@@ -342,6 +347,8 @@ async function authenticate(request, env, requiredRole) {
     ).bind(payload.sub).first();
     if (!ownerDirector) return null;
     authenticated = { ...payload, role: "director", isPlatformOwner: true };
+  } else if (requiredRole === "founder-chat") {
+    if (!["student", "educator", "director"].includes(payload.role)) return null;
   } else if (requiredRole && payload.role !== requiredRole) {
     return null;
   }
@@ -807,6 +814,16 @@ async function handleLogin(request, env) {
     if (account.role === "director" && !isOwner) {
       return json({ error: "Director account is inactive. In the Owner Control Center, enable Account and press Save all changes." }, 403);
     }
+    if (["student", "educator"].includes(account.role)) {
+      // Allow the registrant to contact the platform Owner while activation is
+      // pending. The signed token is explicitly restricted by authenticate().
+      await env.DB.prepare("DELETE FROM login_attempts WHERE username = ? COLLATE NOCASE AND succeeded = 0").bind(username).run();
+      const chatToken = await signToken(
+        { sub: account.id, role: account.role, username: account.username, chatOnly: true, exp: Math.floor(Date.now() / 1000) + SESSION_TTL_SECONDS },
+        env.SESSION_SIGNING_KEY,
+      );
+      return json({ account: publicAccount(account), token: chatToken, chatOnly: true });
+    }
     await env.DB.prepare("INSERT INTO login_attempts (username, succeeded) VALUES (?, 0)").bind(username).run();
     return json({ error: "This account is not activated. Contact the account administrator." }, 403);
   }
@@ -854,7 +871,7 @@ async function handleLogin(request, env) {
 }
 
 async function getCurrentAccount(request, env) {
-  const claims = await authenticate(request, env, null);
+  const claims = await authenticate(request, env, "founder-chat");
   if (!claims || !["student", "educator", "director", "owner"].includes(claims.role)) {
     return json({ error: "Account authentication required." }, 401);
   }
@@ -862,7 +879,7 @@ async function getCurrentAccount(request, env) {
   if (claims.role === "owner") {
     const owner = await env.DB.prepare("SELECT account_id FROM platform_owners WHERE account_id = ?").bind(claims.sub).first();
     if (!account || !owner) return json({ error: "Owner account not found." }, 404);
-    return json({ account: publicAccount({ ...account, role: "owner" }) });
+    return json({ account: publicAccount({ ...account, role: "owner" }), chatOnly: false });
   }
   if (!account || account.role !== claims.role) return json({ error: "Account not found." }, 404);
   if (claims.role === "director") {
@@ -876,13 +893,14 @@ async function getCurrentAccount(request, env) {
       account: publicAccount(account),
       directorLink: directorSchoolLink(env, school.id, school.name),
       schoolSwitchRequired: new URL(request.url).searchParams.get("schoolId") !== school.id,
+      chatOnly: Boolean(claims.chatOnly),
     });
   }
   const requestedSchoolId = new URL(request.url).searchParams.get("schoolId") || "";
   if (!requestedSchoolId || account.school_id !== requestedSchoolId) {
     return json({ error: "This account belongs to another school. Open your own school's link to continue." }, 401);
   }
-  return json({ account: publicAccount(account) });
+  return json({ account: publicAccount(account), chatOnly: Boolean(claims.chatOnly) });
 }
 
 async function directorProfile(request, env) {
@@ -1028,6 +1046,92 @@ async function requireOwner(request, env) {
   if (!claims) return null;
   const owner = await env.DB.prepare("SELECT account_id FROM platform_owners WHERE account_id = ?").bind(claims.sub).first();
   return owner ? claims : null;
+}
+
+async function founderUserMessages(request, env) {
+  const claims = await authenticate(request, env, "founder-chat");
+  if (!claims || !["student", "educator", "director"].includes(claims.role)) {
+    return json({ error: "Sign in to contact the platform Owner." }, 401);
+  }
+  const account = await env.DB.prepare(
+    "SELECT id, role FROM accounts WHERE id = ? AND role = ?"
+  ).bind(claims.sub, claims.role).first();
+  if (!account) return json({ error: "Account not found." }, 404);
+
+  if (request.method === "GET") {
+    await env.DB.prepare(
+      "UPDATE founder_messages SET read_at = datetime('now') WHERE thread_account_id = ? AND sender_id != ? AND read_at IS NULL"
+    ).bind(account.id, account.id).run();
+    const result = await env.DB.prepare(
+      "SELECT id, sender_id AS senderId, sender_role AS senderRole, message, created_at AS createdAt, read_at AS readAt FROM founder_messages WHERE thread_account_id = ? ORDER BY id ASC LIMIT 300"
+    ).bind(account.id).all();
+    return json({ messages: result.results || [] });
+  }
+
+  const body = await requestJson(request);
+  const message = typeof body?.message === "string" ? body.message.trim() : "";
+  if (!message || message.length > 4000) return json({ error: "Enter a message of 1–4000 characters." }, 400);
+  await env.DB.prepare(
+    "INSERT INTO founder_messages (id, thread_account_id, sender_id, sender_role, message) VALUES (?, ?, ?, ?, ?)"
+  ).bind(randomId(), account.id, account.id, account.role, message).run();
+  return json({ sent: true });
+}
+
+async function ownerFounderMessages(request, env) {
+  const owner = await requireOwner(request, env);
+  if (!owner) return json({ error: "Owner access required." }, 401);
+  const ownerAccount = await env.DB.prepare("SELECT id FROM accounts WHERE id = ?").bind(owner.sub).first();
+  if (!ownerAccount) return json({ error: "Owner account not found." }, 404);
+
+  if (request.method === "GET") {
+    const accountId = new URL(request.url).searchParams.get("accountId") || "";
+    if (accountId) {
+      await env.DB.prepare(
+        "UPDATE founder_messages SET read_at = datetime('now') WHERE thread_account_id = ? AND sender_id != ? AND read_at IS NULL"
+      ).bind(accountId, owner.sub).run();
+      const messages = await env.DB.prepare(
+        "SELECT id, sender_id AS senderId, sender_role AS senderRole, message, created_at AS createdAt, read_at AS readAt FROM founder_messages WHERE thread_account_id = ? ORDER BY id ASC LIMIT 300"
+      ).bind(accountId).all();
+      return json({ messages: messages.results || [] });
+    }
+    const threads = await env.DB.prepare(
+      `SELECT a.id AS accountId, a.full_name AS fullName, a.username, a.role,
+              a.school_id AS schoolId, s.name AS schoolName,
+              COUNT(*) AS messageCount,
+              SUM(CASE WHEN m.sender_id != ? AND m.read_at IS NULL THEN 1 ELSE 0 END) AS unreadIncoming,
+              SUM(CASE WHEN m.sender_id = ? THEN 1 ELSE 0 END) AS outgoingCount,
+              MAX(m.created_at) AS lastMessageAt
+       FROM founder_messages m
+       INNER JOIN accounts a ON a.id = m.thread_account_id
+       LEFT JOIN schools s ON s.id = a.school_id
+       GROUP BY a.id, a.full_name, a.username, a.role, a.school_id, s.name
+       ORDER BY MAX(m.created_at) DESC`
+    ).bind(owner.sub, owner.sub).all();
+    return json({ threads: threads.results || [] });
+  }
+
+  if (request.method === "POST") {
+    const body = await requestJson(request);
+    const accountId = typeof body?.accountId === "string" ? body.accountId.trim() : "";
+    const message = typeof body?.message === "string" ? body.message.trim() : "";
+    if (!accountId || !message || message.length > 4000) return json({ error: "Select a conversation and enter a message of 1–4000 characters." }, 400);
+    const recipient = await env.DB.prepare(
+      "SELECT id, role FROM accounts WHERE id = ? AND role IN ('student','educator','director')"
+    ).bind(accountId).first();
+    if (!recipient) return json({ error: "Conversation account not found." }, 404);
+    await env.DB.prepare(
+      "INSERT INTO founder_messages (id, thread_account_id, sender_id, sender_role, message) VALUES (?, ?, ?, 'owner', ?)"
+    ).bind(randomId(), accountId, owner.sub, message).run();
+    return json({ sent: true });
+  }
+
+  if (request.method === "DELETE") {
+    const accountId = new URL(request.url).searchParams.get("accountId") || "";
+    if (!accountId) return json({ error: "accountId is required." }, 400);
+    await env.DB.prepare("DELETE FROM founder_messages WHERE thread_account_id = ?").bind(accountId).run();
+    return json({ deleted: true });
+  }
+  return json({ error: "Method not allowed." }, 405);
 }
 
 async function ownerDirectors(request, env) {
@@ -3676,6 +3780,8 @@ async function handle(request, env) {
   if (request.method === "POST" && path === "/api/director/register") return registerPublicDirectorSchool(request, env);
   if (request.method === "POST" && path === "/api/auth/login") return handleLogin(request, env);
   if (request.method === "GET" && path === "/api/auth/me") return getCurrentAccount(request, env);
+  if (path === "/api/founder/messages" && ["GET", "POST"].includes(request.method)) return founderUserMessages(request, env);
+  if (path === "/api/owner/founder/messages" && ["GET", "POST", "DELETE"].includes(request.method)) return ownerFounderMessages(request, env);
   if (request.method === "GET" && path === "/api/owner/directors") return ownerDirectors(request, env);
   if (request.method === "POST" && path === "/api/owner/directors") return createOwnerDirector(request, env);
   if (request.method === "POST" && path === "/api/director/claim") return claimDirectorSetup(request, env);
