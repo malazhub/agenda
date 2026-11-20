@@ -454,7 +454,6 @@ const registerSignOutCleanup = useCallback(
         </div>
       )}
 
-      <>
       {/* Header */}
       <Header
         currentLang={currentLang}
