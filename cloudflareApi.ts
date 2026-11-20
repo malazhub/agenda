@@ -22,6 +22,7 @@ export interface AuthResponse {
   account: CloudflareAccount;
   token: string;
   directorLink?: string;
+  chatOnly?: boolean;
 }
 
 export interface RegistrationInput {
@@ -781,4 +782,43 @@ export function updateDirectorPayment(token:string,paymentMethod:DirectorPayment
 }
 export function getSchoolPayment(schoolId:string):Promise<{paymentMethod:DirectorPaymentMethod;paymentValue:string}> {
   return request('/api/school-payment?'+new URLSearchParams({schoolId}).toString());
+}
+
+export interface FounderMessage {
+  id: string;
+  senderId: string;
+  senderRole: 'student'|'educator'|'director'|'owner';
+  message: string;
+  createdAt: string;
+  readAt: string | null;
+}
+export interface FounderThread {
+  accountId: string;
+  fullName: string;
+  username: string;
+  role: 'student'|'educator'|'director';
+  schoolId: string;
+  schoolName: string;
+  messageCount: number;
+  unreadIncoming: number;
+  outgoingCount: number;
+  lastMessageAt: string | null;
+}
+export function getFounderMessages(token:string):Promise<{messages:FounderMessage[]}> {
+  return request('/api/founder/messages',{headers:authHeaders(token)});
+}
+export function sendFounderMessage(token:string,message:string):Promise<{sent:boolean}> {
+  return request('/api/founder/messages',{method:'POST',headers:authHeaders(token),body:JSON.stringify({message})});
+}
+export function getOwnerFounderThreads(token:string):Promise<{threads:FounderThread[]}> {
+  return request('/api/owner/founder/messages',{headers:authHeaders(token)});
+}
+export function getOwnerFounderMessages(token:string,accountId:string):Promise<{messages:FounderMessage[]}> {
+  return request('/api/owner/founder/messages?'+new URLSearchParams({accountId}).toString(),{headers:authHeaders(token)});
+}
+export function replyToFounderThread(token:string,accountId:string,message:string):Promise<{sent:boolean}> {
+  return request('/api/owner/founder/messages',{method:'POST',headers:authHeaders(token),body:JSON.stringify({accountId,message})});
+}
+export function deleteFounderThread(token:string,accountId:string):Promise<{deleted:boolean}> {
+  return request('/api/owner/founder/messages?'+new URLSearchParams({accountId}).toString(),{method:'DELETE',headers:authHeaders(token)});
 }
