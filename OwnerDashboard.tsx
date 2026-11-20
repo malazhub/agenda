@@ -248,7 +248,7 @@ export const OwnerDashboard: React.FC<{ currentLang:Language; token:string; onSi
                       <span className="block text-[10px] text-slate-500">@{thread.username} · {thread.schoolName || 'Agenda'}</span>
                     </td>
                     <td className="p-3">
-                      <span className={thread.unreadIncoming > 0 ? 'inline-flex items-center gap-1 rounded-full bg-rose-600 px-2 py-1 font-black text-white' : 'font-semibold text-slate-600'}><MessageCircle size={12}/>{thread.unreadIncoming || 0}</span>
+                      <span className={thread.unreadIncoming > 0 ? 'inline-flex items-center gap-1 rounded-full bg-rose-600 px-2 py-1 font-black text-white' : 'font-semibold text-slate-600'}><MessageCircle size={12}/>{thread.incomingCount || 0}</span>
                       {thread.unreadIncoming > 0 && <span className="ms-2 font-black text-rose-700">{currentLang==='ar'?'جديد':currentLang==='fr'?'Nouveau':currentLang==='es'?'Nuevo':currentLang==='it'?'Nuovo':'NEW'}</span>}
                     </td>
                     <td className="p-3 font-semibold text-slate-600">{thread.outgoingCount || 0}</td>
