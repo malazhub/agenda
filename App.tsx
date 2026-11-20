@@ -80,6 +80,7 @@ export default function App() {
   const activeSchoolName = schools.find((school) => school.id === activeSchoolId)?.name ||
     (activeSchoolId === 'default-agenda-school' ? 'Agenda' : (schoolPathTitle || 'School'));
   const signOutCleanupRef = useRef<(() => Promise<void>) | null>(null);
+  const pendingHomeRedirectRef = useRef(false);
 
 const registerSignOutCleanup = useCallback(
   (cleanup: (() => Promise<void>) | null) => {
@@ -192,7 +193,8 @@ const registerSignOutCleanup = useCallback(
           setActiveSchoolId('default-agenda-school');
           setUserProfile((previous) => ({ ...previous, name: '', email: '', role: 'student' }));
           const agendaHome = 'https://agenda.mycamp.workers.dev/';
-          if (window.location.href !== agendaHome) {
+          if (window.location.href !== agendaHome && !pendingHomeRedirectRef.current) {
+            pendingHomeRedirectRef.current = true;
             window.location.replace(agendaHome);
             return;
           }
@@ -363,8 +365,7 @@ const registerSignOutCleanup = useCallback(
       setRegisteredAccount(account);
       setActiveSchoolId('default-agenda-school');
       setUserProfile((previous) => ({ ...previous, name: '', email: '', role: 'student' }));
-      const agendaHome = 'https://agenda.mycamp.workers.dev/';
-      if (window.location.href !== agendaHome) window.location.replace(agendaHome);
+      // The account-refresh effect owns the single canonical root redirect.
       return;
     }
 
@@ -712,7 +713,6 @@ const registerSignOutCleanup = useCallback(
         sessionToken={sessionToken}
         chatOnlyMode={chatOnlyMode}
         isOwner={Boolean(ownerAccount)}
-        onOpenSignIn={() => setIsRegisterOpen(true)}
         onFounderBackHome={handleFounderBackHome}
       />
     </div>
