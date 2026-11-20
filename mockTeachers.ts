@@ -35,7 +35,7 @@ export const MOCK_TEACHERS: Teacher[] = [
  name: "Nour Haddad",
  title: "Senior Physics & Chemistry Specialist",
  avatar: "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150&auto=format&fit=crop&q=80",
- location: "Mount Lebanon (Metn) & Online",
+ location: "Regional & Online",
  education: "American University of Beirut (AUB) - BS Physics, DipEd",
  schoolExperience: "International College (IC) & Brummana High School (9 yrs)",
  streams: ["Anglophone", "Bilingual"],
