@@ -969,7 +969,6 @@ Platform architecture and navigation:
       {usMessages.length === 0 && !usError && <p className="py-8 text-center text-xs text-slate-400">{currentLang === 'ar' ? 'لا توجد رسائل بعد. اكتب رسالتك الأولى أدناه.' : currentLang === 'fr' ? 'Aucun message. Écrivez le premier ci-dessous.' : currentLang === 'es' ? 'Todavía no hay mensajes. Escribe el primero abajo.' : currentLang === 'it' ? 'Nessun messaggio. Scrivi il primo qui sotto.' : 'No messages yet. Write the first message below.'}</p>}
       {usError && <p role="alert" className="rounded-lg bg-rose-50 p-2 text-[11px] text-rose-700">{usError}</p>}
      </>
-    }
    </div>
    <form onSubmit={(event) => { event.preventDefault(); if (account && sessionToken) void submitFounderMessage(); else void submitGuestMessage(); }} className="flex shrink-0 items-end gap-2 border-t border-slate-200 bg-white p-3">
     <label className="flex min-w-0 flex-1 flex-col gap-1.5">
@@ -977,7 +976,7 @@ Platform architecture and navigation:
      <textarea value={usDraft} onChange={(event) => setUsDraft(event.target.value)} maxLength={4000} rows={2} placeholder={currentLang === 'ar' ? 'اكتب سؤالك أو رسالتك...' : currentLang === 'fr' ? 'Écrivez votre question ou message...' : currentLang === 'es' ? 'Escribe tu pregunta o mensaje...' : currentLang === 'it' ? 'Scrivi la tua domanda o il messaggio...' : 'Write your question or message...'} className="min-h-14 w-full resize-none rounded-xl border border-slate-200 bg-slate-50 p-2.5 text-xs outline-indigo-600" />
     </label>
     <button type="submit" disabled={!usDraft.trim() || usBusy} className="rounded-xl bg-indigo-700 p-3 text-white disabled:opacity-40" aria-label={currentLang === 'ar' ? 'إرسال' : 'Send'}><Send className="h-4 w-4"/></button>
-   </form>}
+   </form>
   </div>
  )}
 
