@@ -50,6 +50,7 @@ interface CoursesHubProps {
   onOwnerTokenRefresh?: (token: string) => void;
   directorAccessToken?: string;
   initialDirectorLogin?: boolean;
+  initialGuestLiveRoom?: boolean;
   onDirectorRedirect?: () => void;
   onRegisterSignOutCleanup?: (
     cleanup: (() => Promise<void>) | null
@@ -73,6 +74,7 @@ export const CoursesHub: React.FC<CoursesHubProps> = ({
   onOwnerTokenRefresh,
   directorAccessToken,
   initialDirectorLogin,
+  initialGuestLiveRoom = false,
   onDirectorRedirect,
 }) => {
   const t = translations[currentLang];
@@ -663,6 +665,14 @@ const updateAccount = async (
     setAutoOpenLiveClassroom(false);
     setActiveGradeForSessions(targetGrade);
   };
+
+  // Owner guest testing opens the real Broadcast Room Live Sessions view,
+  // not the unrelated demo VirtualClassroom component.
+  useEffect(() => {
+    if (initialGuestLiveRoom && !registeredAccount && !activeGradeForSessions) {
+      openSharedLiveRoom();
+    }
+  }, [initialGuestLiveRoom, registeredAccount, activeGradeForSessions]);
 
     const renderDirectorTable = (     title: string,     rows: DirectorRow[],     showEducatorColumn = false   ) => (
     <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white">
