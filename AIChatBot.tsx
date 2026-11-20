@@ -89,6 +89,7 @@ export const AIChatBot: React.FC<AIChatBotProps> = ({ currentLang, schoolId, sch
  const [usBusy, setUsBusy] = useState(false);
  const [usError, setUsError] = useState('');
  const messagesEndRef = useRef<HTMLDivElement>(null);
+ const usRefreshSequenceRef = useRef(0);
  const previousLanguageRef = useRef<Language>(currentLang);
  const activeLanguageRef = useRef<Language>(currentLang);
  activeLanguageRef.current = currentLang;
@@ -146,8 +147,18 @@ export const AIChatBot: React.FC<AIChatBotProps> = ({ currentLang, schoolId, sch
   if (!usMode || !sessionToken || !account || isOwner) return;
   let active = true;
   const refresh = async () => {
-   try { const response = await getUsMessages(sessionToken); if (active) { setUsMessages(response.messages || []); setUsError(''); } }
-   catch (error) { if (active) setUsError(error instanceof Error ? error.message : 'Unable to load the conversation.'); }
+   const sequence = ++usRefreshSequenceRef.current;
+   try {
+    const response = await getUsMessages(sessionToken);
+    if (active && sequence === usRefreshSequenceRef.current) {
+     setUsMessages(response.messages || []);
+     setUsError('');
+    }
+   } catch (error) {
+    if (active && sequence === usRefreshSequenceRef.current) {
+     setUsError(error instanceof Error ? error.message : 'Unable to load the conversation.');
+    }
+   }
   };
   void refresh();
   const intervalId = window.setInterval(() => void refresh(), 12000);
@@ -156,15 +167,33 @@ export const AIChatBot: React.FC<AIChatBotProps> = ({ currentLang, schoolId, sch
  const submitUsMessage = async () => {
   const message = usDraft.trim();
   if (!message || !sessionToken || !account || isOwner || usBusy) return;
-  setUsBusy(true); setUsError('');
+  const optimisticId = 'pending-' + crypto.randomUUID();
+  const optimisticMessage: UsMessage = {
+   id: optimisticId,
+   senderId: account.id,
+   senderRole: account.role,
+   message,
+   createdAt: new Date().toISOString(),
+   readAt: null,
+  };
+  // Render immediately, then reconcile with the canonical saved transcript.
+  setUsMessages((previous) => [...previous, optimisticMessage]);
+  setUsBusy(true);
+  setUsError('');
+  setUsDraft('');
+  ++usRefreshSequenceRef.current; // Invalidate polls started before this send.
   try {
    await sendUsMessage(sessionToken, message);
-   setUsDraft('');
+   const sequence = ++usRefreshSequenceRef.current;
    const response = await getUsMessages(sessionToken);
-   setUsMessages(response.messages || []);
-
-  } catch (error) { setUsError(error instanceof Error ? error.message : 'Unable to send your message. Please try again.'); }
-  finally { setUsBusy(false); }
+   if (sequence === usRefreshSequenceRef.current) setUsMessages(response.messages || []);
+  } catch (error) {
+   setUsMessages((previous) => previous.filter((item) => item.id !== optimisticId));
+   setUsDraft(message);
+   setUsError(error instanceof Error ? error.message : 'Unable to send your message. Please try again.');
+  } finally {
+   setUsBusy(false);
+  }
  };
 
  useEffect(() => {
