@@ -140,13 +140,28 @@ const registerSignOutCleanup = useCallback(
   }, [activeSchoolId]);
 
   useEffect(() => {
-    const storedOwnerToken = sessionStorage.getItem('agenda-owner-token');
-    if (storedOwnerToken) { setOwnerToken(storedOwnerToken); void getCurrentAccount(storedOwnerToken).then(({account}) => setOwnerAccount(account)).catch(() => { sessionStorage.removeItem('agenda-owner-token'); setOwnerToken(''); }); }
     const storedToken = sessionStorage.getItem('agenda-session-token');
     const storedDirectorToken = sessionStorage.getItem('agenda-director-token');
-    if (storedDirectorToken) setDirectorAccessToken(storedDirectorToken);
-    if (storedToken) setSessionToken(storedToken);
-    else if (storedDirectorToken) setSessionToken(storedDirectorToken);
+    const storedOwnerToken = sessionStorage.getItem('agenda-owner-token');
+
+    // A normal account session takes precedence over a stale Owner session.
+    // Owner login clears the normal token; user login clears Owner context.
+    if (storedToken || storedDirectorToken) {
+      if (storedOwnerToken) sessionStorage.removeItem('agenda-owner-token');
+      if (storedDirectorToken) setDirectorAccessToken(storedDirectorToken);
+      setSessionToken(storedToken || storedDirectorToken || '');
+      return;
+    }
+
+    if (storedOwnerToken) {
+      setOwnerToken(storedOwnerToken);
+      void getCurrentAccount(storedOwnerToken)
+        .then(({ account }) => setOwnerAccount(account))
+        .catch(() => {
+          sessionStorage.removeItem('agenda-owner-token');
+          setOwnerToken('');
+        });
+    }
   }, []);
 
   useEffect(() => {
@@ -162,6 +177,14 @@ const registerSignOutCleanup = useCallback(
           setSessionToken(refreshedToken);
         }
         if (chatOnly) {
+          // Prevent a stale Owner context from overriding a pending user's
+          // restricted session when this tab returns to the Agenda root.
+          sessionStorage.removeItem('agenda-owner-token');
+          setOwnerAccount(null);
+          setOwnerToken('');
+          setOwnerSchoolMode(false);
+          setOwnerGuestClassroom(false);
+          setOwnerDirectorLoginMode(false);
           setChatOnlyMode(true);
           setRegisteredAccount(account);
           setUserProfile((previous) => ({ ...previous, name: account.fullName, email: account.email, role: account.role === 'educator' ? 'teacher' : 'student' }));
@@ -232,6 +255,7 @@ const registerSignOutCleanup = useCallback(
   };
 
   const handleOwnerLogin = (account: CloudflareAccount, token: string) => {
+    sessionStorage.removeItem('agenda-founder-chat-dismissed');
     sessionStorage.setItem('agenda-owner-token', token);
     sessionStorage.removeItem('agenda-session-token');
     sessionStorage.removeItem('agenda-director-token');
@@ -253,6 +277,20 @@ const registerSignOutCleanup = useCallback(
     }
     setActiveSchoolId('default-agenda-school');
     showToast(`${account.fullName}: ${currentLang === 'ar' ? 'تم تسجيل دخول المالك.' : 'Owner signed in successfully.'}`);
+  };
+
+  const handleFounderBackHome = () => {
+    // Exit the Owner view as well as the chat overlay. Preserve the pending
+    // user's own token so the canonical root displays the correct home state.
+    sessionStorage.setItem('agenda-founder-chat-dismissed', '1');
+    sessionStorage.removeItem('agenda-owner-token');
+    setOwnerAccount(null);
+    setOwnerToken('');
+    setOwnerSchoolMode(false);
+    setOwnerGuestClassroom(false);
+    setOwnerDirectorLoginMode(false);
+    setIsClassroomActive(false);
+    window.location.replace('https://agenda.mycamp.workers.dev/');
   };
 
   const handleSelectQuestionForBooking = (question: ExamQuestion, exam: OfficialExam) => {
@@ -296,6 +334,17 @@ const registerSignOutCleanup = useCallback(
 
   const handleRegisterSuccess = (account: CloudflareAccount, token: string, chatOnly = false) => {
     setChatOnlyMode(chatOnly);
+    if (account.role !== 'owner') {
+      // Signing into a school account replaces any Owner context in this tab.
+      sessionStorage.removeItem('agenda-owner-token');
+      setOwnerAccount(null);
+      setOwnerToken('');
+      setOwnerSchoolMode(false);
+      setOwnerGuestClassroom(false);
+      setOwnerDirectorLoginMode(false);
+    } else {
+      sessionStorage.removeItem('agenda-founder-chat-dismissed');
+    }
     if (account.role === 'owner') {
       handleOwnerLogin(account, token);
       return;
@@ -342,6 +391,7 @@ const registerSignOutCleanup = useCallback(
     setOwnerToken('');
     setOwnerSchoolMode(false);
     sessionStorage.removeItem('agenda-owner-token');
+    sessionStorage.removeItem('agenda-founder-chat-dismissed');
 
     setUserProfile({
       name: '',
@@ -649,6 +699,7 @@ const registerSignOutCleanup = useCallback(
         chatOnlyMode={chatOnlyMode}
         isOwner={Boolean(ownerAccount)}
         onOpenSignIn={() => setIsRegisterOpen(true)}
+        onFounderBackHome={handleFounderBackHome}
       />
     </div>
   );
