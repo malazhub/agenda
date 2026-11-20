@@ -64,6 +64,7 @@ export default function App() {
   const [ownerAccount, setOwnerAccount] = useState<CloudflareAccount | null>(null);
   const [ownerToken, setOwnerToken] = useState('');
   const [ownerSchoolMode, setOwnerSchoolMode] = useState(false);
+  const [ownerGuestClassroom, setOwnerGuestClassroom] = useState(false);
   const [ownerDirectorLoginMode, setOwnerDirectorLoginMode] = useState(false);
   const [directorSetupToken, setDirectorSetupToken] = useState(() => new URLSearchParams(window.location.search).get('directorSetup') || '');
   const [directorAccessToken, setDirectorAccessToken] = useState('');
@@ -157,13 +158,12 @@ const registerSignOutCleanup = useCallback(
         if (account.role === 'owner') {
           setOwnerAccount(account);
           setOwnerToken(sessionToken);
-          const ownerUrl = new URL(window.location.href);
-          if (ownerUrl.searchParams.has('schoolId') || ownerUrl.searchParams.has('directorLogin')) {
-            ownerUrl.pathname = '/';
-            ownerUrl.searchParams.delete('schoolId');
-            ownerUrl.searchParams.delete('directorLogin');
-            ownerUrl.searchParams.delete('directorSetup');
-            window.history.replaceState({}, '', ownerUrl.toString());
+          const ownerUrl = new URL('https://agenda.mycamp.workers.dev/');
+          if (window.location.origin !== ownerUrl.origin || window.location.pathname !== '/' || window.location.search) {
+            // The owner always uses the platform root. sessionStorage is shared
+            // across paths on this origin, so the owner token survives this tab redirect.
+            window.location.replace(ownerUrl.toString());
+            return;
           }
           setActiveSchoolId('default-agenda-school');
           return;
@@ -230,13 +230,14 @@ const registerSignOutCleanup = useCallback(
     setOwnerSchoolMode(false);
     setOwnerDirectorLoginMode(false);
     setIsClassroomActive(false);
-    // Owner Control Center always belongs to the platform root, never a school URL.
-    const ownerUrl = new URL(window.location.href);
-    ownerUrl.pathname = '/';
-    ownerUrl.searchParams.delete('schoolId');
-    ownerUrl.searchParams.delete('directorLogin');
-    ownerUrl.searchParams.delete('directorSetup');
-    window.history.replaceState({}, '', ownerUrl.toString());
+    // Owner Control Center always belongs to the canonical Agenda root.
+    // Replace this tab (rather than only editing history) so app state is
+    // re-initialized for the owner context while the same-origin token survives.
+    const ownerUrl = 'https://agenda.mycamp.workers.dev/';
+    if (window.location.href !== ownerUrl) {
+      window.location.replace(ownerUrl);
+      return;
+    }
     setActiveSchoolId('default-agenda-school');
     showToast(`${account.fullName}: ${currentLang === 'ar' ? 'تم تسجيل دخول المالك.' : 'Owner signed in successfully.'}`);
   };
@@ -440,7 +441,8 @@ const registerSignOutCleanup = useCallback(
               schoolId={ownerAccount.schoolId || activeSchoolId}
               sessionToken=""
               ownerSchoolToken={ownerToken}
-              onBackToOwner={() => setOwnerSchoolMode(false)}
+              initialGuestLiveRoom={ownerGuestClassroom}
+              onBackToOwner={() => { setOwnerSchoolMode(false); setOwnerGuestClassroom(false); }}
               onOwnerTokenRefresh={(token) => {
                 sessionStorage.setItem('agenda-owner-token', token);
                 setOwnerToken(token);
@@ -477,10 +479,12 @@ const registerSignOutCleanup = useCallback(
               onSignOut={handleSignOut}
               onDirectorSignIn={() => setOwnerDirectorLoginMode(true)}
               onEnterGuestClassroom={() => {
-                setSelectedTeacherForBooking(MOCK_TEACHERS[0]);
-                setIsClassroomActive(true);
+                setIsClassroomActive(false);
+                setOwnerGuestClassroom(true);
+                setOwnerSchoolMode(true);
               }}
               onManageMySchool={() => {
+                setOwnerGuestClassroom(false);
                 setIsClassroomActive(false);
                 setOwnerSchoolMode(true);
               }}
