@@ -379,7 +379,6 @@ export const OwnerDashboard: React.FC<{ currentLang:Language; token:string; onSi
             const link=destination(row);
             const contactLabel=row.paymentMethod==='whatsapp'?'WhatsApp':row.paymentMethod==='phone'?t.phone:row.paymentMethod==='email'?t.email:row.paymentMethod==='bank'?'Bank':row.paymentMethod==='suyool'?'Suyool':'—';
             return <div key={row.id} className="px-3 py-3">
-              <div className="mb-2 font-bold text-sm text-slate-800">{row.schoolName} — {row.fullName}</div>
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[1450px] text-sm">
                   <thead className="bg-slate-50"><tr>{[t.school,t.director,t.phone,t.email,currentLang==='ar'?'الوارد':currentLang==='fr'?'Messages reçus':currentLang==='es'?'Chat entrante':currentLang==='it'?'Chat in':'Chat in',currentLang==='ar'?'الصادر':currentLang==='fr'?'Messages envoyés':currentLang==='es'?'Chat saliente':currentLang==='it'?'Chat out':'Chat out',t.students,t.educators,t.joined,t.expiry,t.account,t.paymentState,t.schoolLink,t.paymentLink,t.actions].map(x=><th key={x} className="p-3 text-start whitespace-nowrap">{x}</th>)}</tr></thead>
