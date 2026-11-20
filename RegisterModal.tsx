@@ -323,7 +323,7 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
         window.location.replace(destination);
         return;
       }
-      if (account.role !== 'owner' && account.schoolId && account.schoolId !== schoolId) {
+      if (!chatOnly && account.role !== 'owner' && account.schoolId && account.schoolId !== schoolId) {
         sessionStorage.setItem('agenda-session-token', token);
         const targetUrl = new URL('https://agenda.mycamp.workers.dev/');
         targetUrl.searchParams.set('schoolId', account.schoolId);
