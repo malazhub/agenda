@@ -177,17 +177,20 @@ const registerSignOutCleanup = useCallback(
           setSessionToken(refreshedToken);
         }
         if (chatOnly) {
-          // Prevent a stale Owner context from overriding a pending user's
-          // restricted session when this tab returns to the Agenda root.
+          // Keep identity for founder messages, but provide the public Agenda
+          // experience as a guest until the account is approved.
           sessionStorage.removeItem('agenda-owner-token');
+          sessionStorage.removeItem('agenda-director-token');
           setOwnerAccount(null);
           setOwnerToken('');
           setOwnerSchoolMode(false);
           setOwnerGuestClassroom(false);
           setOwnerDirectorLoginMode(false);
+          setDirectorAccessToken('');
           setChatOnlyMode(true);
           setRegisteredAccount(account);
-          setUserProfile((previous) => ({ ...previous, name: account.fullName, email: account.email, role: account.role === 'educator' ? 'teacher' : 'student' }));
+          setActiveSchoolId('default-agenda-school');
+          setUserProfile((previous) => ({ ...previous, name: '', email: '', role: 'student' }));
           return;
         }
         setChatOnlyMode(false);
@@ -335,7 +338,6 @@ const registerSignOutCleanup = useCallback(
   const handleRegisterSuccess = (account: CloudflareAccount, token: string, chatOnly = false) => {
     setChatOnlyMode(chatOnly);
     if (account.role !== 'owner') {
-      // Signing into a school account replaces any Owner context in this tab.
       sessionStorage.removeItem('agenda-owner-token');
       setOwnerAccount(null);
       setOwnerToken('');
@@ -345,6 +347,22 @@ const registerSignOutCleanup = useCallback(
     } else {
       sessionStorage.removeItem('agenda-founder-chat-dismissed');
     }
+
+    if (chatOnly) {
+      // Retain this account's limited identity for Contact Founder, but show
+      // the standard public home exactly as a guest and do not auto-open chat.
+      sessionStorage.removeItem('agenda-director-token');
+      sessionStorage.setItem('agenda-session-token', token);
+      setDirectorAccessToken('');
+      setSessionToken(token);
+      setRegisteredAccount(account);
+      setActiveSchoolId('default-agenda-school');
+      setUserProfile((previous) => ({ ...previous, name: '', email: '', role: 'student' }));
+      const agendaHome = 'https://agenda.mycamp.workers.dev/';
+      if (window.location.href !== agendaHome) window.location.replace(agendaHome);
+      return;
+    }
+
     if (account.role === 'owner') {
       handleOwnerLogin(account, token);
       return;
@@ -431,7 +449,7 @@ const registerSignOutCleanup = useCallback(
         </div>
       )}
 
-      {!chatOnlyMode && <>
+      <>
       {/* Header */}
       <Header
         currentLang={currentLang}
@@ -440,7 +458,7 @@ const registerSignOutCleanup = useCallback(
         userProfile={userProfile}
         onRoleChange={(role) => setUserProfile(prev => ({ ...prev, role }))}
         onOpenRegister={() => setIsRegisterOpen(true)}
-        signedInName={ownerAccount?.fullName || registeredAccount?.fullName}
+        signedInName={chatOnlyMode ? undefined : (ownerAccount?.fullName || registeredAccount?.fullName)}
         isOwner={Boolean(ownerAccount)}
         onOpenOwner={() => setIsClassroomActive(false)}
         schoolName={activeSchoolName}
@@ -448,16 +466,10 @@ const registerSignOutCleanup = useCallback(
         onOpenArchiveSessions={() => setIsArchiveSessionsOpen(true)}
         onSignOut={handleSignOut}
       />
-      </>}
 
       {/* Main Content: Courses Hub or Live Classroom */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8 flex-1 w-full">
-        {chatOnlyMode ? (
-          <section className="mx-auto max-w-2xl rounded-3xl border border-amber-200 bg-amber-50 p-6 sm:p-8 text-center shadow-sm">
-            <h1 className="text-xl font-black text-slate-900">{currentLang === 'ar' ? 'حسابك بانتظار التفعيل' : currentLang === 'fr' ? 'Votre compte attend son activation' : currentLang === 'es' ? 'Tu cuenta está pendiente de activación' : currentLang === 'it' ? 'Il tuo account è in attesa di attivazione' : 'Your account is awaiting activation'}</h1>
-            <p className="mt-3 text-sm leading-6 text-slate-700">{currentLang === 'ar' ? 'يمكنك الآن مراسلة مؤسس المنصة ومتابعة الردود. ستُفتح جميع وظائف المدرسة بعد تفعيل حسابك.' : currentLang === 'fr' ? 'Vous pouvez écrire au fondateur de la plateforme et lire ses réponses. Les fonctions de votre établissement seront disponibles après activation.' : currentLang === 'es' ? 'Ahora puedes escribir al fundador de la plataforma y leer sus respuestas. Las funciones de tu escuela estarán disponibles cuando se active tu cuenta.' : currentLang === 'it' ? 'Ora puoi scrivere al fondatore della piattaforma e leggere le risposte. Le funzioni scolastiche saranno disponibili dopo l’attivazione.' : 'You can now message the platform founder and read replies. Your school features will become available after your account is activated.'}</p>
-          </section>
-        ) : directorSetupToken ? (
+        {directorSetupToken ? (
           <DirectorSetupPage
             token={directorSetupToken}
             currentLang={currentLang}
@@ -574,11 +586,11 @@ const registerSignOutCleanup = useCallback(
         ) : (
                     <CoursesHub
             currentLang={currentLang}
-            registeredAccount={registeredAccount}
+            registeredAccount={chatOnlyMode ? null : registeredAccount}
             onOwnerLogin={handleOwnerLogin}
-            schoolId={registeredAccount?.schoolId || activeSchoolId}
-            sessionToken={sessionToken}
-            directorAccessToken={directorAccessToken}
+            schoolId={chatOnlyMode ? 'default-agenda-school' : (registeredAccount?.schoolId || activeSchoolId)}
+            sessionToken={chatOnlyMode ? '' : sessionToken}
+            directorAccessToken={chatOnlyMode ? '' : directorAccessToken}
             onSchoolBrandChange={(schoolId, schoolName) => {
               setActiveSchoolId(schoolId);
               const nextUrl = new URL(window.location.href);
@@ -687,7 +699,6 @@ const registerSignOutCleanup = useCallback(
           </div>
         </div>
       </footer>
-      </>}
 
       {/* AI Assistant Chatbot: Auto responds about pricing, agenda, live sessions, and saved issues */}
       <AIChatBot
