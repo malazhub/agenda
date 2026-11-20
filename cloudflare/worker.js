@@ -868,11 +868,45 @@ async function handleLogin(request, env) {
 }
 
 async function getCurrentAccount(request, env) {
-  const claims = await authenticate(request, env, "founder-chat");
+  let claims = await authenticate(request, env, "founder-chat");
   if (!claims || !["student", "educator", "director", "owner"].includes(claims.role)) {
     return json({ error: "Account authentication required." }, 401);
   }
   const account = await env.DB.prepare("SELECT * FROM accounts WHERE id = ?").bind(claims.sub).first();
+  let upgradedToken;
+
+  // A chat-only session can be safely promoted after the Owner activates the
+  // account. Directors must also have a paid, active, unexpired school licence.
+  if (claims.chatOnly && account && Number(account.activated ?? 0) === 1) {
+    let canUpgrade = true;
+    const accountExpiry = account.expires_at
+      ? Date.parse(String(account.expires_at).replace(" ", "T") + "Z")
+      : null;
+    if (accountExpiry !== null && (!Number.isFinite(accountExpiry) || accountExpiry <= Date.now())) {
+      canUpgrade = false;
+    }
+    if (claims.role === "director") {
+      const schoolLicence = await env.DB.prepare(
+        "SELECT license_active, license_expires_at FROM schools WHERE id = ? AND director_id = ?"
+      ).bind(account.school_id, account.id).first();
+      const licenceExpiry = schoolLicence?.license_expires_at
+        ? Date.parse(String(schoolLicence.license_expires_at).replace(" ", "T") + "Z")
+        : accountExpiry;
+      if (Number(account.paid ?? 0) !== 1 ||
+          !schoolLicence ||
+          Number(schoolLicence.license_active ?? 1) !== 1 ||
+          (licenceExpiry !== null && (!Number.isFinite(licenceExpiry) || licenceExpiry <= Date.now()))) {
+        canUpgrade = false;
+      }
+    }
+    if (canUpgrade) {
+      upgradedToken = await signToken(
+        { sub: claims.sub, role: claims.role, username: claims.username, exp: Math.floor(Date.now() / 1000) + SESSION_TTL_SECONDS },
+        env.SESSION_SIGNING_KEY,
+      );
+      claims = { ...claims, chatOnly: false };
+    }
+  }
   if (claims.role === "owner") {
     const owner = await env.DB.prepare("SELECT account_id FROM platform_owners WHERE account_id = ?").bind(claims.sub).first();
     if (!account || !owner) return json({ error: "Owner account not found." }, 404);
@@ -891,13 +925,14 @@ async function getCurrentAccount(request, env) {
       directorLink: directorSchoolLink(env, school.id, school.name),
       schoolSwitchRequired: new URL(request.url).searchParams.get("schoolId") !== school.id,
       chatOnly: Boolean(claims.chatOnly),
+      ...(upgradedToken ? { token: upgradedToken } : {}),
     });
   }
   const requestedSchoolId = new URL(request.url).searchParams.get("schoolId") || "";
   if (!requestedSchoolId || account.school_id !== requestedSchoolId) {
     return json({ error: "This account belongs to another school. Open your own school's link to continue." }, 401);
   }
-  return json({ account: publicAccount(account), chatOnly: Boolean(claims.chatOnly) });
+  return json({ account: publicAccount(account), chatOnly: Boolean(claims.chatOnly), ...(upgradedToken ? { token: upgradedToken } : {}) });
 }
 
 async function directorProfile(request, env) {
