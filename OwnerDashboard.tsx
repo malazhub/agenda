@@ -123,16 +123,20 @@ export const OwnerDashboard: React.FC<{ currentLang:Language; token:string; onSi
     setError('');
     setFounderReply('');
     ++founderConversationRefreshSequence.current;
+    let saved = false;
     try {
       await replyToFounderThread(token, thread.accountId, reply);
+      saved = true;
       const sequence = ++founderConversationRefreshSequence.current;
       const result = await getOwnerFounderMessages(token, thread.accountId);
       if (sequence === founderConversationRefreshSequence.current) setFounderConversation(result.messages || []);
       const inbox = await getOwnerFounderThreads(token);
       setFounderThreads(inbox.threads || []);
     } catch (e) {
-      setFounderConversation((items) => items.filter((item) => item.id !== optimisticId));
-      setFounderReply(reply);
+      if (!saved) {
+        setFounderConversation((items) => items.filter((item) => item.id !== optimisticId));
+        setFounderReply(reply);
+      }
       setError(e instanceof Error ? e.message : t.error);
     } finally {
       setFounderActionBusy(false);
