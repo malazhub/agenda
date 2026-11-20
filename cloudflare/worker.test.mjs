@@ -1047,8 +1047,15 @@ test('Owner creates a one-year Director school with phone initial password; Dire
   const blockedLogin = await send(env, '/api/auth/login', {
     method: 'POST', body: { username: 'new.director', password: '+961 70 123 456', schoolId: director.schoolId },
   });
-  assert.equal(blockedLogin.status, 403);
-  assert.match((await blockedLogin.json()).error, /Director account is inactive/i);
+  assert.equal(blockedLogin.status, 200);
+  const pendingDirectorSession = await blockedLogin.json();
+  assert.equal(pendingDirectorSession.chatOnly, true);
+  assert.equal(pendingDirectorSession.account.role, 'director');
+  const pendingDirectorProfile = await send(env, `/api/auth/me?schoolId=${director.schoolId}`, { token: pendingDirectorSession.token });
+  assert.equal(pendingDirectorProfile.status, 200);
+  assert.equal((await pendingDirectorProfile.json()).chatOnly, true);
+  const blockedDirectorDashboard = await send(env, '/api/director/sessions', { token: pendingDirectorSession.token });
+  assert.ok([401, 403].includes(blockedDirectorDashboard.status));
   const savedStatuses = await send(env, '/api/owner/directors/status', {
     method: 'PATCH', token: ownerToken,
     body: { updates: [{ id: director.id, activated: true, paid: true }] },
@@ -1225,8 +1232,10 @@ test('Public Director registration saves chosen password and signs in by email a
     method: 'POST',
     body: { username: ' DIRECTOR@NEWSCHOOL.EXAMPLE ', password: 'x', schoolId: created.schoolId },
   });
-  assert.equal(pendingLogin.status, 403);
-  assert.match((await pendingLogin.json()).error, /Director account is inactive/i);
+  assert.equal(pendingLogin.status, 200);
+  const pendingEmailSession = await pendingLogin.json();
+  assert.equal(pendingEmailSession.chatOnly, true);
+  assert.equal(pendingEmailSession.account.role, 'director');
 
   // No separate username is collected on public Director registration. The
   // Director can also enter their exact full name, with the same password.
@@ -1234,8 +1243,10 @@ test('Public Director registration saves chosen password and signs in by email a
     method: 'POST',
     body: { username: '  New School Director  ', password: 'x', schoolId: created.schoolId },
   });
-  assert.equal(fullNamePendingLogin.status, 403);
-  assert.match((await fullNamePendingLogin.json()).error, /Director account is inactive/i);
+  assert.equal(fullNamePendingLogin.status, 200);
+  const pendingNameSession = await fullNamePendingLogin.json();
+  assert.equal(pendingNameSession.chatOnly, true);
+  assert.equal(pendingNameSession.account.role, 'director');
 
   const ownerLogin = await send(env, '/api/auth/login', {
     method: 'POST',
