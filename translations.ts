@@ -407,7 +407,7 @@ const baseTranslations: Record<'ar' | 'en' | 'fr', Translations> = {
       languages: "Langues & Lettres",
     },
 
-    archiveTitle: "Examens Officiels Libanais",
+    archiveTitle: "Examens Officiels",
     archiveSubtitle: "Épreuves officielles avec barèmes officiels et solutions complètes.",
     filterYear: "Année",
     filterTrack: "Série",
