@@ -341,7 +341,7 @@ export function loginAccount(username: string, password: string, schoolId: strin
   });
 }
 
-export function getCurrentAccount(token: string, schoolId?: string): Promise<{ account: CloudflareAccount; directorLink?: string; schoolSwitchRequired?: boolean }> {
+export function getCurrentAccount(token: string, schoolId?: string): Promise<{ account: CloudflareAccount; directorLink?: string; schoolSwitchRequired?: boolean; chatOnly?: boolean }> {
   const query = schoolId ? `?schoolId=${encodeURIComponent(schoolId)}` : '';
   return request(`/api/auth/me${query}`, { headers: authHeaders(token) });
 }
