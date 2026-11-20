@@ -1,6 +1,6 @@
 import { GradeLevelDef, StoredSession, LiveSessionInfo } from '../types';
 
-export const LEBANESE_GRADE_LEVELS: GradeLevelDef[] = [
+export const GRADE_LEVELS: GradeLevelDef[] = [
   // 1. Terminale / Baccalauréat
   {
     id: 'bac_sg',
