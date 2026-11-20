@@ -665,10 +665,25 @@ test('registration hashes credentials and rejects duplicate usernames', async ()
 
   const pendingLogin = await send(env, '/api/auth/login', {
     method: 'POST',
-    body: { username: registration.username, password: registration.password },
+    body: { username: registration.username, password: registration.password, schoolId: 'default-agenda-school' },
   });
-  assert.equal(pendingLogin.status, 403);
-  assert.match((await pendingLogin.json()).error, /not activated/i);
+  assert.equal(pendingLogin.status, 200);
+  const pendingSession = await pendingLogin.json();
+  assert.equal(pendingSession.chatOnly, true);
+  assert.equal(pendingSession.account.activated, false);
+
+  const pendingProfile = await send(env, '/api/auth/me?schoolId=default-agenda-school', {
+    token: pendingSession.token,
+  });
+  assert.equal(pendingProfile.status, 200);
+  assert.equal((await pendingProfile.json()).chatOnly, true);
+
+  // Pending credentials can reach the founder-chat identity endpoint but may
+  // not access the live classroom with the chat-only token.
+  const blockedLiveClass = await send(env, '/api/live-stream?sessionId=test-registration-session', {
+    token: pendingSession.token,
+  });
+  assert.ok([401, 403].includes(blockedLiveClass.status));
 
   const legacyAccount = accounts.get(result.account.id);
   legacyAccount.registered_session_id = null;
