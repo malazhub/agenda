@@ -371,16 +371,20 @@ export const OwnerDashboard: React.FC<{ currentLang:Language; token:string; onSi
 
     <section className="rounded-2xl border bg-white overflow-hidden">
       <div className="p-4 flex flex-wrap justify-between items-center gap-3"><h2 className="font-black">{t.directors}</h2><div className="flex gap-2"><button onClick={()=>setShowCreate(v=>!v)} className="rounded-lg bg-indigo-700 px-3 py-2 text-xs font-bold text-white">{t.add}</button><button onClick={()=>void refresh()} aria-label="Refresh"><RefreshCw size={17}/></button></div></div>
-      {loading ? <p className="p-4">{t.loading}</p> : <div className="overflow-x-auto">
-        <table className="w-full text-sm min-w-[1450px]">
-          <thead className="bg-slate-50"><tr>{[t.school,t.director,t.phone,t.email,currentLang==='ar'?'الوارد':currentLang==='fr'?'Messages reçus':currentLang==='es'?'Chat entrante':currentLang==='it'?'Chat in':'Chat in',currentLang==='ar'?'الصادر':currentLang==='fr'?'Messages envoyés':currentLang==='es'?'Chat saliente':currentLang==='it'?'Chat out':'Chat out',t.students,t.educators,t.joined,t.expiry,t.account,t.paymentState,t.schoolLink,t.paymentLink,t.actions].map(x=><th key={x} className="p-3 text-start whitespace-nowrap">{x}</th>)}</tr></thead>
-          <tbody>{rows.length===0 ? <tr><td colSpan={15} className="p-4 text-center text-slate-500">{t.empty}</td></tr> : rows.map(row=>{
+      {loading ? <p className="p-4">{t.loading}</p> : rows.length===0 ? <p className="p-4 text-center text-slate-500">{t.empty}</p> : <div className="divide-y divide-slate-100">
+        {rows.map(row=>{
             const schoolThreads = founderThreads.filter(thread => thread.accountId === row.id);
             const chatIn = schoolThreads.reduce((total, thread) => total + (thread.incomingCount || 0), 0);
             const chatOut = schoolThreads.reduce((total, thread) => total + (thread.outgoingCount || 0), 0);
             const link=destination(row);
             const contactLabel=row.paymentMethod==='whatsapp'?'WhatsApp':row.paymentMethod==='phone'?t.phone:row.paymentMethod==='email'?t.email:row.paymentMethod==='bank'?'Bank':row.paymentMethod==='suyool'?'Suyool':'—';
-            return <tr key={row.id} className="border-t align-top">
+            return <div key={row.id} className="px-3 py-3">
+              <div className="mb-2 font-bold text-sm text-slate-800">{row.schoolName} — {row.fullName}</div>
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[1450px] text-sm">
+                  <thead className="bg-slate-50"><tr>{[t.school,t.director,t.phone,t.email,currentLang==='ar'?'الوارد':currentLang==='fr'?'Messages reçus':currentLang==='es'?'Chat entrante':currentLang==='it'?'Chat in':'Chat in',currentLang==='ar'?'الصادر':currentLang==='fr'?'Messages envoyés':currentLang==='es'?'Chat saliente':currentLang==='it'?'Chat out':'Chat out',t.students,t.educators,t.joined,t.expiry,t.account,t.paymentState,t.schoolLink,t.paymentLink,t.actions].map(x=><th key={x} className="p-3 text-start whitespace-nowrap">{x}</th>)}</tr></thead>
+                  <tbody>
+                    <tr className="border-t align-top">
               <td className="p-3"><b>{row.schoolName}</b><small className="block text-slate-500">{row.schoolId}</small></td>
               <td className="p-3"><b>{row.fullName}</b><small className="block text-slate-500">@{row.username}</small><small className="block text-slate-500">{row.setupPending?t.setupPending:t.setupDone}</small><small className={row.phonePasswordEnabled?'block text-emerald-700':'block text-slate-500'}>{row.phonePasswordEnabled?t.phoneEnabled:t.phoneDisabled}</small></td>
               <td className="p-3 whitespace-nowrap">{row.phone||'—'}</td>
@@ -405,9 +409,12 @@ export const OwnerDashboard: React.FC<{ currentLang:Language; token:string; onSi
               <td className="p-3"><a href={row.directorLink} target="_blank" rel="noreferrer" className="text-indigo-700 underline whitespace-nowrap">{t.open} <ExternalLink size={12} className="inline"/></a><button onClick={()=>void navigator.clipboard.writeText(row.directorLink)} className="block text-xs underline mt-1">{t.copy}</button></td>
               <td className="p-3 min-w-48">{link?<><span className="block text-xs text-slate-500">{contactLabel}</span><a href={link} target="_blank" rel="noreferrer" className="block max-w-52 break-all text-indigo-700 underline">{row.paymentValue}</a></>:<span className="text-slate-400">{t.noPayment}</span>}</td>
               <td className="p-3"><div className="flex flex-col items-start gap-2"><button disabled={busy===row.id||!row.setupPending} onClick={()=>void resend(row.id)} className="text-xs underline disabled:opacity-40"><KeyRound size={13} className="inline"/> {t.resend}</button><button disabled={busy===row.id||!row.phone} onClick={()=>void copyLoginSms(row)} className="text-xs underline disabled:opacity-40">{t.copyLoginSms}</button><button disabled={busy===row.id||!row.phone} onClick={()=>void resetPhonePassword(row)} className="text-xs underline disabled:opacity-40">{t.resetPhonePassword}</button><button disabled={busy===row.id} onClick={()=>void update(row.id,{renewLicense:true})} className="text-xs underline disabled:opacity-40">{t.renew}</button><button disabled={busy===row.id} onClick={()=>void remove(row)} className="text-xs text-red-700 underline disabled:opacity-40"><Trash2 size={13} className="inline"/> {t.delete}</button></div></td>
-            </tr>;
-          })}</tbody>
-        </table>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>;
+        })}
       </div>}
     </section>
 
@@ -417,14 +424,14 @@ export const OwnerDashboard: React.FC<{ currentLang:Language; token:string; onSi
         ? (currentLang==='ar'?'المعلمون':currentLang==='fr'?'Éducateurs':currentLang==='es'?'Educadores':currentLang==='it'?'Educatori':'Educators')
         : (currentLang==='ar'?'الطلاب':currentLang==='fr'?'Élèves':currentLang==='es'?'Estudiantes':currentLang==='it'?'Studenti':'Students');
       const headers = currentLang === 'ar'
-        ? ['المعلم','اسم المستخدم أو البريد الإلكتروني','كلمة المرور','البريد الإلكتروني','رقم الهاتف','المدرسة / المادة','الحصة المسجلة','تاريخ الانضمام','تاريخ الانتهاء','مفعّل','مدفوع','حذف']
+        ? ['الاسم الكامل','المعلم','اسم المستخدم أو البريد الإلكتروني','كلمة المرور','البريد الإلكتروني','رقم الهاتف','المدرسة / المادة','الحصة المسجلة','تاريخ الانضمام','تاريخ الانتهاء','مفعّل','مدفوع','حذف']
         : currentLang === 'fr'
-          ? ['Éducateur','Nom d’utilisateur ou e-mail','Mot de passe','Adresse e-mail','Téléphone','École / matière','Séance inscrite','Date d’inscription','Date d’expiration','Activé','Payé','Supprimer']
+          ? ['Nom complet','Éducateur','Nom d’utilisateur ou e-mail','Mot de passe','Adresse e-mail','Téléphone','École / matière','Séance inscrite','Date d’inscription','Date d’expiration','Activé','Payé','Supprimer']
           : currentLang === 'es'
-            ? ['Educador','Usuario o correo electrónico','Contraseña','Correo electrónico','Teléfono','Escuela / materia','Sesión registrada','Fecha de alta','Fecha de vencimiento','Activado','Pagado','Eliminar']
+            ? ['Nombre completo','Educador','Usuario o correo electrónico','Contraseña','Correo electrónico','Teléfono','Escuela / materia','Sesión registrada','Fecha de alta','Fecha de vencimiento','Activado','Pagado','Eliminar']
             : currentLang === 'it'
-              ? ['Educatore','Nome utente o e-mail','Password','Indirizzo e-mail','Numero di telefono','Scuola / materia','Sessione registrata','Data di iscrizione','Data di scadenza','Attivato','Pagato','Elimina']
-              : ['Educator','Username or email address','Password','Email address','Phone number','School / subject','Registered session','Joining date','Expiry date','Activated','Paid','Delete'];
+              ? ['Nome completo','Educatore','Nome utente o e-mail','Password','Indirizzo e-mail','Numero di telefono','Scuola / materia','Sessione registrata','Data di iscrizione','Data di scadenza','Attivato','Pagato','Elimina']
+              : ['Full name','Educator','Username or email address','Password','Email address','Phone number','School / subject','Registered session','Joining date','Expiry date','Activated','Paid','Delete'];
       const emptyLabel = currentLang==='ar'?'لا توجد تسجيلات بعد.':currentLang==='fr'?'Aucune inscription pour le moment.':currentLang==='es'?'Todavía no hay registros.':currentLang==='it'?'Nessuna registrazione al momento.':'No registrations yet.';
       const yes = currentLang==='ar'?'نعم':currentLang==='fr'?'Oui':currentLang==='es'?'Sí':currentLang==='it'?'Sì':'Yes';
       const no = currentLang==='ar'?'لا':currentLang==='fr'?'Non':currentLang==='es'?'No':currentLang==='it'?'No':'No';
@@ -440,20 +447,20 @@ export const OwnerDashboard: React.FC<{ currentLang:Language; token:string; onSi
                   const stagedAccount = pendingSchoolAccountUpdates[thread.accountId] || thread;
                   const activated = stagedAccount.activated === true || Number(stagedAccount.activated || 0) === 1;
                   const paid = stagedAccount.paid === true || Number(stagedAccount.paid || 0) === 1;
-                  return <div key={thread.accountId} className="bg-white px-3 py-3">
-                    <div className="mb-2 flex min-w-0 items-center gap-2">
-                      <button type="button" onClick={()=>void openFounderConversation(thread)} className="min-w-0 truncate text-start text-sm font-bold text-indigo-800 underline decoration-indigo-300 underline-offset-2">{thread.fullName || thread.username || '—'}</button>
-                      <span className={thread.unreadIncoming>0?'shrink-0 rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-black text-rose-700':'shrink-0 text-[10px] text-slate-500'}>
-                        {thread.unreadIncoming>0
-                          ? String(thread.unreadIncoming) + (currentLang==='ar'?' رسائل جديدة':currentLang==='fr'?' nouveaux messages':currentLang==='es'?' mensajes nuevos':currentLang==='it'?' nuovi messaggi':' unread message(s)')
-                          : String(thread.incomingCount||0) + ' in · ' + String(thread.outgoingCount||0) + ' out'}
-                      </span>
-                    </div>
+                  return <div key={thread.accountId} className="bg-white">
                     <div className="overflow-x-auto">
                       <table className="w-full min-w-[1550px] text-xs">
                         <thead className="bg-slate-50"><tr>{headers.map((header) => <th key={header} className="whitespace-nowrap p-3 text-start">{header}</th>)}</tr></thead>
                         <tbody>
                           <tr className={thread.unreadIncoming>0?'bg-rose-50':'bg-white'}>
+                    <td className="p-3">
+                      <button type="button" onClick={()=>void openFounderConversation(thread)} className="text-start font-bold text-indigo-800 underline decoration-indigo-300 underline-offset-2">{thread.fullName || '—'}</button>
+                      <small className={thread.unreadIncoming>0?'mt-1 block font-black text-rose-700':'mt-1 block text-slate-500'}>
+                        {thread.unreadIncoming>0
+                          ? String(thread.unreadIncoming) + (currentLang==='ar'?' رسائل جديدة':currentLang==='fr'?' nouveaux messages':currentLang==='es'?' mensajes nuevos':currentLang==='it'?' nuovi messaggi':' unread message(s)')
+                          : String(thread.incomingCount||0) + ' in · ' + String(thread.outgoingCount||0) + ' out'}
+                      </small>
+                    </td>
                     <td className="p-3">{role==='student' ? (thread.educatorName || '—') : '—'}</td>
                     <td className="p-3">{thread.username || thread.email || '—'}</td>
                     <td className="p-3">
