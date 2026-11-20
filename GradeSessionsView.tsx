@@ -155,8 +155,6 @@ export const GradeSessionsView: React.FC<GradeSessionsViewProps> = ({
     'Unable to clear the conversation.': { es: 'No se pudo borrar la conversación.', it: 'Impossibile cancellare la conversazione.' },
     'Close enlarged camera': { es: 'Cerrar cámara ampliada', it: 'Chiudi fotocamera ingrandita' },
     'Enlarge camera': { es: 'Ampliar cámara', it: 'Ingrandisci fotocamera' },
-    'Click to return to small view': { es: 'Haz clic para volver al tamaño pequeño', it: 'Fai clic per tornare alla visualizzazione ridotta' },
-    'Click to enlarge camera': { es: 'Haz clic para ampliar la cámara', it: 'Fai clic per ingrandire la fotocamera' },
     'Private Chat': { es: 'Chat privado', it: 'Chat privato' },
     'Clear all messages for both participants': { es: 'Borrar todos los mensajes para ambos participantes', it: 'Elimina tutti i messaggi per entrambi i partecipanti' },
     'Clear chat': { es: 'Borrar chat', it: 'Cancella chat' },
