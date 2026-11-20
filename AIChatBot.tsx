@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Language } from '../types';
-import { generateAIContent, getSchoolPublicContext } from '../services/cloudflareApi';
-import type { SchoolPublicContext } from '../services/cloudflareApi';
+import { generateAIContent, getSchoolPublicContext, getFounderMessages, sendFounderMessage } from '../services/cloudflareApi';
+import type { SchoolPublicContext, CloudflareAccount, FounderMessage } from '../services/cloudflareApi';
 import { 
  X, 
  Send, 
@@ -13,6 +13,11 @@ interface AIChatBotProps {
  currentLang: Language;
  schoolId: string;
  schoolName?: string;
+ account?: CloudflareAccount | null;
+ sessionToken?: string;
+ chatOnlyMode?: boolean;
+ isOwner?: boolean;
+ onOpenSignIn?: () => void;
 }
 
 interface ChatMessage {
@@ -74,10 +79,15 @@ function detectChatLanguage(text: string, fallback: Language): Language {
  return fallback;
 }
 
-export const AIChatBot: React.FC<AIChatBotProps> = ({ currentLang, schoolId, schoolName }) => {
+export const AIChatBot: React.FC<AIChatBotProps> = ({ currentLang, schoolId, schoolName, account, sessionToken = '', chatOnlyMode = false, isOwner = false, onOpenSignIn }) => {
  const [isOpen, setIsOpen] = useState(false);
  const [inputText, setInputText] = useState('');
  const [isTyping, setIsTyping] = useState(false);
+ const [founderMode, setFounderMode] = useState(chatOnlyMode);
+ const [founderMessages, setFounderMessages] = useState<FounderMessage[]>([]);
+ const [founderDraft, setFounderDraft] = useState('');
+ const [founderBusy, setFounderBusy] = useState(false);
+ const [founderError, setFounderError] = useState('');
  const messagesEndRef = useRef<HTMLDivElement>(null);
  const previousLanguageRef = useRef<Language>(currentLang);
  const activeLanguageRef = useRef<Language>(currentLang);
@@ -120,6 +130,36 @@ export const AIChatBot: React.FC<AIChatBotProps> = ({ currentLang, schoolId, sch
  // Blank chat: Starts with no initial pre-canned text as requested
  const [messages, setMessages] = useState<ChatMessage[]>([]);
  const [schoolContext, setSchoolContext] = useState<SchoolPublicContext | null>(null);
+ useEffect(() => { if (chatOnlyMode) { setIsOpen(true); setFounderMode(true); } }, [chatOnlyMode]);
+ useEffect(() => {
+  if (!founderMode || !sessionToken || !account || isOwner) return;
+  let active = true;
+  const refresh = async () => {
+   try { const response = await getFounderMessages(sessionToken); if (active) { setFounderMessages(response.messages || []); setFounderError(''); } }
+   catch (error) { if (active) setFounderError(error instanceof Error ? error.message : 'Unable to load the conversation.'); }
+  };
+  void refresh();
+  const intervalId = window.setInterval(() => void refresh(), 12000);
+  return () => { active = false; window.clearInterval(intervalId); };
+ }, [founderMode, sessionToken, account?.id, isOwner]);
+ const submitFounderMessage = async () => {
+  const message = founderDraft.trim();
+  if (!message || !sessionToken || !account || isOwner || founderBusy) return;
+  setFounderBusy(true); setFounderError('');
+  try {
+   await sendFounderMessage(sessionToken, message);
+   setFounderDraft('');
+   const response = await getFounderMessages(sessionToken);
+   setFounderMessages(response.messages || []);
+   const confirmation = currentLang === 'ar' ? 'وصلتنا رسالتك بنجاح، وسنراجعها ونرد عليك في أقرب وقت.'
+    : currentLang === 'fr' ? 'Votre message a bien été reçu. Nous le consulterons et vous répondrons dès que possible.'
+    : currentLang === 'es' ? 'Hemos recibido tu mensaje. Lo revisaremos y te responderemos lo antes posible.'
+    : currentLang === 'it' ? 'Abbiamo ricevuto il tuo messaggio. Lo esamineremo e ti risponderemo al più presto.'
+    : 'We received your message and will review it and respond as soon as possible.';
+   setFounderMessages((previous) => [...previous, { id: 'local-ack-' + Date.now(), senderId: 'founder-ack', senderRole: 'owner', message: confirmation, createdAt: new Date().toISOString(), readAt: null }]);
+  } catch (error) { setFounderError(error instanceof Error ? error.message : 'Unable to send your message. Please try again.'); }
+  finally { setFounderBusy(false); }
+ };
 
  useEffect(() => {
  let active = true;
@@ -503,7 +543,7 @@ export const AIChatBot: React.FC<AIChatBotProps> = ({ currentLang, schoolId, sch
  let reply = '';
  {
  try {
- const systemPrompt = `You are the AI academic assistant for Agenda (منصة الأجندة ة).
+ const systemPrompt = `You are the AI academic assistant for Agenda.
 
 HIGHEST-PRIORITY LANGUAGE RULES:
 - The application supports Arabic, English, French, Spanish, and Italian.
@@ -521,7 +561,9 @@ ${recentConversation || '(No previous chat messages.)'}
 Platform constraints:
 - Use the selected school's live configuration for its name, educators, and sessions. The default student rate is USD 125 per session and may be adjusted by the Director; users should confirm the current rate with their Director.
 - Do not claim a fixed platform-wide price or timetable. Do not invent payment methods, schedules, account credentials, or school records.
-- Explain academic concepts, official curriculum, homework, camera exercise submissions, and classroom navigation.
+- Explain academic concepts, official curricula, homework, camera exercise submissions, and classroom navigation.
+- Answer in the language used in the latest question. Cover Student, Educator, Director, registration, activation, lessons, live classroom, camera controls, chat, and payment procedures.
+- When a question is ambiguous, ask one concise clarification instead of returning an unrelated or empty answer.
 Authoritative school configuration (use current values, never invent a rate):
 ${JSON.stringify(currentSchoolContext ? { schoolName: currentSchoolContext.schoolName, sessions: currentSchoolContext.sessions, educators: currentSchoolContext.educators, guidance: currentSchoolContext.guidance } : { schoolName: schoolName || 'Agenda', sessions: [], educators: [] })}
 Platform architecture and navigation:
@@ -601,7 +643,7 @@ Platform architecture and navigation:
 
  {/* Floating AI Chat Window */}
  {isOpen && (
- <div className="fixed bottom-6 right-4 sm:right-6 z-50 w-[95vw] sm:w-[400px] max-h-[80vh] h-[540px] bg-white rounded-3xl shadow-2xl border border-slate-200 flex flex-col overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-200 text-start">
+ <div className="fixed bottom-6 right-4 sm:right-6 z-50 w-[95vw] sm:w-[400px] max-h-[80vh] h-[540px] bg-white relative rounded-3xl shadow-2xl border border-slate-200 flex flex-col overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-200 text-start">
  {/* Header */}
  <div className="bg-linear-to-r from-slate-900 via-indigo-950 to-blue-950 text-white p-4 flex items-center justify-between border-b border-white/10 shrink-0">
  <div className="flex items-center gap-2.5">
@@ -733,7 +775,8 @@ Platform architecture and navigation:
  dir={currentLang === 'ar' ? 'rtl' : 'auto'}
  className="flex-1 text-xs sm:text-sm p-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-indigo-600 font-medium"
  />
- <button
+ {!isOwner && <button type="button" onClick={() => account && sessionToken ? setFounderMode(true) : onOpenSignIn?.()} className="shrink-0 rounded-lg border border-amber-300 bg-amber-50 px-2.5 py-2 text-[10px] font-black text-amber-900">{currentLang === 'ar' ? 'التواصل مع المؤسس' : currentLang === 'fr' ? 'Contacter le fondateur' : currentLang === 'es' ? 'Contactar al fundador' : currentLang === 'it' ? 'Contatta il fondatore' : 'Contact Founder'}</button>}
+            <button
  type="submit"
  disabled={!inputText.trim() || isTyping}
  title={chatLabels.send}
@@ -743,6 +786,39 @@ Platform architecture and navigation:
  <Send className="w-4 h-4" />
  </button>
  </form>
+ {founderMode && (
+  <div className="absolute inset-0 z-[5] flex flex-col bg-white">
+   <div className="flex items-center justify-between gap-2 border-b border-slate-200 bg-slate-950 p-4 text-white">
+    <div><h5 className="text-sm font-black">{currentLang === 'ar' ? 'التواصل مع المؤسس' : currentLang === 'fr' ? 'Contacter le fondateur' : currentLang === 'es' ? 'Contactar al fundador' : currentLang === 'it' ? 'Contatta il fondatore' : 'Contact Founder'}</h5>
+    <p className="mt-0.5 text-[10px] text-slate-300">{currentLang === 'ar' ? 'أرسل سؤالك وتابع الرد هنا.' : currentLang === 'fr' ? 'Envoyez votre question et suivez la réponse ici.' : currentLang === 'es' ? 'Envía tu pregunta y consulta la respuesta aquí.' : currentLang === 'it' ? 'Invia la domanda e consulta qui la risposta.' : 'Send your question and follow the reply here.'}</p></div>
+    <button type="button" onClick={() => setFounderMode(false)} className="rounded-lg bg-white/10 px-3 py-2 text-xs font-bold">{currentLang === 'ar' ? 'عودة' : currentLang === 'fr' ? 'Retour' : currentLang === 'es' ? 'Volver' : currentLang === 'it' ? 'Indietro' : 'Back'}</button>
+   </div>
+   <div className="flex-1 space-y-3 overflow-y-auto bg-slate-50 p-4">
+    {!account || !sessionToken ? (
+     <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-xs text-amber-900">{currentLang === 'ar' ? 'سجّل الدخول بحسابك أولاً لإرسال رسالة إلى المؤسس.' : currentLang === 'fr' ? 'Connectez-vous d’abord pour écrire au fondateur.' : currentLang === 'es' ? 'Inicia sesión primero para escribir al fundador.' : currentLang === 'it' ? 'Accedi prima per scrivere al fondatore.' : 'Sign in first to contact the founder.'}
+      <button type="button" onClick={onOpenSignIn} className="mt-2 block rounded-lg bg-indigo-700 px-3 py-2 font-bold text-white">{currentLang === 'ar' ? 'تسجيل الدخول' : currentLang === 'fr' ? 'Se connecter' : currentLang === 'es' ? 'Iniciar sesión' : currentLang === 'it' ? 'Accedi' : 'Sign In'}</button>
+     </div>
+    ) : (
+     <>
+      {founderMessages.map((msg) => <div key={msg.id} className={msg.senderRole === 'owner' ? 'flex justify-start' : 'flex justify-end'}>
+       <div className={msg.senderRole === 'owner' ? 'max-w-[88%] rounded-2xl rounded-bl-sm border border-slate-200 bg-white px-3 py-2.5 text-xs text-slate-800 shadow-sm' : 'max-w-[88%] rounded-2xl rounded-br-sm bg-indigo-700 px-3 py-2.5 text-xs text-white shadow-sm'}>
+        <p className="mb-1 text-[9px] font-black opacity-70">{msg.senderRole === 'owner' ? (currentLang === 'ar' ? 'المؤسس' : currentLang === 'fr' ? 'Fondateur' : currentLang === 'es' ? 'Fundador' : currentLang === 'it' ? 'Fondatore' : 'Founder') : (account.fullName || account.username)}</p>
+        <p className="whitespace-pre-wrap">{msg.message}</p>
+        <time className="mt-1 block text-end text-[9px] opacity-60">{new Date(msg.createdAt).toLocaleString(chatLocale[currentLang], { dateStyle: 'short', timeStyle: 'short' })}</time>
+       </div>
+      </div>)}
+      {founderMessages.length === 0 && !founderError && <p className="py-8 text-center text-xs text-slate-400">{currentLang === 'ar' ? 'لا توجد رسائل بعد. اكتب رسالتك الأولى أدناه.' : currentLang === 'fr' ? 'Aucun message. Écrivez le premier ci-dessous.' : currentLang === 'es' ? 'Todavía no hay mensajes. Escribe el primero abajo.' : currentLang === 'it' ? 'Nessun messaggio. Scrivi il primo qui sotto.' : 'No messages yet. Write the first message below.'}</p>}
+      {founderError && <p role="alert" className="rounded-lg bg-rose-50 p-2 text-[11px] text-rose-700">{founderError}</p>}
+     </>
+    )}
+   </div>
+   {account && sessionToken && <form onSubmit={(event) => { event.preventDefault(); void submitFounderMessage(); }} className="flex shrink-0 items-end gap-2 border-t border-slate-200 bg-white p-3">
+    <textarea value={founderDraft} onChange={(event) => setFounderDraft(event.target.value)} maxLength={4000} rows={2} placeholder={currentLang === 'ar' ? 'اكتب رسالتك للمؤسس...' : currentLang === 'fr' ? 'Écrivez votre message...' : currentLang === 'es' ? 'Escribe tu mensaje...' : currentLang === 'it' ? 'Scrivi il tuo messaggio...' : 'Write your message to the founder...'} className="min-h-14 flex-1 resize-none rounded-xl border border-slate-200 bg-slate-50 p-2.5 text-xs outline-indigo-600" />
+    <button type="submit" disabled={!founderDraft.trim() || founderBusy} className="rounded-xl bg-indigo-700 p-3 text-white disabled:opacity-40" aria-label={currentLang === 'ar' ? 'إرسال' : 'Send'}><Send className="h-4 w-4"/></button>
+   </form>}
+  </div>
+ )}
+
  </div>
  )}
  </>
