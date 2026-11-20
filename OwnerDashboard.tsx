@@ -428,7 +428,7 @@ export const OwnerDashboard: React.FC<{ currentLang:Language; token:string; onSi
                     <td className="p-3"><span title={passwordTip} aria-label={passwordTip}>••••••••</span></td>
                     <td className="p-3">{thread.email || '—'}</td>
                     <td className="p-3">{thread.phone || '—'}</td>
-                    <td className="p-3">{thread.schoolOrSubject || '—'}</td>
+                    <td className="p-3">{thread.schoolOrSubject || thread.schoolName || '—'}</td>
                     <td className="p-3">{thread.registeredSession || '—'}</td>
                     <td className="whitespace-nowrap p-3">{dateLabel(thread.createdAt || null,currentLang)}</td>
                     <td className="whitespace-nowrap p-3">{dateLabel(thread.expiresAt || null,currentLang)}</td>
