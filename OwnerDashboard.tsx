@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { ShieldCheck, RefreshCw, Building2, Users, Copy, ExternalLink, Trash2, KeyRound, MessageCircle, Send, X } from 'lucide-react';
 import type { Language } from '../types';
 import {
@@ -40,6 +40,7 @@ export const OwnerDashboard: React.FC<{ currentLang:Language; token:string; onSi
   const [founderReply,setFounderReply] = useState('');
   const [founderConversationLoading,setFounderConversationLoading] = useState(false);
   const [founderActionBusy,setFounderActionBusy] = useState(false);
+  const founderConversationRefreshSequence = useRef(0);
   const [pendingStatuses,setPendingStatuses] = useState<Record<string,{activated:boolean;paid:boolean}>>({});
   const [loading,setLoading] = useState(true);
   const [busy,setBusy] = useState('');
@@ -77,21 +78,61 @@ export const OwnerDashboard: React.FC<{ currentLang:Language; token:string; onSi
     }
   };
 
+  useEffect(() => {
+    const thread = selectedFounderThread;
+    if (!thread) return;
+    let active = true;
+    const refreshConversation = async () => {
+      const sequence = ++founderConversationRefreshSequence.current;
+      try {
+        const result = await getOwnerFounderMessages(token, thread.accountId);
+        if (active && sequence === founderConversationRefreshSequence.current) {
+          setFounderConversation(result.messages || []);
+        }
+      } catch (e) {
+        if (active && sequence === founderConversationRefreshSequence.current) {
+          setError(e instanceof Error ? e.message : t.error);
+        }
+      }
+    };
+    void refreshConversation();
+    const intervalId = window.setInterval(() => void refreshConversation(), 3000);
+    return () => {
+      active = false;
+      window.clearInterval(intervalId);
+      ++founderConversationRefreshSequence.current;
+    };
+  }, [token, selectedFounderThread?.accountId]);
+
   const sendFounderReply = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const thread = selectedFounderThread;
     const reply = founderReply.trim();
     if (!thread || !reply || founderActionBusy) return;
+    const optimisticId = 'pending-owner-' + crypto.randomUUID();
+    const optimisticReply: FounderMessage = {
+      id: optimisticId,
+      senderId: 'owner',
+      senderRole: 'owner',
+      message: reply,
+      createdAt: new Date().toISOString(),
+      readAt: null,
+    };
+    setFounderConversation((items) => [...items, optimisticReply]);
     setFounderActionBusy(true);
     setError('');
+    setFounderReply('');
+    ++founderConversationRefreshSequence.current;
     try {
       await replyToFounderThread(token, thread.accountId, reply);
-      setFounderReply('');
+      const sequence = ++founderConversationRefreshSequence.current;
       const result = await getOwnerFounderMessages(token, thread.accountId);
-      setFounderConversation(result.messages || []);
+      if (sequence === founderConversationRefreshSequence.current) setFounderConversation(result.messages || []);
       const inbox = await getOwnerFounderThreads(token);
       setFounderThreads(inbox.threads || []);
     } catch (e) {
+      setFounderConversation((items) => items.filter((item) => item.id !== optimisticId));
+      setFounderReply(reply);
       setError(e instanceof Error ? e.message : t.error);
     } finally {
       setFounderActionBusy(false);
@@ -316,7 +357,7 @@ export const OwnerDashboard: React.FC<{ currentLang:Language; token:string; onSi
 
     {selectedFounderThread && (
       <div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/50 p-3 sm:p-5" onClick={()=>setSelectedFounderThread(null)}>
-        <section role="dialog" aria-modal="true" aria-label="Founder conversation" onClick={(event)=>event.stopPropagation()} className="flex max-h-[90dvh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
+        <section role="dialog" aria-modal="true" aria-label="Conversation with user" onClick={(event)=>event.stopPropagation()} className="flex max-h-[90dvh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
           <header className="flex items-center justify-between gap-3 bg-slate-950 p-4 text-white">
             <div className="min-w-0"><h3 className="truncate font-black">{selectedFounderThread.fullName}</h3><p className="text-[11px] text-slate-300">@{selectedFounderThread.username} · {selectedFounderThread.schoolName||'Agenda'} · {selectedFounderThread.role}</p></div>
             <button type="button" onClick={()=>setSelectedFounderThread(null)} className="rounded-lg bg-white/10 p-2" aria-label={currentLang==='ar'?'إغلاق':'Close'}><X size={17}/></button>
@@ -326,7 +367,7 @@ export const OwnerDashboard: React.FC<{ currentLang:Language; token:string; onSi
               : founderConversation.length===0 ? <p className="py-8 text-center text-sm text-slate-400">{currentLang==='ar'?'لا توجد رسائل بعد. أرسل أول رسالة.':'No messages yet. Send the first message.'}</p>
               : founderConversation.map((item)=> <div key={item.id} className={item.senderRole==='owner'?'flex justify-end':'flex justify-start'}>
                   <div className={item.senderRole==='owner'?'max-w-[86%] rounded-2xl rounded-br-sm bg-indigo-700 p-3 text-sm text-white':'max-w-[86%] rounded-2xl rounded-bl-sm border border-slate-200 bg-white p-3 text-sm text-slate-800'}>
-                    <p className="mb-1 text-[10px] font-black opacity-70">{item.senderRole==='owner'?'Owner':selectedFounderThread.fullName}</p>
+                    <p className="mb-1 text-[10px] font-black opacity-70">{item.senderRole==='owner'?'Us':selectedFounderThread.fullName}</p>
                     <p className="whitespace-pre-wrap break-words">{item.message}</p>
                     <time className="mt-1 block text-end text-[9px] opacity-60">{new Date(item.createdAt).toLocaleString(currentLang,{dateStyle:'short',timeStyle:'short'})}</time>
                   </div>
