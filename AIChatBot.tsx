@@ -219,9 +219,9 @@ export const AIChatBot: React.FC<AIChatBotProps> = ({ currentLang, schoolId, sch
 
  useEffect(() => {
  if (isOpen) {
- messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
  }
- }, [messages, isOpen]);
+ }, [messages, usMessages, usMode, isOpen]);
 
  // Deterministic answers use the selected school's live configuration.
  const getSavedResponse = (query: string, context = schoolContext, allowComposite = true, responseLang: Language = currentLang): string | null => {
