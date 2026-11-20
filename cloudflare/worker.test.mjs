@@ -1160,8 +1160,15 @@ test('Owner creates a one-year Director school with phone initial password; Dire
     method: 'POST',
     body: { username: 'nostafa.director', password: 'NewPrivatePassword#2026', schoolId: director.schoolId },
   });
-  assert.equal(blockedDirectorLogin.status, 403);
-  assert.match((await blockedDirectorLogin.json()).error, /Director account is inactive/i);
+  assert.equal(blockedDirectorLogin.status, 200);
+  const limitedDirectorSession = await blockedDirectorLogin.json();
+  assert.equal(limitedDirectorSession.chatOnly, true);
+  assert.equal(limitedDirectorSession.account.role, 'director');
+  const limitedDirectorProfile = await send(env, `/api/auth/me?schoolId=${director.schoolId}`, { token: limitedDirectorSession.token });
+  assert.equal(limitedDirectorProfile.status, 200);
+  assert.equal((await limitedDirectorProfile.json()).chatOnly, true);
+  const limitedDirectorDashboard = await send(env, '/api/director/profile', { token: limitedDirectorSession.token });
+  assert.equal(limitedDirectorDashboard.status, 401);
   const blockedExistingSession = await send(env, '/api/director/profile', { token: directorToken });
   assert.equal(blockedExistingSession.status, 401);
 
