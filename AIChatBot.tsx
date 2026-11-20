@@ -18,6 +18,7 @@ interface AIChatBotProps {
  chatOnlyMode?: boolean;
  isOwner?: boolean;
  onOpenSignIn?: () => void;
+ onFounderBackHome?: () => void;
 }
 
 interface ChatMessage {
@@ -79,7 +80,7 @@ function detectChatLanguage(text: string, fallback: Language): Language {
  return fallback;
 }
 
-export const AIChatBot: React.FC<AIChatBotProps> = ({ currentLang, schoolId, schoolName, account, sessionToken = '', chatOnlyMode = false, isOwner = false, onOpenSignIn }) => {
+export const AIChatBot: React.FC<AIChatBotProps> = ({ currentLang, schoolId, schoolName, account, sessionToken = '', chatOnlyMode = false, isOwner = false, onOpenSignIn, onFounderBackHome }) => {
  const [isOpen, setIsOpen] = useState(false);
  const [inputText, setInputText] = useState('');
  const [isTyping, setIsTyping] = useState(false);
@@ -130,7 +131,14 @@ export const AIChatBot: React.FC<AIChatBotProps> = ({ currentLang, schoolId, sch
  // Blank chat: Starts with no initial pre-canned text as requested
  const [messages, setMessages] = useState<ChatMessage[]>([]);
  const [schoolContext, setSchoolContext] = useState<SchoolPublicContext | null>(null);
- useEffect(() => { if (chatOnlyMode) { setIsOpen(true); setFounderMode(true); } }, [chatOnlyMode]);
+ useEffect(() => {
+  if (!chatOnlyMode) return;
+  // A deliberate Back action is sticky for this tab: root-page restoration
+  // must not immediately reopen Founder Chat on the next render or refresh.
+  const dismissed = sessionStorage.getItem('agenda-founder-chat-dismissed') === '1';
+  setFounderMode(!dismissed);
+  setIsOpen(!dismissed);
+ }, [chatOnlyMode]);
  useEffect(() => {
   if (!isOpen) return;
   const closeOnEscape = (event: KeyboardEvent) => {
@@ -882,7 +890,7 @@ Platform architecture and navigation:
     <div><h5 className="text-sm font-black">{currentLang === 'ar' ? 'التواصل مع المؤسس' : currentLang === 'fr' ? 'Contacter le fondateur' : currentLang === 'es' ? 'Contactar al fundador' : currentLang === 'it' ? 'Contatta il fondatore' : 'Contact Founder'}</h5>
     <p className="mt-0.5 text-[10px] text-slate-300">{currentLang === 'ar' ? 'أرسل سؤالك وتابع الرد هنا.' : currentLang === 'fr' ? 'Envoyez votre question et suivez la réponse ici.' : currentLang === 'es' ? 'Envía tu pregunta y consulta la respuesta aquí.' : currentLang === 'it' ? 'Invia la domanda e consulta qui la risposta.' : 'Send your question and follow the reply here.'}</p></div>
     <div className="flex shrink-0 items-center gap-2">
-     <button type="button" onClick={() => { setFounderMode(false); if (chatOnlyMode) { window.location.assign('https://agenda.mycamp.workers.dev/'); } else { setIsOpen(false); } }} className="rounded-lg bg-white/10 px-3 py-2 text-xs font-bold">{currentLang === 'ar' ? 'عودة' : currentLang === 'fr' ? 'Retour' : currentLang === 'es' ? 'Volver' : currentLang === 'it' ? 'Indietro' : 'Back'}</button>
+     <button type="button" onClick={() => { setFounderMode(false); setIsOpen(false); if (chatOnlyMode) { onFounderBackHome?.(); if (!onFounderBackHome) window.location.replace('https://agenda.mycamp.workers.dev/'); } }} className="rounded-lg bg-white/10 px-3 py-2 text-xs font-bold">{currentLang === 'ar' ? 'عودة' : currentLang === 'fr' ? 'Retour' : currentLang === 'es' ? 'Volver' : currentLang === 'it' ? 'Indietro' : 'Back'}</button>
      <button type="button" onClick={() => { setFounderMode(false); setIsOpen(false); }} aria-label={chatLabels.close} title={chatLabels.close} className="rounded-lg bg-white/10 p-2 text-white transition hover:bg-white/20"><X className="h-4 w-4"/></button>
     </div>
    </div>
