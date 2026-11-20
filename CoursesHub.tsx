@@ -1200,36 +1200,35 @@ const updateAccount = async (
         </div>
       </div>
 
-      {/* Freeform educational word-and-formula collage: scattered, layered typography without individual frames */}
-      <section aria-label="Educational mathematics and science collage" className="relative isolate min-h-[300px] overflow-hidden rounded-2xl bg-[#11152d] px-3 py-5 shadow-xl sm:min-h-[340px] sm:px-5">
-        <div className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(ellipse_at_12%_18%,rgba(244,63,94,.18),transparent_34%),radial-gradient(ellipse_at_82%_22%,rgba(34,197,94,.16),transparent_33%),radial-gradient(ellipse_at_52%_100%,rgba(234,179,8,.15),transparent_42%),radial-gradient(ellipse_at_70%_70%,rgba(217,70,239,.14),transparent_32%)]"/>
-        <div className="pointer-events-none absolute left-[8%] top-[18%] h-20 w-20 rounded-full border border-rose-300/20"/>
-        <div className="pointer-events-none absolute bottom-[12%] right-[8%] h-28 w-28 rotate-12 border border-emerald-300/20"/>
-        <div className="relative z-10 flex min-h-[270px] flex-wrap content-center items-center justify-around gap-x-5 gap-y-4 px-2 py-3 sm:min-h-[300px] sm:gap-x-8 sm:gap-y-5">
-          <span className="rotate-[-11deg] font-serif text-xl font-black italic tracking-wide text-rose-400 sm:text-2xl">ALGEBRA</span>
-          <span className="rotate-[5deg] whitespace-nowrap font-serif text-lg font-bold italic text-yellow-300 sm:text-2xl">a² + b² = c²</span>
-          <span className="rotate-[13deg] font-mono text-sm font-bold text-emerald-300 sm:text-lg">F = ma</span>
-          <span className="rotate-[-5deg] font-serif text-2xl font-black italic text-pink-400 sm:text-3xl">BIOLOGY</span>
-          <span className="flex rotate-[7deg] flex-col items-center font-serif text-sm italic leading-tight text-lime-300 sm:text-base"><span>DNA → RNA</span><span className="text-yellow-200">→ PROTEIN</span></span>
-          <span className="rotate-[-16deg] font-mono text-base font-bold text-cyan-300 sm:text-xl">V = IR</span>
-          <span className="rotate-[9deg] font-serif text-lg font-black italic text-orange-300 sm:text-xl">CHEMISTRY</span>
-          <span className="rotate-[-3deg] font-serif text-base italic text-fuchsia-300 sm:text-lg">A = πr²</span>
-          <span className="flex rotate-[4deg] flex-col items-center font-serif text-sm italic leading-tight text-sky-200 sm:text-base"><span>6CO₂ + 6H₂O</span><span>→ C₆H₁₂O₆ + 6O₂</span></span>
-          <span className="rotate-[-8deg] font-mono text-sm font-black text-red-400 sm:text-base">PV = nRT</span>
-          <span className="rotate-[15deg] font-serif text-xl font-black italic text-emerald-400 sm:text-2xl">PHYSICS</span>
-          <span className="rotate-[-4deg] font-serif text-sm italic text-amber-200 sm:text-base">v = u + at</span>
-          <span className="flex rotate-[8deg] flex-col items-center font-serif text-sm italic leading-tight text-pink-300 sm:text-base"><span>KE = ½mv²</span><span className="text-rose-300">q = mcΔT</span></span>
-          <span className="rotate-[-12deg] font-serif text-lg font-black italic text-yellow-300 sm:text-2xl">GEOGRAPHY</span>
-          <span className="rotate-[6deg] font-serif text-sm italic text-green-300 sm:text-base">Rivers shape the land</span>
-          <span className="rotate-[-7deg] font-mono text-sm font-bold text-violet-300 sm:text-base">M₁V₁ = M₂V₂</span>
-          <span className="rotate-[11deg] font-serif text-lg font-black italic text-cyan-300 sm:text-xl">ASTRONOMY</span>
-          <span className="rotate-[-3deg] font-serif text-base italic text-orange-200 sm:text-lg">E = mc²</span>
-          <span className="flex rotate-[9deg] flex-col items-center font-serif text-sm italic leading-tight text-lime-200 sm:text-base"><span>PLATE TECTONICS</span><span className="text-yellow-300">continents in motion</span></span>
-          <span className="rotate-[-10deg] font-serif text-xl font-black italic text-fuchsia-400 sm:text-2xl">ECOSYSTEM</span>
-          <span className="rotate-[4deg] font-mono text-sm font-bold text-rose-300 sm:text-base">p² + 2pq + q² = 1</span>
-          <span className="rotate-[-6deg] font-serif text-base font-bold italic text-sky-300 sm:text-lg">GRAVITY · ENERGY · MOTION</span>
-          <span className="rotate-[14deg] font-serif text-sm italic text-emerald-300 sm:text-base">Cells · Atoms · Molecules</span>
-          <span className="flex rotate-[-5deg] flex-col items-center font-serif text-sm italic leading-tight text-yellow-200 sm:text-base"><span>a/sinA = b/sinB</span><span>= c/sinC</span></span>
+      {/* Compact, overlapping educational word-and-formula collage without individual frames */}
+      <section aria-label="Educational mathematics and science collage" className="relative isolate min-h-[205px] overflow-hidden rounded-2xl bg-[#11152d] px-2 py-2 shadow-xl sm:min-h-[225px] sm:px-4">
+        <div className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(ellipse_at_12%_18%,rgba(244,63,94,.2),transparent_34%),radial-gradient(ellipse_at_82%_22%,rgba(34,197,94,.18),transparent_33%),radial-gradient(ellipse_at_52%_100%,rgba(234,179,8,.16),transparent_42%),radial-gradient(ellipse_at_70%_70%,rgba(217,70,239,.16),transparent_32%)]"/>
+        <div className="pointer-events-none absolute left-[8%] top-[18%] h-14 w-14 rounded-full border border-rose-300/20"/>
+        <div className="pointer-events-none absolute bottom-[10%] right-[8%] h-20 w-20 rotate-12 border border-emerald-300/20"/>
+        <div className="relative z-10 flex min-h-[188px] flex-wrap content-center items-center justify-center gap-x-3 gap-y-0 px-1 py-1 sm:min-h-[205px] sm:gap-x-5">
+          <span className="relative -my-1 rotate-[-12deg] font-serif text-base font-black italic text-rose-400 sm:text-xl">THEOREM</span>
+          <span className="relative -my-1 rotate-[5deg] whitespace-nowrap font-serif text-base font-bold italic text-yellow-300 sm:text-xl">a² + b² = c²</span>
+          <span className="relative -my-1 rotate-[13deg] font-mono text-xs font-bold text-emerald-300 sm:text-base">F = ma</span>
+          <span className="relative -my-1 rotate-[-5deg] font-serif text-lg font-black italic text-pink-400 sm:text-2xl">CELL → TISSUE</span>
+          <span className="relative -my-1 flex rotate-[7deg] flex-col items-center font-serif text-xs italic leading-[0.9] text-lime-300 sm:text-sm"><span>DNA → RNA</span><span className="text-yellow-200">→ PROTEIN</span></span>
+          <span className="relative -my-1 rotate-[-16deg] font-mono text-sm font-bold text-cyan-300 sm:text-lg">V = IR</span>
+          <span className="relative -my-1 rotate-[9deg] font-serif text-base font-black italic text-orange-300 sm:text-lg">CHEMISTRY</span>
+          <span className="relative -my-1 rotate-[-3deg] font-serif text-sm italic text-fuchsia-300 sm:text-base">A = πr²</span>
+          <span className="relative -my-1 flex rotate-[4deg] flex-col items-center font-serif text-xs italic leading-[0.9] text-sky-200 sm:text-sm"><span>6CO₂ + 6H₂O</span><span>→ C₆H₁₂O₆ + 6O₂</span></span>
+          <span className="relative -my-1 rotate-[-8deg] font-mono text-xs font-black text-red-400 sm:text-sm">PV = nRT</span>
+          <span className="relative -my-1 rotate-[15deg] font-serif text-lg font-black italic text-emerald-400 sm:text-xl">MOTION</span>
+          <span className="relative -my-1 rotate-[-4deg] font-serif text-xs italic text-amber-200 sm:text-sm">v = u + at</span>
+          <span className="relative -my-1 flex rotate-[8deg] flex-col items-center font-serif text-xs italic leading-[0.9] text-pink-300 sm:text-sm"><span>KE = ½mv²</span><span className="text-rose-300">q = mcΔT</span></span>
+          <span className="relative -my-1 rotate-[-12deg] font-serif text-base font-black italic text-yellow-300 sm:text-xl">EARTH SYSTEMS</span>
+          <span className="relative -my-1 rotate-[6deg] font-serif text-xs italic text-green-300 sm:text-sm">Rivers shape the land</span>
+          <span className="relative -my-1 rotate-[-7deg] font-mono text-xs font-bold text-violet-300 sm:text-sm">M₁V₁ = M₂V₂</span>
+          <span className="relative -my-1 rotate-[11deg] font-serif text-base font-black italic text-cyan-300 sm:text-lg">ORBITAL PATHS</span>
+          <span className="relative -my-1 rotate-[-3deg] font-serif text-sm italic text-orange-200 sm:text-base">E = mc²</span>
+          <span className="relative -my-1 flex rotate-[9deg] flex-col items-center font-serif text-xs italic leading-[0.9] text-lime-200 sm:text-sm"><span>PLATE TECTONICS</span><span className="text-yellow-300">continents in motion</span></span>
+          <span className="relative -my-1 rotate-[4deg] font-mono text-xs font-bold text-rose-300 sm:text-sm">p² + 2pq + q² = 1</span>
+          <span className="relative -my-1 rotate-[-6deg] font-serif text-sm font-bold italic text-sky-300 sm:text-base">GRAVITY · ENERGY · MOTION</span>
+          <span className="relative -my-1 rotate-[14deg] font-serif text-xs italic text-emerald-300 sm:text-sm">Cells · Atoms · Molecules</span>
+          <span className="relative -my-1 flex rotate-[-5deg] flex-col items-center font-serif text-xs italic leading-[0.9] text-yellow-200 sm:text-sm"><span>a/sinA = b/sinB</span><span>= c/sinC</span></span>
         </div>
       </section>
 
