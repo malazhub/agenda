@@ -356,7 +356,7 @@ async function authenticate(request, env, requiredRole) {
   // Re-check Director school licensing on every authenticated API request so a
   // suspended or expired licence cannot keep using a still-valid 12-hour token.
   // Platform Owners retain access to administer their own school.
-  if (authenticated.role === "director" && !authenticated.isPlatformOwner) {
+  if (!payload.chatOnly && authenticated.role === "director" && !authenticated.isPlatformOwner) {
     const licence = await env.DB.prepare(
       `SELECT accounts.expires_at, accounts.activated, accounts.paid,
               schools.license_active, schools.license_expires_at
@@ -811,10 +811,7 @@ async function handleLogin(request, env) {
   const expiryTime = account.expires_at ? Date.parse(`${account.expires_at.replace(' ', 'T')}Z`) : null;
   const expired = expiryTime !== null && (!Number.isFinite(expiryTime) || expiryTime <= Date.now());
   if (!account.activated) {
-    if (account.role === "director" && !isOwner) {
-      return json({ error: "Director account is inactive. In the Owner Control Center, enable Account and press Save all changes." }, 403);
-    }
-    if (["student", "educator"].includes(account.role)) {
+    if (["student", "educator", "director"].includes(account.role) && !isOwner) {
       // Allow the registrant to contact the platform Owner while activation is
       // pending. The signed token is explicitly restricted by authenticate().
       await env.DB.prepare("DELETE FROM login_attempts WHERE username = ? COLLATE NOCASE AND succeeded = 0").bind(username).run();
