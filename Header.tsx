@@ -65,6 +65,39 @@ export const Header: React.FC<HeaderProps> = ({
                 <span>{t.registerBtn}</span>
               </button>
             )}
+            {/* Share Agenda Platform Button */}
+            <button
+              type="button"
+              onClick={async () => {
+                // Every share action intentionally distributes the single
+                // canonical owner/platform entry point, never a school-specific URL.
+                const shareUrl = 'https://agenda.mycamp.workers.dev/';
+                const shareData = {
+                  title: schoolName || 'Agenda',
+                  text: currentLang === 'ar' ? `منصة ${schoolName || 'Agenda'} للتعليم والدروس الخصوصية` : currentLang === 'fr' ? `Plateforme éducative ${schoolName || 'Agenda'}` : currentLang === 'es' ? `Plataforma educativa ${schoolName || 'Agenda'}` : currentLang === 'it' ? `Piattaforma educativa ${schoolName || 'Agenda'}` : `${schoolName || 'Agenda'} Educational Platform`,
+                  url: shareUrl,
+                };
+                if (navigator.share) {
+                  try {
+                    await navigator.share(shareData);
+                  } catch {}
+                } else {
+                  await navigator.clipboard.writeText(shareUrl);
+                  alert(
+                    currentLang === 'ar'
+                      ? `تم نسخ رابط المدرسة: ${shareUrl}`
+                      : currentLang === 'fr'
+                      ? 'Lien de l’établissement copié.'
+                      : currentLang === 'es' ? 'Enlace de la escuela copiado.' : currentLang === 'it' ? 'Link della scuola copiato.' : 'School link copied.'
+                  );
+                }
+              }}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-black bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-200 transition cursor-pointer shadow-2xs mr-1"
+              title={currentLang === 'ar' ? 'مشاركة رابط المدرسة' : currentLang === 'fr' ? 'Partager le lien de l’établissement' : currentLang === 'es' ? 'Compartir enlace de la escuela' : currentLang === 'it' ? 'Condividi il link della scuola' : 'Share school link'}
+            >
+              <Share2 className="w-3.5 h-3.5" />
+              <span>{currentLang === 'ar' ? 'مشاركة' : currentLang === 'fr' ? 'Partager' : currentLang === 'es' ? 'Compartir' : currentLang === 'it' ? 'Condividi' : 'Share'}</span>
+            </button>
           </div>
 
           {/* Middle of Top Bar: Agenda without 'A' logo and without dot, with 'التعليم والدروس الخصوصية' in RED, YELLOW, BLUE */}
@@ -113,39 +146,7 @@ export const Header: React.FC<HeaderProps> = ({
           {/* Right Side: Share Button & 3 Languages */}
           <div className="flex items-center justify-end gap-2 order-3">
             {isOwner && <button type="button" onClick={onOpenOwner} className="rounded-lg bg-amber-100 px-3 py-1.5 text-xs font-black text-amber-900">{currentLang === 'ar' ? 'لوحة المالك' : currentLang === 'fr' ? 'Contrôle propriétaire' : currentLang === 'es' ? 'Panel del propietario' : currentLang === 'it' ? 'Pannello proprietario' : 'Owner Control'}</button>}
-            {/* Share Agenda Platform Button */}
-            <button
-              type="button"
-              onClick={async () => {
-                // Every share action intentionally distributes the single
-                // canonical owner/platform entry point, never a school-specific URL.
-                const shareUrl = 'https://agenda.mycamp.workers.dev/';
-                const shareData = {
-                  title: schoolName || 'Agenda',
-                  text: currentLang === 'ar' ? `منصة ${schoolName || 'Agenda'} للتعليم والدروس الخصوصية` : currentLang === 'fr' ? `Plateforme éducative ${schoolName || 'Agenda'}` : currentLang === 'es' ? `Plataforma educativa ${schoolName || 'Agenda'}` : currentLang === 'it' ? `Piattaforma educativa ${schoolName || 'Agenda'}` : `${schoolName || 'Agenda'} Educational Platform`,
-                  url: shareUrl,
-                };
-                if (navigator.share) {
-                  try {
-                    await navigator.share(shareData);
-                  } catch {}
-                } else {
-                  await navigator.clipboard.writeText(shareUrl);
-                  alert(
-                    currentLang === 'ar'
-                      ? `تم نسخ رابط المدرسة: ${shareUrl}`
-                      : currentLang === 'fr'
-                      ? 'Lien de l’établissement copié.'
-                      : currentLang === 'es' ? 'Enlace de la escuela copiado.' : currentLang === 'it' ? 'Link della scuola copiato.' : 'School link copied.'
-                  );
-                }
-              }}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-black bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-200 transition cursor-pointer shadow-2xs mr-1"
-              title={currentLang === 'ar' ? 'مشاركة رابط المدرسة' : currentLang === 'fr' ? 'Partager le lien de l’établissement' : currentLang === 'es' ? 'Compartir enlace de la escuela' : currentLang === 'it' ? 'Condividi il link della scuola' : 'Share school link'}
-            >
-              <Share2 className="w-3.5 h-3.5" />
-              <span>{currentLang === 'ar' ? 'مشاركة' : currentLang === 'fr' ? 'Partager' : currentLang === 'es' ? 'Compartir' : currentLang === 'it' ? 'Condividi' : 'Share'}</span>
-            </button>
+            
             {/* Arabic: Vibrant Emerald Green */}
             <button
               type="button"

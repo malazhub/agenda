@@ -1166,7 +1166,7 @@ const updateAccount = async (
   }
 
   return (
-    <div className="space-y-0">
+    <div className="flex flex-1 flex-col gap-0">
       {registeredAccount?.role === 'director' && directorToken && !ownerSchoolToken && (
         <div className="mb-3 flex justify-end">
           <button
@@ -1178,7 +1178,7 @@ const updateAccount = async (
           </button>
         </div>
       )}
-      <div className="rounded-3xl bg-linear-to-r from-amber-500 via-emerald-600 to-indigo-700 p-6 sm:p-8 text-white shadow-xl relative overflow-hidden">
+      <div className="shrink-0 rounded-3xl bg-linear-to-r from-amber-500 via-emerald-600 to-indigo-700 p-6 sm:p-8 text-white shadow-xl relative overflow-hidden">
         <div className="max-w-6xl mx-auto items-center relative z-10">
           <div className="space-y-6 text-center">
             <div className="space-y-2">
@@ -1214,11 +1214,11 @@ const updateAccount = async (
       </div>
 
       {/* Compact, overlapping educational word-and-formula collage without individual frames */}
-      <section aria-label="Educational mathematics and science collage" className="relative isolate min-h-[205px] overflow-hidden rounded-2xl bg-[#11152d] px-2 py-2 shadow-xl sm:min-h-[225px] sm:px-4">
+      <section aria-label="Educational mathematics and science collage" className="relative isolate flex min-h-[205px] flex-1 flex-col justify-center overflow-hidden rounded-2xl bg-[#11152d] px-2 py-2 shadow-xl sm:min-h-[225px] sm:px-4">
         <div className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(ellipse_at_12%_18%,rgba(244,63,94,.2),transparent_34%),radial-gradient(ellipse_at_82%_22%,rgba(34,197,94,.18),transparent_33%),radial-gradient(ellipse_at_52%_100%,rgba(234,179,8,.16),transparent_42%),radial-gradient(ellipse_at_70%_70%,rgba(217,70,239,.16),transparent_32%)]"/>
         <div className="pointer-events-none absolute left-[8%] top-[18%] h-14 w-14 rounded-full border border-rose-300/20"/>
         <div className="pointer-events-none absolute bottom-[10%] right-[8%] h-20 w-20 rotate-12 border border-emerald-300/20"/>
-        <div className="relative z-10 flex min-h-[188px] flex-wrap content-center items-center justify-center gap-x-3 gap-y-0 px-1 py-1 sm:min-h-[205px] sm:gap-x-5">
+        <div className="relative z-10 flex min-h-[188px] flex-1 flex-wrap content-center items-center justify-center gap-x-3 gap-y-0 px-1 py-1 sm:min-h-[205px] sm:gap-x-5">
           <span className="relative -my-1 rotate-[-12deg] font-serif text-base font-black italic text-rose-400 sm:text-xl">THEOREM</span>
           <span className="relative -my-1 rotate-[5deg] whitespace-nowrap font-serif text-base font-bold italic text-yellow-300 sm:text-xl">a² + b² = c²</span>
           <span className="relative -my-1 rotate-[13deg] font-mono text-xs font-bold text-emerald-300 sm:text-base">F = ma</span>

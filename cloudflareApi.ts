@@ -836,13 +836,11 @@ export function deleteFounderThread(token:string,accountId:string):Promise<{dele
   return request('/api/owner/founder/messages?'+new URLSearchParams({accountId}).toString(),{method:'DELETE',headers:authHeaders(token)});
 }
 
-export function getGuestContactMessages(guestId:string):Promise<{messages:FounderMessage[]}> {
-  return request('/api/guest/contact?'+new URLSearchParams({guestId}).toString());
-}
-export function sendGuestContactMessage(guestId:string,message:string):Promise<{sent:boolean}> {
-  return request('/api/guest/contact?'+new URLSearchParams({guestId}).toString(),{method:'POST',body:JSON.stringify({message})});
-}
 
+
+export function updateOwnerAccount(token:string,accountId:string,update:{activated?:boolean;paid?:boolean;password?:string}):Promise<{updated:boolean}> {
+  return request('/api/owner/accounts/'+encodeURIComponent(accountId),{method:'PATCH',headers:authHeaders(token),body:JSON.stringify(update)});
+}
 export function deleteOwnerAccount(token:string,accountId:string):Promise<{deleted:boolean}> {
   return request('/api/owner/accounts/'+encodeURIComponent(accountId),{method:'DELETE',headers:authHeaders(token)});
 }

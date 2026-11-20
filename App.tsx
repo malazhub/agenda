@@ -446,7 +446,7 @@ const registerSignOutCleanup = useCallback(
   };
 
   return (
-    <div className={`min-h-screen bg-slate-50 flex flex-col ${isRTL ? 'font-[Cairo]' : 'font-[Plus_Jakarta_Sans]'}`}>
+    <div className={`min-h-dvh bg-slate-50 flex flex-col ${isRTL ? 'font-[Cairo]' : 'font-[Plus_Jakarta_Sans]'}`}>
       {/* Toast Notification */}
       {notification && (
         <div className="fixed top-16 right-4 left-4 sm:left-auto z-50 bg-slate-900 text-white px-5 py-3 rounded-2xl shadow-2xl flex items-center gap-2.5 text-xs font-bold animate-in fade-in slide-in-from-top-4 duration-150 max-w-sm border border-emerald-400">
@@ -473,7 +473,7 @@ const registerSignOutCleanup = useCallback(
       />
 
       {/* Main Content: Courses Hub or Live Classroom */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8 flex-1 w-full">
+      <main className="max-w-7xl mx-auto flex min-h-0 flex-1 flex-col w-full px-4 sm:px-6 pt-2 pb-0 sm:pt-3 sm:pb-0">
         {directorSetupToken ? (
           <DirectorSetupPage
             token={directorSetupToken}
@@ -673,7 +673,7 @@ const registerSignOutCleanup = useCallback(
       )}
 
       {/* Clean, Colorful Footer without payment badges */}
-      <footer className="bg-linear-to-b from-slate-900 to-indigo-950 text-white mt-16 pt-8 pb-8 border-t border-slate-800">
+      <footer className="bg-linear-to-b from-slate-900 to-indigo-950 text-white mt-0 pt-4 pb-4 border-t border-slate-800">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 space-y-4">
           <div className="flex flex-wrap items-center justify-between gap-4 pb-4 border-b border-white/10">
             <div className="flex items-center gap-3">

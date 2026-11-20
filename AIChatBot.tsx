@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Language } from '../types';
-import { generateAIContent, getSchoolPublicContext, getFounderMessages, sendFounderMessage, getGuestContactMessages, sendGuestContactMessage } from '../services/cloudflareApi';
+import { generateAIContent, getSchoolPublicContext, getFounderMessages, sendFounderMessage } from '../services/cloudflareApi';
 import type { SchoolPublicContext, CloudflareAccount, FounderMessage } from '../services/cloudflareApi';
 import { 
  X, 
@@ -88,13 +88,6 @@ export const AIChatBot: React.FC<AIChatBotProps> = ({ currentLang, schoolId, sch
  const [usDraft, setUsDraft] = useState('');
  const [usBusy, setUsBusy] = useState(false);
  const [usError, setUsError] = useState('');
- const [guestId] = useState(() => {
-  if (typeof window === 'undefined') return '';
-  const key = 'agenda-contact-visitor-id';
-  let value = window.localStorage.getItem(key);
-  if (!value) { value = crypto.randomUUID(); window.localStorage.setItem(key, value); }
-  return value;
- });
  const messagesEndRef = useRef<HTMLDivElement>(null);
  const usRefreshSequenceRef = useRef(0);
  const previousLanguageRef = useRef<Language>(currentLang);
@@ -171,40 +164,6 @@ export const AIChatBot: React.FC<AIChatBotProps> = ({ currentLang, schoolId, sch
   const intervalId = window.setInterval(() => void refresh(), 3000);
   return () => { active = false; window.clearInterval(intervalId); };
  }, [usMode, sessionToken, account?.id, isOwner]);
- useEffect(() => {
-  if (!usMode || account || !guestId) return;
-  let active = true;
-  const refreshGuest = async () => {
-   const sequence = ++usRefreshSequenceRef.current;
-   try {
-    const response = await getGuestContactMessages(guestId);
-    if (active && sequence === usRefreshSequenceRef.current) { setFounderMessages(response.messages || []); setUsError(''); }
-   } catch (error) {
-    if (active && sequence === usRefreshSequenceRef.current) setUsError(error instanceof Error ? error.message : 'Unable to load the conversation.');
-   }
-  };
-  void refreshGuest();
-  const intervalId = window.setInterval(() => void refreshGuest(), 3000);
-  return () => { active = false; window.clearInterval(intervalId); };
- }, [usMode, account?.id, guestId]);
- const submitGuestMessage = async () => {
-  const message = usDraft.trim();
-  if (!message || !guestId || usBusy || account) return;
-  const optimisticId = 'pending-guest-' + crypto.randomUUID();
-  const optimistic: FounderMessage = { id: optimisticId, senderId: guestId, senderRole: 'guest', message, createdAt: new Date().toISOString(), readAt: null };
-  setFounderMessages(previous => [...previous, optimistic]);
-  setUsBusy(true); setUsError(''); setUsDraft(''); ++usRefreshSequenceRef.current;
-  let saved = false;
-  try {
-   await sendGuestContactMessage(guestId, message); saved = true;
-   const sequence = ++usRefreshSequenceRef.current;
-   const response = await getGuestContactMessages(guestId);
-   if (sequence === usRefreshSequenceRef.current) setFounderMessages(response.messages || []);
-  } catch (error) {
-   if (!saved) { setFounderMessages(previous => previous.filter(item => item.id !== optimisticId)); setUsDraft(message); }
-   setUsError(error instanceof Error ? error.message : 'Unable to send your message. Please try again.');
-  } finally { setUsBusy(false); }
- };
  const submitFounderMessage = async () => {
   const message = usDraft.trim();
   if (!message || !sessionToken || !account || isOwner || usBusy) return;
@@ -951,7 +910,7 @@ Platform architecture and navigation:
   <div className="absolute inset-0 z-[5] flex flex-col bg-white">
    <div className="flex items-center justify-between gap-2 border-b border-slate-200 bg-slate-950 p-4 text-white">
     <div><h5 className="text-sm font-black">{currentLang === 'ar' ? 'تواصل معنا' : currentLang === 'fr' ? 'Contactez-nous' : currentLang === 'es' ? 'Contáctanos' : currentLang === 'it' ? 'Contattaci' : 'Contact us'}</h5>
-    <p className="mt-0.5 text-[10px] text-slate-300">{currentLang === 'ar' ? 'أرسل رسالتك وتابع ردنا هنا.' : currentLang === 'fr' ? 'Envoyez-nous un message et suivez notre réponse ici.' : currentLang === 'es' ? 'Envíanos tu mensaje y consulta nuestra respuesta aquí.' : currentLang === 'it' ? 'Scrivici e consulta qui la nostra risposta.' : 'Send us a message and follow our reply here.'}</p></div>
+    <p className="mt-0.5 text-[10px] text-slate-300">{account ? (currentLang === 'ar' ? 'أرسل رسالتك وتابع ردنا هنا.' : currentLang === 'fr' ? 'Envoyez-nous un message et suivez notre réponse ici.' : currentLang === 'es' ? 'Envíanos tu mensaje y consulta nuestra respuesta aquí.' : currentLang === 'it' ? 'Scrivici e consulta qui la nostra risposta.' : 'Send us a message and follow our reply here.') : currentLang === 'ar' ? 'أنشئ حساباً لتتمكن من التواصل معنا.' : currentLang === 'fr' ? 'Créez un compte pour pouvoir nous contacter.' : currentLang === 'es' ? 'Crea una cuenta para poder contactarnos.' : currentLang === 'it' ? 'Crea un account per poterci contattare.' : 'Create an account to be able to contact us.'}</p></div>
     <div className="flex shrink-0 items-center gap-2">
      <button type="button" onClick={() => { setUsMode(false); setIsOpen(false); if (chatOnlyMode) { onFounderBackHome?.(); if (!onFounderBackHome) window.location.replace('https://agenda.mycamp.workers.dev/'); } }} className="rounded-lg bg-white/10 px-3 py-2 text-xs font-bold">{currentLang === 'ar' ? 'عودة' : currentLang === 'fr' ? 'Retour' : currentLang === 'es' ? 'Volver' : currentLang === 'it' ? 'Indietro' : 'Back'}</button>
      <button type="button" onClick={() => { setUsMode(false); setIsOpen(false); }} aria-label={chatLabels.close} title={chatLabels.close} className="rounded-lg bg-white/10 p-2 text-white transition hover:bg-white/20"><X className="h-4 w-4"/></button>
@@ -966,17 +925,22 @@ Platform architecture and navigation:
         <time className="mt-1 block text-end text-[9px] opacity-60">{new Date(msg.createdAt).toLocaleString(chatLocale[currentLang], { dateStyle: 'short', timeStyle: 'short' })}</time>
        </div>
       </div>)}
-      {usMessages.length === 0 && !usError && <p className="py-8 text-center text-xs text-slate-400">{currentLang === 'ar' ? 'لا توجد رسائل بعد. اكتب رسالتك الأولى أدناه.' : currentLang === 'fr' ? 'Aucun message. Écrivez le premier ci-dessous.' : currentLang === 'es' ? 'Todavía no hay mensajes. Escribe el primero abajo.' : currentLang === 'it' ? 'Nessun messaggio. Scrivi il primo qui sotto.' : 'No messages yet. Write the first message below.'}</p>}
+      {account && usMessages.length === 0 && !usError && <p className="py-8 text-center text-xs text-slate-400">{currentLang === 'ar' ? 'لا توجد رسائل بعد. اكتب رسالتك الأولى أدناه.' : currentLang === 'fr' ? 'Aucun message. Écrivez le premier ci-dessous.' : currentLang === 'es' ? 'Todavía no hay mensajes. Escribe el primero abajo.' : currentLang === 'it' ? 'Nessun messaggio. Scrivi il primo qui sotto.' : 'No messages yet. Write the first message below.'}</p>}
+      {!account && <p role="status" className="mx-auto max-w-sm rounded-xl border border-amber-200 bg-amber-50 p-4 text-center text-sm font-bold text-amber-900">{currentLang === 'ar' ? 'أنشئ حساباً لتتمكن من التواصل معنا.' : currentLang === 'fr' ? 'Créez un compte pour pouvoir nous contacter.' : currentLang === 'es' ? 'Crea una cuenta para poder contactarnos.' : currentLang === 'it' ? 'Crea un account per poterci contattare.' : 'Create an account to be able to contact us.'}</p>}
       {usError && <p role="alert" className="rounded-lg bg-rose-50 p-2 text-[11px] text-rose-700">{usError}</p>}
      </>
    </div>
-   <form onSubmit={(event) => { event.preventDefault(); if (account && sessionToken) void submitFounderMessage(); else void submitGuestMessage(); }} className="flex shrink-0 items-end gap-2 border-t border-slate-200 bg-white p-3">
+   {account && sessionToken ? (
+    <form onSubmit={(event) => { event.preventDefault(); if (account && sessionToken) void submitFounderMessage(); }} className="flex shrink-0 items-end gap-2 border-t border-slate-200 bg-white p-3">
     <label className="flex min-w-0 flex-1 flex-col gap-1.5">
      <span className="text-[10px] font-black uppercase tracking-wider text-slate-600">{currentLang === 'ar' ? 'السؤال' : currentLang === 'fr' ? 'Question' : currentLang === 'es' ? 'Pregunta' : currentLang === 'it' ? 'Domanda' : 'Question'}</span>
      <textarea value={usDraft} onChange={(event) => setUsDraft(event.target.value)} maxLength={4000} rows={2} placeholder={currentLang === 'ar' ? 'اكتب سؤالك أو رسالتك...' : currentLang === 'fr' ? 'Écrivez votre question ou message...' : currentLang === 'es' ? 'Escribe tu pregunta o mensaje...' : currentLang === 'it' ? 'Scrivi la tua domanda o il messaggio...' : 'Write your question or message...'} className="min-h-14 w-full resize-none rounded-xl border border-slate-200 bg-slate-50 p-2.5 text-xs outline-indigo-600" />
     </label>
     <button type="submit" disabled={!usDraft.trim() || usBusy} className="rounded-xl bg-indigo-700 p-3 text-white disabled:opacity-40" aria-label={currentLang === 'ar' ? 'إرسال' : 'Send'}><Send className="h-4 w-4"/></button>
    </form>
+   ) : (
+    <p role="status" className="shrink-0 border-t border-slate-200 bg-amber-50 px-4 py-5 text-center text-sm font-bold text-amber-900">{currentLang === 'ar' ? 'أنشئ حساباً لتتمكن من التواصل معنا.' : currentLang === 'fr' ? 'Créez un compte pour pouvoir nous contacter.' : currentLang === 'es' ? 'Crea una cuenta para poder contactarnos.' : currentLang === 'it' ? 'Crea un account per poterci contattare.' : 'Create an account to be able to contact us.'}</p>
+   )}
   </div>
  )}
 

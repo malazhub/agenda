@@ -1118,24 +1118,6 @@ async function founderUserMessages(request, env) {
   return json({ sent: true });
 }
 
-async function guestContactMessages(request, env) {
-  const guestId = new URL(request.url).searchParams.get("guestId") || "";
-  if (!/^[0-9a-f-]{36}$/i.test(guestId)) return json({ error: "A valid visitor conversation is required." }, 400);
-  if (request.method === "GET") {
-    const result = await env.DB.prepare(
-      `SELECT id, sender_id AS senderId, sender_role AS senderRole, message, created_at AS createdAt, read_at AS readAt
-       FROM founder_guest_messages WHERE guest_id = ? ORDER BY created_at ASC, rowid ASC LIMIT 300`
-    ).bind(guestId).all();
-    await env.DB.prepare("UPDATE founder_guest_messages SET read_at = datetime('now') WHERE guest_id = ? AND sender_role = 'owner' AND read_at IS NULL").bind(guestId).run();
-    return json({ messages: result.results || [] });
-  }
-  const body = await requestJson(request);
-  const message = typeof body?.message === "string" ? body.message.trim() : "";
-  if (!message || message.length > 4000) return json({ error: "Enter a message of 1–4000 characters." }, 400);
-  await env.DB.prepare("INSERT INTO founder_guest_messages (id, guest_id, sender_id, sender_role, message) VALUES (?, ?, ?, 'guest', ?)").bind(randomId(), guestId, guestId, message).run();
-  return json({ sent: true });
-}
-
 async function ownerFounderMessages(request, env) {
   const owner = await requireOwner(request, env);
   if (!owner) return json({ error: "Owner access required." }, 401);
@@ -1143,22 +1125,24 @@ async function ownerFounderMessages(request, env) {
   if (!ownerAccount) return json({ error: "Owner account not found." }, 404);
   const url = new URL(request.url);
   const accountId = url.searchParams.get("accountId") || "";
-  const isGuest = accountId.startsWith("guest:");
-  const guestId = isGuest ? accountId.slice(6) : "";
+
   if (request.method === "GET") {
     if (accountId) {
-      if (isGuest) {
-        if (!/^[0-9a-f-]{36}$/i.test(guestId)) return json({ error: "Conversation not found." }, 404);
-        await env.DB.prepare("UPDATE founder_guest_messages SET read_at = datetime('now') WHERE guest_id = ? AND sender_role = 'guest' AND read_at IS NULL").bind(guestId).run();
-        const messages = await env.DB.prepare("SELECT id, sender_id AS senderId, sender_role AS senderRole, message, created_at AS createdAt, read_at AS readAt FROM founder_guest_messages WHERE guest_id = ? ORDER BY created_at ASC, rowid ASC LIMIT 300").bind(guestId).all();
-        return json({ messages: messages.results || [] });
-      }
-      await env.DB.prepare("UPDATE founder_messages SET read_at = datetime('now') WHERE thread_account_id = ? AND sender_id != ? AND read_at IS NULL").bind(accountId, owner.sub).run();
-      const messages = await env.DB.prepare(`SELECT id, sender_id AS senderId, sender_role AS senderRole, message, created_at AS createdAt, read_at AS readAt FROM (SELECT rowid AS insertionOrder, id, sender_id, sender_role, message, created_at, read_at FROM founder_messages WHERE thread_account_id = ? ORDER BY created_at DESC, rowid DESC LIMIT 300) ORDER BY createdAt ASC, insertionOrder ASC`).bind(accountId).all();
+      const recipient = await env.DB.prepare(
+        "SELECT id FROM accounts WHERE id = ? AND role IN ('student','educator','director')"
+      ).bind(accountId).first();
+      if (!recipient) return json({ error: "Conversation account not found." }, 404);
+      await env.DB.prepare(
+        "UPDATE founder_messages SET read_at = datetime('now') WHERE thread_account_id = ? AND sender_id != ? AND read_at IS NULL"
+      ).bind(accountId, owner.sub).run();
+      const messages = await env.DB.prepare(`SELECT id, sender_id AS senderId, sender_role AS senderRole, message, created_at AS createdAt, read_at AS readAt
+        FROM (SELECT rowid AS insertionOrder, id, sender_id, sender_role, message, created_at, read_at
+          FROM founder_messages WHERE thread_account_id = ?
+          ORDER BY created_at DESC, rowid DESC LIMIT 300)
+        ORDER BY createdAt ASC, insertionOrder ASC`).bind(accountId).all();
       return json({ messages: messages.results || [] });
     }
-    const [threads, guests] = await Promise.all([
-      env.DB.prepare(`SELECT a.id AS accountId, a.full_name AS fullName, a.username,
+    const threads = await env.DB.prepare(`SELECT a.id AS accountId, a.full_name AS fullName, a.username,
         a.email, a.phone, a.role, a.school_id AS schoolId, COALESCE(s.name, '') AS schoolName,
         COALESCE(a.school_or_subject, '') AS schoolOrSubject, COALESCE(a.grade_id, '') AS gradeId,
         a.registered_session_id AS registeredSessionId,
@@ -1183,24 +1167,15 @@ async function ownerFounderMessages(request, env) {
         a.school_or_subject, a.grade_id, a.registered_session_id, sess.title, sess.subject,
         educator.full_name, a.created_at, a.expires_at, a.activated, a.paid
       ORDER BY CASE WHEN COUNT(m.id) > 0 THEN 0 ELSE 1 END,
-        MAX(m.created_at) DESC, a.full_name COLLATE NOCASE LIMIT 5000`).bind(owner.sub, owner.sub, owner.sub).all(),
-      env.DB.prepare(`SELECT guest_id, COUNT(*) AS messageCount, SUM(CASE WHEN sender_role = 'guest' THEN 1 ELSE 0 END) AS incomingCount, SUM(CASE WHEN sender_role = 'guest' AND read_at IS NULL THEN 1 ELSE 0 END) AS unreadIncoming, SUM(CASE WHEN sender_role = 'owner' THEN 1 ELSE 0 END) AS outgoingCount, MAX(created_at) AS lastMessageAt FROM founder_guest_messages GROUP BY guest_id ORDER BY MAX(created_at) DESC LIMIT 5000`).all()
-    ]);
-    const registered = threads.results || [];
-    const anonymous = (guests.results || []).map(row => ({ accountId: "guest:" + row.guest_id, fullName: "Website visitor", username: "Guest " + String(row.guest_id).slice(0, 8), role: "guest", schoolId: "", schoolName: "Agenda", messageCount: Number(row.messageCount || 0), incomingCount: Number(row.incomingCount || 0), unreadIncoming: Number(row.unreadIncoming || 0), outgoingCount: Number(row.outgoingCount || 0), lastMessageAt: row.lastMessageAt || null }));
-    return json({ threads: [...registered, ...anonymous].sort((a,b) => String(b.lastMessageAt || "").localeCompare(String(a.lastMessageAt || ""))) });
+        MAX(m.created_at) DESC, a.full_name COLLATE NOCASE LIMIT 5000`).bind(owner.sub, owner.sub, owner.sub).all();
+    return json({ threads: threads.results || [] });
   }
   if (request.method === "POST") {
     const body = await requestJson(request);
     const target = typeof body?.accountId === "string" ? body.accountId.trim() : "";
     const message = typeof body?.message === "string" ? body.message.trim() : "";
     if (!target || !message || message.length > 4000) return json({ error: "Select a conversation and enter a message of 1–4000 characters." }, 400);
-    if (target.startsWith("guest:")) {
-      const id = target.slice(6);
-      if (!/^[0-9a-f-]{36}$/i.test(id)) return json({ error: "Conversation not found." }, 404);
-      await env.DB.prepare("INSERT INTO founder_guest_messages (id, guest_id, sender_id, sender_role, message) VALUES (?, ?, ?, 'owner', ?)").bind(randomId(), id, owner.sub, message).run();
-      return json({ sent: true });
-    }
+    if (target.startsWith("guest:")) return json({ error: "Create an account to contact the platform Owner." }, 403);
     const recipient = await env.DB.prepare("SELECT id FROM accounts WHERE id = ? AND role IN ('student','educator','director')").bind(target).first();
     if (!recipient) return json({ error: "Conversation account not found." }, 404);
     await env.DB.prepare("INSERT INTO founder_messages (id, thread_account_id, sender_id, sender_role, message) VALUES (?, ?, ?, 'owner', ?)").bind(randomId(), target, owner.sub, message).run();
@@ -1208,10 +1183,8 @@ async function ownerFounderMessages(request, env) {
   }
   if (request.method === "DELETE") {
     if (!accountId) return json({ error: "accountId is required." }, 400);
-    if (isGuest) {
-      if (!/^[0-9a-f-]{36}$/i.test(guestId)) return json({ error: "Conversation not found." }, 404);
-      await env.DB.prepare("DELETE FROM founder_guest_messages WHERE guest_id = ?").bind(guestId).run();
-    } else await env.DB.prepare("DELETE FROM founder_messages WHERE thread_account_id = ?").bind(accountId).run();
+    if (accountId.startsWith("guest:")) return json({ error: "Visitor contact is disabled." }, 403);
+    await env.DB.prepare("DELETE FROM founder_messages WHERE thread_account_id = ?").bind(accountId).run();
     return json({ deleted: true });
   }
   return json({ error: "Method not allowed." }, 405);
@@ -1240,6 +1213,41 @@ async function deleteOwnerAccount(request, env, accountId) {
     "DELETE FROM accounts WHERE id = ? AND school_id = ? AND role IN ('student','educator')"
   ).bind(accountId, account.school_id).run();
   return json({ deleted: true });
+}
+
+async function updateOwnerSchoolAccount(request, env, accountId) {
+  const owner = await requireOwner(request, env);
+  if (!owner) return json({ error: "Owner access required." }, 401);
+  const account = await env.DB.prepare(
+    "SELECT id, school_id FROM accounts WHERE id = ? AND role IN ('student','educator')"
+  ).bind(accountId).first();
+  if (!account) return json({ error: "Student or Educator account not found." }, 404);
+
+  const body = await requestJson(request);
+  const updates = [];
+  const values = [];
+  if (typeof body?.activated === "boolean") {
+    updates.push("activated = ?");
+    values.push(Number(body.activated));
+  }
+  if (typeof body?.paid === "boolean") {
+    updates.push("paid = ?");
+    values.push(Number(body.paid));
+  }
+  if (typeof body?.password === "string") {
+    if (body.password.length === 0 || body.password.length > 128) {
+      return json({ error: "Enter a password of 1–128 characters." }, 400);
+    }
+    updates.push("password_hash = ?");
+    values.push(await hashPassword(body.password));
+  }
+  if (!updates.length) return json({ error: "No valid account changes were supplied." }, 400);
+
+  values.push(accountId, account.school_id);
+  await env.DB.prepare(
+    `UPDATE accounts SET ${updates.join(", ")} WHERE id = ? AND school_id = ? AND role IN ('student','educator')`
+  ).bind(...values).run();
+  return json({ updated: true });
 }
 
 async function ownerDirectors(request, env) {
@@ -3889,10 +3897,11 @@ async function handle(request, env) {
   if (request.method === "POST" && path === "/api/auth/login") return handleLogin(request, env);
   if (request.method === "GET" && path === "/api/auth/me") return getCurrentAccount(request, env);
   if (path === "/api/founder/messages" && ["GET", "POST"].includes(request.method)) return founderUserMessages(request, env);
-  if (path === "/api/guest/contact" && ["GET", "POST"].includes(request.method)) return guestContactMessages(request, env);
+  if (path === "/api/guest/contact" && ["GET", "POST"].includes(request.method)) return json({ error: "Create an account to contact us." }, 403);
   if (path === "/api/owner/founder/messages" && ["GET", "POST", "DELETE"].includes(request.method)) return ownerFounderMessages(request, env);
   if (request.method === "GET" && path === "/api/owner/directors") return ownerDirectors(request, env);
   const ownerAccountMatch = path.match(/^\/api\/owner\/accounts\/([a-zA-Z0-9_-]{1,100})$/i);
+  if (request.method === "PATCH" && ownerAccountMatch) return updateOwnerSchoolAccount(request, env, ownerAccountMatch[1]);
   if (request.method === "DELETE" && ownerAccountMatch) return deleteOwnerAccount(request, env, ownerAccountMatch[1]);
   if (request.method === "POST" && path === "/api/owner/directors") return createOwnerDirector(request, env);
   if (request.method === "POST" && path === "/api/director/claim") return claimDirectorSetup(request, env);
