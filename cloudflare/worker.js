@@ -1117,70 +1117,75 @@ async function founderUserMessages(request, env) {
   return json({ sent: true });
 }
 
+async function guestContactMessages(request, env) {
+  const guestId = new URL(request.url).searchParams.get("guestId") || "";
+  if (!/^[0-9a-f-]{36}$/i.test(guestId)) return json({ error: "A valid visitor conversation is required." }, 400);
+  if (request.method === "GET") {
+    const result = await env.DB.prepare(
+      `SELECT id, sender_id AS senderId, sender_role AS senderRole, message, created_at AS createdAt, read_at AS readAt
+       FROM founder_guest_messages WHERE guest_id = ? ORDER BY created_at ASC, rowid ASC LIMIT 300`
+    ).bind(guestId).all();
+    await env.DB.prepare("UPDATE founder_guest_messages SET read_at = datetime('now') WHERE guest_id = ? AND sender_role = 'owner' AND read_at IS NULL").bind(guestId).run();
+    return json({ messages: result.results || [] });
+  }
+  const body = await requestJson(request);
+  const message = typeof body?.message === "string" ? body.message.trim() : "";
+  if (!message || message.length > 4000) return json({ error: "Enter a message of 1–4000 characters." }, 400);
+  await env.DB.prepare("INSERT INTO founder_guest_messages (id, guest_id, sender_id, sender_role, message) VALUES (?, ?, ?, 'guest', ?)").bind(randomId(), guestId, guestId, message).run();
+  return json({ sent: true });
+}
+
 async function ownerFounderMessages(request, env) {
   const owner = await requireOwner(request, env);
   if (!owner) return json({ error: "Owner access required." }, 401);
   const ownerAccount = await env.DB.prepare("SELECT id FROM accounts WHERE id = ?").bind(owner.sub).first();
   if (!ownerAccount) return json({ error: "Owner account not found." }, 404);
-
+  const url = new URL(request.url);
+  const accountId = url.searchParams.get("accountId") || "";
+  const isGuest = accountId.startsWith("guest:");
+  const guestId = isGuest ? accountId.slice(6) : "";
   if (request.method === "GET") {
-    const accountId = new URL(request.url).searchParams.get("accountId") || "";
     if (accountId) {
-      await env.DB.prepare(
-        "UPDATE founder_messages SET read_at = datetime('now') WHERE thread_account_id = ? AND sender_id != ? AND read_at IS NULL"
-      ).bind(accountId, owner.sub).run();
-      const messages = await env.DB.prepare(
-        `SELECT id, sender_id AS senderId, sender_role AS senderRole, message, created_at AS createdAt, read_at AS readAt
-         FROM (
-           SELECT rowid AS insertionOrder, id, sender_id, sender_role, message, created_at, read_at
-           FROM founder_messages
-           WHERE thread_account_id = ?
-           ORDER BY created_at DESC, rowid DESC
-           LIMIT 300
-         )
-         ORDER BY createdAt ASC, insertionOrder ASC`
-      ).bind(accountId).all();
+      if (isGuest) {
+        if (!/^[0-9a-f-]{36}$/i.test(guestId)) return json({ error: "Conversation not found." }, 404);
+        await env.DB.prepare("UPDATE founder_guest_messages SET read_at = datetime('now') WHERE guest_id = ? AND sender_role = 'guest' AND read_at IS NULL").bind(guestId).run();
+        const messages = await env.DB.prepare("SELECT id, sender_id AS senderId, sender_role AS senderRole, message, created_at AS createdAt, read_at AS readAt FROM founder_guest_messages WHERE guest_id = ? ORDER BY created_at ASC, rowid ASC LIMIT 300").bind(guestId).all();
+        return json({ messages: messages.results || [] });
+      }
+      await env.DB.prepare("UPDATE founder_messages SET read_at = datetime('now') WHERE thread_account_id = ? AND sender_id != ? AND read_at IS NULL").bind(accountId, owner.sub).run();
+      const messages = await env.DB.prepare(`SELECT id, sender_id AS senderId, sender_role AS senderRole, message, created_at AS createdAt, read_at AS readAt FROM (SELECT rowid AS insertionOrder, id, sender_id, sender_role, message, created_at, read_at FROM founder_messages WHERE thread_account_id = ? ORDER BY created_at DESC, rowid DESC LIMIT 300) ORDER BY createdAt ASC, insertionOrder ASC`).bind(accountId).all();
       return json({ messages: messages.results || [] });
     }
-    const threads = await env.DB.prepare(
-      `SELECT a.id AS accountId, a.full_name AS fullName, a.username, a.role,
-              a.school_id AS schoolId, COALESCE(s.name, '') AS schoolName,
-              COUNT(m.id) AS messageCount,
-              SUM(CASE WHEN m.id IS NOT NULL AND m.sender_id != ? THEN 1 ELSE 0 END) AS incomingCount,
-              SUM(CASE WHEN m.id IS NOT NULL AND m.sender_id != ? AND m.read_at IS NULL THEN 1 ELSE 0 END) AS unreadIncoming,
-              SUM(CASE WHEN m.id IS NOT NULL AND m.sender_id = ? THEN 1 ELSE 0 END) AS outgoingCount,
-              MAX(m.created_at) AS lastMessageAt
-       FROM accounts a
-       LEFT JOIN schools s ON s.id = a.school_id
-       LEFT JOIN founder_messages m ON m.thread_account_id = a.id
-       WHERE a.role IN ('student','educator','director')
-         AND NOT EXISTS (SELECT 1 FROM platform_owners p WHERE p.account_id = a.id)
-       GROUP BY a.id, a.full_name, a.username, a.role, a.school_id, s.name
-       ORDER BY CASE WHEN COUNT(m.id) > 0 THEN 0 ELSE 1 END, MAX(m.created_at) DESC, a.full_name COLLATE NOCASE
-       LIMIT 5000`
-    ).bind(owner.sub, owner.sub, owner.sub).all();
-    return json({ threads: threads.results || [] });
+    const [threads, guests] = await Promise.all([
+      env.DB.prepare(`SELECT a.id AS accountId, a.full_name AS fullName, a.username, a.role, a.school_id AS schoolId, COALESCE(s.name, '') AS schoolName, COUNT(m.id) AS messageCount, SUM(CASE WHEN m.id IS NOT NULL AND m.sender_id != ? THEN 1 ELSE 0 END) AS incomingCount, SUM(CASE WHEN m.id IS NOT NULL AND m.sender_id != ? AND m.read_at IS NULL THEN 1 ELSE 0 END) AS unreadIncoming, SUM(CASE WHEN m.id IS NOT NULL AND m.sender_id = ? THEN 1 ELSE 0 END) AS outgoingCount, MAX(m.created_at) AS lastMessageAt FROM accounts a LEFT JOIN schools s ON s.id = a.school_id LEFT JOIN founder_messages m ON m.thread_account_id = a.id WHERE a.role IN ('student','educator','director') AND NOT EXISTS (SELECT 1 FROM platform_owners p WHERE p.account_id = a.id) GROUP BY a.id, a.full_name, a.username, a.role, a.school_id, s.name ORDER BY CASE WHEN COUNT(m.id) > 0 THEN 0 ELSE 1 END, MAX(m.created_at) DESC, a.full_name COLLATE NOCASE LIMIT 5000`).bind(owner.sub, owner.sub, owner.sub).all(),
+      env.DB.prepare(`SELECT guest_id, COUNT(*) AS messageCount, SUM(CASE WHEN sender_role = 'guest' THEN 1 ELSE 0 END) AS incomingCount, SUM(CASE WHEN sender_role = 'guest' AND read_at IS NULL THEN 1 ELSE 0 END) AS unreadIncoming, SUM(CASE WHEN sender_role = 'owner' THEN 1 ELSE 0 END) AS outgoingCount, MAX(created_at) AS lastMessageAt FROM founder_guest_messages GROUP BY guest_id ORDER BY MAX(created_at) DESC LIMIT 5000`).all()
+    ]);
+    const registered = threads.results || [];
+    const anonymous = (guests.results || []).map(row => ({ accountId: "guest:" + row.guest_id, fullName: "Website visitor", username: "Guest " + String(row.guest_id).slice(0, 8), role: "guest", schoolId: "", schoolName: "Agenda", messageCount: Number(row.messageCount || 0), incomingCount: Number(row.incomingCount || 0), unreadIncoming: Number(row.unreadIncoming || 0), outgoingCount: Number(row.outgoingCount || 0), lastMessageAt: row.lastMessageAt || null }));
+    return json({ threads: [...registered, ...anonymous].sort((a,b) => String(b.lastMessageAt || "").localeCompare(String(a.lastMessageAt || ""))) });
   }
-
   if (request.method === "POST") {
     const body = await requestJson(request);
-    const accountId = typeof body?.accountId === "string" ? body.accountId.trim() : "";
+    const target = typeof body?.accountId === "string" ? body.accountId.trim() : "";
     const message = typeof body?.message === "string" ? body.message.trim() : "";
-    if (!accountId || !message || message.length > 4000) return json({ error: "Select a conversation and enter a message of 1–4000 characters." }, 400);
-    const recipient = await env.DB.prepare(
-      "SELECT id, role FROM accounts WHERE id = ? AND role IN ('student','educator','director')"
-    ).bind(accountId).first();
+    if (!target || !message || message.length > 4000) return json({ error: "Select a conversation and enter a message of 1–4000 characters." }, 400);
+    if (target.startsWith("guest:")) {
+      const id = target.slice(6);
+      if (!/^[0-9a-f-]{36}$/i.test(id)) return json({ error: "Conversation not found." }, 404);
+      await env.DB.prepare("INSERT INTO founder_guest_messages (id, guest_id, sender_id, sender_role, message) VALUES (?, ?, ?, 'owner', ?)").bind(randomId(), id, owner.sub, message).run();
+      return json({ sent: true });
+    }
+    const recipient = await env.DB.prepare("SELECT id FROM accounts WHERE id = ? AND role IN ('student','educator','director')").bind(target).first();
     if (!recipient) return json({ error: "Conversation account not found." }, 404);
-    await env.DB.prepare(
-      "INSERT INTO founder_messages (id, thread_account_id, sender_id, sender_role, message) VALUES (?, ?, ?, 'owner', ?)"
-    ).bind(randomId(), accountId, owner.sub, message).run();
+    await env.DB.prepare("INSERT INTO founder_messages (id, thread_account_id, sender_id, sender_role, message) VALUES (?, ?, ?, 'owner', ?)").bind(randomId(), target, owner.sub, message).run();
     return json({ sent: true });
   }
-
   if (request.method === "DELETE") {
-    const accountId = new URL(request.url).searchParams.get("accountId") || "";
     if (!accountId) return json({ error: "accountId is required." }, 400);
-    await env.DB.prepare("DELETE FROM founder_messages WHERE thread_account_id = ?").bind(accountId).run();
+    if (isGuest) {
+      if (!/^[0-9a-f-]{36}$/i.test(guestId)) return json({ error: "Conversation not found." }, 404);
+      await env.DB.prepare("DELETE FROM founder_guest_messages WHERE guest_id = ?").bind(guestId).run();
+    } else await env.DB.prepare("DELETE FROM founder_messages WHERE thread_account_id = ?").bind(accountId).run();
     return json({ deleted: true });
   }
   return json({ error: "Method not allowed." }, 405);
@@ -3833,6 +3838,7 @@ async function handle(request, env) {
   if (request.method === "POST" && path === "/api/auth/login") return handleLogin(request, env);
   if (request.method === "GET" && path === "/api/auth/me") return getCurrentAccount(request, env);
   if (path === "/api/founder/messages" && ["GET", "POST"].includes(request.method)) return founderUserMessages(request, env);
+  if (path === "/api/guest/contact" && ["GET", "POST"].includes(request.method)) return guestContactMessages(request, env);
   if (path === "/api/owner/founder/messages" && ["GET", "POST", "DELETE"].includes(request.method)) return ownerFounderMessages(request, env);
   if (request.method === "GET" && path === "/api/owner/directors") return ownerDirectors(request, env);
   if (request.method === "POST" && path === "/api/owner/directors") return createOwnerDirector(request, env);
