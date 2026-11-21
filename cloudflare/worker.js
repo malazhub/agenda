@@ -537,11 +537,12 @@ async function handleRegister(request, env) {
   }
 
   const account = await env.DB.prepare("SELECT * FROM accounts WHERE id = ?").bind(id).first();
+  const pendingActivation = !Boolean(account.activated);
   const token = await signToken(
-    { sub: id, role, username, exp: Math.floor(Date.now() / 1000) + SESSION_TTL_SECONDS },
+    { sub: id, role, username, ...(pendingActivation ? { chatOnly: true } : {}), exp: Math.floor(Date.now() / 1000) + SESSION_TTL_SECONDS },
     env.SESSION_SIGNING_KEY,
   );
-  return json({ account: publicAccount(account), token }, 201);
+  return json({ account: publicAccount(account), token, ...(pendingActivation ? { chatOnly: true } : {}) }, 201);
 }
 
 async function existingRegistrationResponse(account, registration, env, selectedSession, selectedEducator) {
@@ -626,11 +627,12 @@ async function existingRegistrationResponse(account, registration, env, selected
     }
     account.registered_session_id = classroomId;
   }
+  const pendingActivation = !Boolean(account.activated);
   const token = await signToken(
-    { sub: account.id, role: account.role, username: account.username, exp: Math.floor(Date.now() / 1000) + SESSION_TTL_SECONDS },
+    { sub: account.id, role: account.role, username: account.username, ...(pendingActivation ? { chatOnly: true } : {}), exp: Math.floor(Date.now() / 1000) + SESSION_TTL_SECONDS },
     env.SESSION_SIGNING_KEY,
   );
-  return json({ account: publicAccount(account), token });
+  return json({ account: publicAccount(account), token, ...(pendingActivation ? { chatOnly: true } : {}) });
 }
 
 

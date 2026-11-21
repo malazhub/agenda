@@ -1596,12 +1596,8 @@ const studentPrimarySession =
         ) ||
         callParticipants.find(
           (participant) =>
-            participant.name?.trim().toLowerCase() ===
-            activeCallSession?.educatorName?.trim().toLowerCase()
-        ) ||
-        callParticipants.find(
-          (participant) =>
-            participant.userId !== localStreamUserId
+            Boolean(activeCallSession?.educatorId) &&
+            participant.userId === activeCallSession.educatorId
         ) ||
         null
       );
@@ -1963,14 +1959,18 @@ const handleClearChatMessages = async () => {
               }
             />
           )}
-          {isGuestMode && (
+          {((isGuestMode) || (isStudent && !studentEducatorParticipant)) && (
             <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
               <span className="rounded-xl bg-black/70 px-5 py-3 text-sm font-bold text-white">
                 {currentLang === 'ar'
-                  ? 'لم يتم اختيار أستاذ'
+                  ? 'لا يوجد أستاذ'
                   : currentLang === 'fr'
-                    ? 'Aucun éducateur sélectionné'
-                    : 'No educator selected'}
+                    ? 'Aucun éducateur'
+                    : currentLang === 'es'
+                      ? 'No hay educador'
+                      : currentLang === 'it'
+                        ? 'Nessun educatore'
+                        : 'No educator'}
               </span>
             </div>
           )}

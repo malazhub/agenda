@@ -648,7 +648,10 @@ test('registration hashes credentials and rejects duplicate usernames', async ()
   assert.equal(result.account.role, 'student');
   assert.equal(result.account.activated, false);
   assert.equal(result.account.registeredSessionId, 'test-registration-session');
+  assert.equal(result.chatOnly, true);
   assert.equal('password_hash' in result.account, false);
+  const firstRegistrationLiveAccess = await send(env, '/api/live-stream?sessionId=test-registration-session', { token: result.token });
+  assert.ok([401, 403].includes(firstRegistrationLiveAccess.status), 'a newly registered unactivated account cannot enter the live classroom');
   assert.ok(result.account.expiresAt);
   assert.equal(accounts.get(result.account.id).password_hash.startsWith('pbkdf2_sha256$'), true);
 
@@ -690,7 +693,11 @@ test('registration hashes credentials and rejects duplicate usernames', async ()
   legacyAccount.grade_id = '';
   const retry = await send(env, '/api/auth/register', { method: 'POST', body: registration });
   assert.equal(retry.status, 200);
-  assert.equal((await retry.json()).account.activated, false);
+  const retryRegistration = await retry.json();
+  assert.equal(retryRegistration.account.activated, false);
+  assert.equal(retryRegistration.chatOnly, true);
+  const retryLiveAccess = await send(env, '/api/live-stream?sessionId=test-registration-session', { token: retryRegistration.token });
+  assert.ok([401, 403].includes(retryLiveAccess.status), 'a repeated pending registration must remain blocked from live classroom');
   assert.equal(legacyAccount.registered_session_id, 'test-registration-session');
 
   const directorLogin = await send(env, '/api/auth/login', {
