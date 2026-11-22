@@ -55,6 +55,8 @@ interface CoursesHubProps {
   onRegisterSignOutCleanup?: (
     cleanup: (() => Promise<void>) | null
   ) => void;
+  onSessionViewChange?: (isOpen: boolean) => void;
+  onRequestClassroomFullscreen?: () => void;
 }
 
 type DirectorRow = CloudflareAccount;
@@ -76,6 +78,8 @@ export const CoursesHub: React.FC<CoursesHubProps> = ({
   initialDirectorLogin,
   initialGuestLiveRoom = false,
   onDirectorRedirect,
+  onSessionViewChange,
+  onRequestClassroomFullscreen,
 }) => {
   const t = translations[currentLang];
 
@@ -85,6 +89,10 @@ export const CoursesHub: React.FC<CoursesHubProps> = ({
 
 
     const [activeGradeForSessions, setActiveGradeForSessions] = useState<GradeLevelDef | null>(null);
+  useEffect(() => {
+    onSessionViewChange?.(Boolean(activeGradeForSessions));
+    return () => onSessionViewChange?.(false);
+  }, [activeGradeForSessions, onSessionViewChange]);
   const [activeGradeTab, setActiveGradeTab] = useState<'stored' | 'live'>('stored');
   const [autoOpenLiveClassroom, setAutoOpenLiveClassroom] = useState(false);
   const [directorScreen, setDirectorScreen] = useState<'home' | 'login' | 'dashboard'>(() =>
@@ -632,7 +640,10 @@ const updateAccount = async (
   };
 
         // Open Broadcast Room for both signed-in users and guests.
-  const openSharedLiveRoom = () => {
+  const openSharedLiveRoom = (requestFullscreen = true) => {
+    // A direct Broadcast Room click has a browser user activation, so request
+    // fullscreen here; auto-open flows never attempt a gestureless fullscreen request.
+    if (requestFullscreen) onRequestClassroomFullscreen?.();
     const accountGrade = registeredAccount?.gradeId
       ?.toLowerCase()
       .replace(/[^a-z0-9]/g, '') || '';
@@ -672,7 +683,7 @@ const updateAccount = async (
   // not the unrelated demo VirtualClassroom component.
   useEffect(() => {
     if (initialGuestLiveRoom && !registeredAccount && !activeGradeForSessions) {
-      openSharedLiveRoom();
+      openSharedLiveRoom(false);
     }
   }, [initialGuestLiveRoom, registeredAccount, activeGradeForSessions]);
 
@@ -870,6 +881,7 @@ const updateAccount = async (
         autoOpenLiveClassroom={autoOpenLiveClassroom}
         registeredAccount={registeredAccount}
         sessionToken={sessionToken}
+        onRequestFullscreen={onRequestClassroomFullscreen}
         onShowMessage={onShowMessage}
         onRegisterSignOutCleanup={onRegisterSignOutCleanup}
         onBack={() => {

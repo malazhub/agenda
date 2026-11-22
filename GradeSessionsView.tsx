@@ -61,6 +61,7 @@ interface GradeSessionsViewProps {
   onBack: () => void;
   onEnterLiveClassroom?: (session?: any) => void;
   onShowMessage: (message: string) => void;
+  onRequestFullscreen?: () => void;
   onRegisterSignOutCleanup?: (
     cleanup: (() => Promise<void>) | null
   ) => void;
@@ -142,6 +143,7 @@ export const GradeSessionsView: React.FC<GradeSessionsViewProps> = ({
   sessionToken,
   onBack,
   onShowMessage,
+  onRequestFullscreen,
   onRegisterSignOutCleanup,
 }) => {
     const isRTL = currentLang === 'ar';
@@ -260,7 +262,6 @@ const [isMicOn, setIsMicOn] = useState(false);
 const [isVideoOn, setIsVideoOn] = useState(false);
 const [isGuestMode, setIsGuestMode] = useState(false);
 const [guestUserId, setGuestUserId] = useState('');
-const [isFullscreen, setIsFullscreen] = useState(false);
 const [isStudentPreviewExpanded, setIsStudentPreviewExpanded] =
   useState(false);
 const [isPrimaryVideoExpanded, setIsPrimaryVideoExpanded] = useState(false);
@@ -392,15 +393,6 @@ const containerRef = useRef<HTMLDivElement>(null);
     return `${m}:${s}`;
   };
 
-  const toggleFullscreen = () => {
-    if (!containerRef.current) return;
-    if (!document.fullscreenElement) {
-      containerRef.current.requestFullscreen().then(() => setIsFullscreen(true)).catch(() => {});
-    } else {
-      document.exitFullscreen().then(() => setIsFullscreen(false)).catch(() => {});
-    }
-  };
-
     // Start the educator's actual video broadcast or join it as an assigned student.
   
 const startLiveCall = async (session: any) => {
@@ -442,6 +434,7 @@ const startLiveCall = async (session: any) => {
     return;
   }
 
+  onRequestFullscreen?.();
   startCallInProgressRef.current = true;
   setIsLoading(true);
 
@@ -1799,83 +1792,42 @@ const handleClearChatMessages = async () => {
   // Do not create attendee records from the signed-in account alone.
 
   return (
-    <div   className="space-y-6 animate-in fade-in duration-300 text-start"   ref={containerRef}   onPointerDown={() => {     if (isEducator && streamCall) {       streamCall.resumeAudio();     }   }} >
+    <div   className={inLiveConference ? "h-full min-h-0 flex flex-col overflow-hidden text-start" : "space-y-6 animate-in fade-in duration-300 text-start"}   ref={containerRef}   onPointerDown={() => {     if (isEducator && streamCall) {       streamCall.resumeAudio();     }   }} >
       
             {/* IN-CALL VIDEO CLASSROOM VIEW */}
       {inLiveConference && activeCallSession ? (
-        <div className="bg-slate-900 rounded-3xl overflow-hidden shadow-2xl flex flex-col h-[85vh] text-white">
+        <div className="flex-1 min-h-0 h-full bg-slate-900 overflow-hidden shadow-2xl flex flex-col text-white">
 
-          {/* CLASSROOM HEADER */}
-          <div className="px-6 py-3.5 bg-slate-800/95 backdrop-blur-md flex flex-wrap items-center justify-between border-b border-slate-700 gap-3">
-            <div className="flex items-center gap-3">
+          {/* CLASSROOM CONTROLS */}
+          <div className="shrink-0 px-3 sm:px-4 py-2 bg-slate-800/95 border-b border-slate-700 flex items-center justify-between gap-2">
+            <div className="flex min-w-0 items-center gap-2">
               <button
                 type="button"
                 onClick={() => {
                   void endLiveCall();
                   onBack();
                 }}
-                className="flex items-center gap-1.5 bg-slate-700 hover:bg-slate-600 text-slate-200 hover:text-white font-bold px-3 py-1.5 rounded-xl transition cursor-pointer text-xs"
+                className="shrink-0 flex items-center gap-1.5 bg-slate-700 hover:bg-slate-600 text-slate-200 hover:text-white font-bold px-3 py-2 rounded-xl transition cursor-pointer text-xs"
                 title="Back to Main Screen"
               >
-                {isRTL
-                  ? <ArrowRight className="w-4 h-4" />
-                  : <ArrowLeft className="w-4 h-4" />}
+                {isRTL ? <ArrowRight className="w-4 h-4" /> : <ArrowLeft className="w-4 h-4" />}
                 <span>{currentLang === 'ar' ? 'الرئيسية' : currentLang === 'fr' ? 'Accueil' : currentLang === 'es' ? 'Inicio' : currentLang === 'it' ? 'Home' : 'Main'}</span>
               </button>
 
-              <span className="flex h-3 w-3 relative">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75" />
-                <span className="relative inline-flex rounded-full h-3 w-3 bg-rose-500" />
-              </span>
-
-              <div>
-                {isGuestMode ? (
-                  <h3 className="font-bold text-sm">
-                    {currentLang === 'ar' ? 'غرفة البث المباشر' : currentLang === 'fr' ? 'Salle de diffusion' : currentLang === 'es' ? 'Sala de emisión' : currentLang === 'it' ? 'Sala trasmissione' : 'Broadcast Room'}
-                  </h3>
-                ) : (
-                  <>
-                    <h3 className="font-bold text-sm">
-                      {(() => {
-                        const gradeId = activeCallSession.gradeId || assignedClassroomDetails?.gradeId || registeredAccount?.gradeId;
-                        const gradeName = gradeId ? (GRADE_LEVELS.find((grade) => grade.id.toLowerCase() === String(gradeId).toLowerCase())?.name[currentLang] || String(gradeId).toUpperCase()) : (activeCallSession.grade || selectedGrade.name[currentLang]);
-                        const subject = activeCallSession.subject || assignedClassroomDetails?.subject || educatorSubject;
-                        return `${gradeName} — ${subject}`;
-                      })()}
-                    </h3>
-                    <p className="text-xs text-slate-300">{currentLang === 'ar' ? 'الأستاذ: ' : currentLang === 'fr' ? 'Éducateur : ' : currentLang === 'es' ? 'Educador: ' : currentLang === 'it' ? 'Educatore: ' : 'Educator: '}{activeCallSession.educatorName || educatorName}</p>
-                  </>
-                )}
+              <div className="flex shrink-0 items-center gap-2 bg-slate-950 px-3 py-2 rounded-xl border border-slate-700 font-mono text-sm text-amber-400 font-black" aria-label={currentLang === 'ar' ? 'الوقت المتبقي' : currentLang === 'fr' ? 'Temps restant' : currentLang === 'es' ? 'Tiempo restante' : currentLang === 'it' ? 'Tempo rimanente' : 'Time remaining'}>
+                <Clock className="w-4 h-4 text-amber-400" />
+                <span>{formatTimer(timeLeft)}</span>
               </div>
             </div>
 
-            {/* SESSION TIMER */}
-            <div className="flex items-center gap-2 bg-slate-950 px-4 py-2 rounded-xl border border-slate-700 font-mono text-sm text-amber-400 font-black">
-              <Clock className="w-4 h-4 text-amber-400" />
-              <span>{formatTimer(timeLeft)}</span>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={toggleFullscreen}
-                className="p-2.5 rounded-xl bg-slate-700 hover:bg-slate-600 transition text-slate-200 cursor-pointer"
-                title="Full Screen"
-              >
-                {isFullscreen
-                  ? <Minimize className="w-4 h-4" />
-                  : <Maximize2 className="w-4 h-4" />}
-              </button>
-
-              <button
-                type="button"
-                onClick={() => void endLiveCall()}
-                className="bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs px-4 py-2 rounded-xl transition cursor-pointer flex items-center gap-1.5 shadow-md"
-              >
-                <PhoneOff className="w-4 h-4" />
-                <span>{t.endSession}</span>
-              </button>
-            </div>
+            <button
+              type="button"
+              onClick={() => void endLiveCall()}
+              className="shrink-0 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs px-3 sm:px-4 py-2 rounded-xl transition cursor-pointer flex items-center gap-1.5 shadow-md"
+            >
+              <PhoneOff className="w-4 h-4" />
+              <span>{currentLang === 'ar' ? 'مغادرة الصف' : currentLang === 'fr' ? 'Quitter la classe' : currentLang === 'es' ? 'Salir del aula' : currentLang === 'it' ? 'Lascia la classe' : 'Leave Classroom'}</span>
+            </button>
           </div>
 
                     {/* RECEIVE AUDIO FROM ALL REMOTE CLASSROOM PARTICIPANTS */}
@@ -1897,22 +1849,7 @@ const handleClearChatMessages = async () => {
           {/* CLASSROOM VIDEO, STUDENT THUMBNAILS AND PRIVATE CHAT */}
 <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain lg:overflow-hidden bg-slate-950 p-4 flex flex-col">
 
-  <div className="flex items-center justify-between gap-3 mb-4">
-    <div>
-      <h3 className="text-sm font-black text-white">
-        {currentLang === 'ar' ? 'البث المباشر للصف' : currentLang === 'fr' ? 'Classe en direct' : currentLang === 'es' ? 'Aula en directo' : currentLang === 'it' ? 'Aula dal vivo' : 'Live Classroom'}
-      </h3>
-      <p className="text-xs text-slate-400 mt-1">
-        {currentLang === 'ar' ? 'الفيديو المباشر للمشاركين المتصلين فعلياً' : currentLang === 'fr' ? 'Vidéo en direct des participants connectés' : currentLang === 'es' ? 'Vídeo en directo de los participantes conectados' : currentLang === 'it' ? 'Video in diretta dei partecipanti collegati' : 'Live video from connected classroom participants'}
-      </p>
-    </div>
 
-    <span className="text-xs font-bold bg-emerald-500/20 text-emerald-400 px-3 py-1.5 rounded-full border border-emerald-500/30">
-      {callParticipants.length}
-      {' '}
-      {currentLang === 'ar' ? 'مشاركون' : currentLang === 'fr' ? 'connectés' : currentLang === 'es' ? 'conectados' : currentLang === 'it' ? 'connessi' : 'Connected'}
-    </span>
-  </div>
 
     <div
     className={`flex-none lg:flex-1 min-h-0 grid grid-cols-1 gap-4 ${
@@ -2208,19 +2145,7 @@ const handleClearChatMessages = async () => {
             </button>
           </div>
 
-          <p className="text-[11px] text-slate-400 mt-1">
-            {isEducator
-              ? (chatAllStudents
-                  ? classroomLabel('جميع الطلاب المتصلين', 'Tous les élèves connectés', 'All connected students')
-                  : (selectedParticipant && selectedParticipant.userId !== registeredAccount?.id
-                    ? (selectedParticipant.name || selectedParticipant.userId)
-                    : classroomLabel('اختر طالباً لبدء المحادثة', 'Choisissez un élève pour démarrer la conversation', 'Select a student to start chatting')))
-              : classroomLabel(
-                  'محادثتك الخاصة مع الأستاذ',
-                  'Votre conversation privée avec le professeur',
-                  'Your private conversation with the educator'
-                )}
-          </p>
+
         </div>
          <div className="flex-1 min-h-[120px] overflow-y-auto p-3 space-y-2">
           {!chatStudentId ? (
@@ -2546,17 +2471,7 @@ const handleClearChatMessages = async () => {
                 <span>{currentLang === 'ar' ? 'رجوع' : currentLang === 'fr' ? 'Retour' : currentLang === 'es' ? 'Volver' : currentLang === 'it' ? 'Indietro' : 'Back'}</span>
               </button>
 
-                 <div className="space-y-1">
-                <h2 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
-                  {registeredAccount && sessionToken
-                    ? selectedGrade.name[currentLang]
-                    : currentLang === 'ar'
-                      ? 'اختر القسم الذي تريده'
-                      : currentLang === 'fr'
-                        ? 'Choisissez une section'
-                        : 'Choose a section'}
-                </h2>
-              </div>
+
             </div>
 
             <div className="flex items-center gap-2 bg-slate-100 p-1.5 rounded-2xl border border-slate-200/80">

@@ -34,6 +34,27 @@ export default function App() {
     return saved === 'ar' || saved === 'en' || saved === 'fr' || saved === 'es' || saved === 'it' ? saved : 'en';
   });
   const [isClassroomActive, setIsClassroomActive] = useState(false);
+  const appShellRef = useRef<HTMLDivElement | null>(null);
+  const [isCompactClassroomHeader, setIsCompactClassroomHeader] = useState(false);
+  const [isAppFullscreen, setIsAppFullscreen] = useState(false);
+
+  const handleSessionViewChange = useCallback((isOpen: boolean) => {
+    setIsCompactClassroomHeader(isOpen);
+  }, []);
+
+  const requestClassroomFullscreen = useCallback(() => {
+    const shell = appShellRef.current;
+    if (!shell || document.fullscreenElement || typeof shell.requestFullscreen !== 'function') return;
+    void shell.requestFullscreen().catch(() => undefined);
+  }, []);
+
+  useEffect(() => {
+    const syncFullscreenState = () => {
+      setIsAppFullscreen(document.fullscreenElement === appShellRef.current);
+    };
+    document.addEventListener('fullscreenchange', syncFullscreenState);
+    return () => document.removeEventListener('fullscreenchange', syncFullscreenState);
+  }, []);
 
   // User Profile: Student & Educator only
   const [userProfile, setUserProfile] = useState<UserProfile>({
@@ -446,7 +467,7 @@ const registerSignOutCleanup = useCallback(
   };
 
   return (
-    <div className={`min-h-dvh bg-slate-50 flex flex-col ${isRTL ? 'font-[Cairo]' : 'font-[Plus_Jakarta_Sans]'}`}>
+    <div ref={appShellRef} className={`min-h-dvh bg-slate-50 flex flex-col ${isAppFullscreen ? 'h-screen overflow-hidden' : ''} ${isRTL ? 'font-[Cairo]' : 'font-[Plus_Jakarta_Sans]'}`}>
       {/* Toast Notification */}
       {notification && (
         <div className="fixed top-16 right-4 left-4 sm:left-auto z-50 bg-slate-900 text-white px-5 py-3 rounded-2xl shadow-2xl flex items-center gap-2.5 text-xs font-bold animate-in fade-in slide-in-from-top-4 duration-150 max-w-sm border border-emerald-400">
@@ -467,13 +488,14 @@ const registerSignOutCleanup = useCallback(
         isOwner={Boolean(ownerAccount)}
         onOpenOwner={() => setIsClassroomActive(false)}
         schoolName={activeSchoolName}
+        compact={isCompactClassroomHeader}
         schoolId={activeSchoolId}
         onOpenArchiveSessions={() => setIsArchiveSessionsOpen(true)}
         onSignOut={handleSignOut}
       />
 
       {/* Main Content: Courses Hub or Live Classroom */}
-      <main className="max-w-7xl mx-auto flex min-h-0 flex-1 flex-col w-full px-4 sm:px-6 pt-2 pb-0 sm:pt-3 sm:pb-0">
+      <main className={isCompactClassroomHeader ? "mx-0 flex min-h-0 flex-1 w-full flex-col overflow-hidden px-1 sm:px-2 pt-1 pb-0" : "max-w-7xl mx-auto flex min-h-0 flex-1 flex-col w-full px-4 sm:px-6 pt-2 pb-0 sm:pt-3 sm:pb-0"}>
         {directorSetupToken ? (
           <DirectorSetupPage
             token={directorSetupToken}
@@ -493,6 +515,8 @@ const registerSignOutCleanup = useCallback(
           />
          ) : ownerAccount && ownerToken && ownerDirectorLoginMode ? (
           <CoursesHub
+            onSessionViewChange={handleSessionViewChange}
+            onRequestClassroomFullscreen={requestClassroomFullscreen}
             currentLang={currentLang}
             registeredAccount={null}
             schoolId="default-agenda-school"
@@ -526,6 +550,8 @@ const registerSignOutCleanup = useCallback(
         ) : ownerAccount && ownerToken ? (
           ownerSchoolMode ? (
             <CoursesHub
+            onSessionViewChange={handleSessionViewChange}
+            onRequestClassroomFullscreen={requestClassroomFullscreen}
               currentLang={currentLang}
               registeredAccount={null}
               schoolId={ownerAccount.schoolId || activeSchoolId}
@@ -590,6 +616,8 @@ const registerSignOutCleanup = useCallback(
           />
         ) : (
                     <CoursesHub
+            onSessionViewChange={handleSessionViewChange}
+            onRequestClassroomFullscreen={requestClassroomFullscreen}
             currentLang={currentLang}
             registeredAccount={chatOnlyMode ? null : registeredAccount}
             onOwnerLogin={handleOwnerLogin}
@@ -673,7 +701,7 @@ const registerSignOutCleanup = useCallback(
       )}
 
       {/* Clean, Colorful Footer without payment badges */}
-      <footer className="bg-linear-to-b from-slate-900 to-indigo-950 text-white mt-0 pt-4 pb-4 border-t border-slate-800">
+      <footer className={isCompactClassroomHeader || isAppFullscreen ? 'hidden' : 'bg-linear-to-b from-slate-900 to-indigo-950 text-white mt-0 pt-4 pb-4 border-t border-slate-800'}>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 space-y-4">
           <div className="flex flex-wrap items-center justify-between gap-4 pb-4 border-b border-white/10">
             <div className="flex items-center gap-3">

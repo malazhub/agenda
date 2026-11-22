@@ -17,6 +17,7 @@ interface HeaderProps {
   onSignOut?: () => void;
   isOwner?: boolean;
   onOpenOwner?: () => void;
+  compact?: boolean;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -29,8 +30,21 @@ export const Header: React.FC<HeaderProps> = ({
   onSignOut,
   isOwner = false,
   onOpenOwner,
+  compact = false,
 }) => {
   const t = translations[currentLang];
+
+  if (compact) {
+    return (
+      <header className="sticky top-0 z-40 shrink-0 bg-white/95 backdrop-blur-md border-b border-slate-200 shadow-xs">
+        <div className="w-full px-3 py-2">
+          <span className="block truncate text-center text-lg font-black tracking-tight text-slate-900">
+            {schoolName || 'Agenda'}
+          </span>
+        </div>
+      </header>
+    );
+  }
 
   return (
     <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200 shadow-xs">
