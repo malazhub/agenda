@@ -269,6 +269,7 @@ const [chatAllStudents, setChatAllStudents] = useState(false);
 const [assignedClassroomDetails, setAssignedClassroomDetails] = useState<StoredSessionRecord | null>(null);
 const [studentCameraDirection, setStudentCameraDirection] =
   useState<'front' | 'back' | null>(null);
+const cameraSwitchInProgressRef = useRef(false);
 const [cameraError, setCameraError] = useState<string | null>(null);
 const [chatMessages, setChatMessages] =
   useState<ClassroomMessage[]>([]);
@@ -1005,6 +1006,8 @@ callEventUnsubs.current = [];
     setStreamClient(null);
 
     setInLiveConference(false);
+    cameraSwitchInProgressRef.current = false;
+    setStudentCameraDirection(null);
     setTimerRunning(false);
     setTimeLeft(45 * 60);
 
@@ -1210,11 +1213,17 @@ const stopStudentSpeaking = async (studentId: string) => {
   }
 };
 
-// Start the student's front-facing camera.
-const startStudentSelfCam = async () => {
+// Select a specific student camera. Keep the selected direction in React
+// state (rather than relying on a possibly stale SDK direction snapshot) and
+// ask Stream to enable the selected device as part of the same operation.
+const selectStudentCamera = async (direction: 'front' | 'back') => {
   const call = streamCall;
 
-  if (!call || (!isStudent && !isGuestMode)) return;
+  if (
+    !call ||
+    (!isStudent && !isGuestMode) ||
+    cameraSwitchInProgressRef.current
+  ) return;
 
   if (
     !call.permissionsContext.hasPermission(
@@ -1231,92 +1240,39 @@ const startStudentSelfCam = async () => {
     return;
   }
 
+  cameraSwitchInProgressRef.current = true;
+  const previousDirection = studentCameraDirection;
+  // Update the button state immediately; the camera operation continues.
+  setStudentCameraDirection(direction);
+  setCameraError(null);
+
   try {
-    await call.camera.selectDirection('front');
-    await call.camera.enable();
+    await call.camera.selectDirection(direction, {
+      enableCamera: true,
+    });
 
     const cameraEnabled =
       call.camera.state.status === 'enabled';
 
     setIsVideoOn(cameraEnabled);
-
-    if (!cameraEnabled) {
-      throw new Error('The front camera did not become enabled.');
-    }
-
-    setStudentCameraDirection('front');
-    setCameraError(null);
-    } catch (error) {
-    // Keep the technical error in the browser console only.
-    // Never display browser or Stream video-source errors to students.
-    console.warn(
-      'Student front camera could not start:',
-      error
-    );
-
-    setIsVideoOn(
-      call.camera.state.status === 'enabled'
-    );
-
-    setCameraError(null);
-  }
-};
-
-// Switch between the student's front and rear cameras.
-const flipStudentCamera = async () => {
-  const call = streamCall;
-
-  if (!call || (!isStudent && !isGuestMode)) return;
-
-  if (
-    !call.permissionsContext.hasPermission(
-      OwnCapability.SEND_VIDEO
-    )
-  ) {
-    setCameraError(
-      classroomLabel(
-        'لم يمنح نظام الصف إذن إرسال الفيديو.',
-        'Le rôle dans la classe ne permet pas l’envoi vidéo.',
-        'Your classroom role does not allow video publishing.'
-      )
-    );
-    return;
-  }
-
-  try {
-    const nextDirection =
-      call.camera.state.direction === 'back'
-        ? 'front'
-        : 'back';
-
-    await call.camera.selectDirection(nextDirection);
-    await call.camera.enable();
-
-    const cameraEnabled =
-      call.camera.state.status === 'enabled';
-
-    setIsVideoOn(cameraEnabled);
-
     if (!cameraEnabled) {
       throw new Error('The selected camera did not become enabled.');
     }
-
-    setStudentCameraDirection(nextDirection);
-    setCameraError(null);
-    } catch (error) {
-    // Keep the technical error in the browser console only.
-    console.warn(
-      'Student camera switch failed:',
-      error
-    );
-
-    setIsVideoOn(
-      call.camera.state.status === 'enabled'
-    );
-
-    setCameraError(null);
+  } catch (error) {
+    console.warn(`Student ${direction} camera could not start:`, error);
+    setStudentCameraDirection(previousDirection);
+    setIsVideoOn(call.camera.state.status === 'enabled');
+  } finally {
+    cameraSwitchInProgressRef.current = false;
   }
 };
+
+const startStudentSelfCam = () => selectStudentCamera('front');
+
+const flipStudentCamera = () =>
+  selectStudentCamera(
+    studentCameraDirection === 'back' ? 'front' : 'back'
+  );
 
 // Normal camera on/off control.
 const toggleVideoTrack = async () => {
@@ -1804,8 +1760,12 @@ const handleClearChatMessages = async () => {
               <button
                 type="button"
                 onClick={() => {
-                  void endLiveCall();
+                  // Navigate immediately; Stream cleanup must not block Main.
                   onBack();
+                  void endLiveCall();
+                  if (document.fullscreenElement) {
+                    void document.exitFullscreen().catch(() => undefined);
+                  }
                 }}
                 className="shrink-0 flex items-center gap-1.5 bg-slate-700 hover:bg-slate-600 text-slate-200 hover:text-white font-bold px-3 py-2 rounded-xl transition cursor-pointer text-xs"
                 title="Back to Main Screen"
@@ -2464,7 +2424,12 @@ const handleClearChatMessages = async () => {
           <div className="bg-white rounded-3xl p-5 sm:p-6 shadow-sm border border-slate-200 flex flex-wrap items-center justify-between gap-4">
             <div className="flex items-center gap-3">
               <button
-                onClick={onBack}
+                onClick={() => {
+                  onBack();
+                  if (document.fullscreenElement) {
+                    void document.exitFullscreen().catch(() => undefined);
+                  }
+                }}
                 className="flex items-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold px-4 py-2.5 rounded-2xl transition cursor-pointer text-xs sm:text-sm shadow-2xs"
               >
                 {isRTL ? <ArrowRight className="w-4 h-4" /> : <ArrowLeft className="w-4 h-4" />}
