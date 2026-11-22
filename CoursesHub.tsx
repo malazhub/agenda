@@ -1204,7 +1204,7 @@ const updateAccount = async (
 
                         <button
               type="button"
-              onClick={openSharedLiveRoom}
+              onClick={() => openSharedLiveRoom(true)}
               className="block w-full text-start bg-slate-950/40 backdrop-blur-md rounded-2xl p-4 sm:p-5 border border-white/20 max-w-2xl mx-auto shadow-lg cursor-pointer transition hover:bg-slate-950/55 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-white"
             >
               <div className="flex items-center justify-center gap-2">
