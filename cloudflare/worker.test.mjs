@@ -864,15 +864,24 @@ test('grade registration loads available grades and grants grade-scoped live acc
     token: directorToken,
     body: { activated: true, paid: true },
   });
+  // The token issued at registration remains chat-only. Sign in again after
+  // activation to obtain the normal classroom-capable session.
+  const activatedLogin = await send(env, '/api/auth/login', {
+    method: 'POST',
+    body: { username: 'grade.student', password: 'no restrictions !', schoolId: 'default-agenda-school' },
+  });
+  assert.equal(activatedLogin.status, 200);
+  const { token: activeToken, chatOnly } = await activatedLogin.json();
+  assert.notEqual(chatOnly, true);
   sessions.get('test-registration-session').is_live = 1;
-  const liveStatus = await send(env, '/api/live-stream?sessionId=test-registration-session', { token });
+  const liveStatus = await send(env, '/api/live-stream?sessionId=test-registration-session', { token: activeToken });
   assert.equal(liveStatus.status, 200);
   assert.equal((await liveStatus.json()).status, 'waiting');
-  const liveCatalog = await send(env, '/api/sessions?gradeId=eb8&live=true&sessionId=test-registration-session', { token });
+  const liveCatalog = await send(env, '/api/sessions?gradeId=eb8&live=true&sessionId=test-registration-session', { token: activeToken });
   assert.equal(liveCatalog.status, 200);
   assert.equal((await liveCatalog.json()).sessions[0].id, 'test-registration-session');
 
-  const wrongGrade = await send(env, '/api/sessions?gradeId=eb7&live=true&sessionId=test-registration-session', { token });
+  const wrongGrade = await send(env, '/api/sessions?gradeId=eb7&live=true&sessionId=test-registration-session', { token: activeToken });
   assert.equal(wrongGrade.status, 403);
 
   // A student can select an educator before the Director has assigned a class.
@@ -1701,7 +1710,7 @@ test('Director can save a live session and the grade catalog returns its playbac
   assert.equal(registration.status, 201);
   const { account, token } = await registration.json();
   const blockedBeforeActivation = await send(env, '/api/sessions?gradeId=eb8&live=true&sessionId=live-eb8-math', { token });
-  assert.equal(blockedBeforeActivation.status, 403);
+  assert.equal(blockedBeforeActivation.status, 401);
 
   await send(env, `/api/director/accounts/${account.id}`, {
     method: 'PATCH',
@@ -1710,16 +1719,25 @@ test('Director can save a live session and the grade catalog returns its playbac
   });
   const anonymous = await send(env, '/api/sessions?gradeId=eb8&live=true&sessionId=live-eb8-math');
   assert.equal(anonymous.status, 401);
+  // Re-authenticate after approval; a token created before approval is still
+  // intentionally limited to Founder chat.
+  const activatedLogin = await send(env, '/api/auth/login', {
+    method: 'POST',
+    body: { username: 'live.student', password: 'live session password', schoolId: 'default-agenda-school' },
+  });
+  assert.equal(activatedLogin.status, 200);
+  const { token: activeToken, chatOnly } = await activatedLogin.json();
+  assert.notEqual(chatOnly, true);
   sessionMap.get('test-registration-session').is_live = 1;
-  const wrongSession = await send(env, '/api/sessions?gradeId=eb8&live=true&sessionId=test-registration-session', { token });
+  const wrongSession = await send(env, '/api/sessions?gradeId=eb8&live=true&sessionId=test-registration-session', { token: activeToken });
   assert.equal(wrongSession.status, 403);
 
-  const response = await send(env, '/api/sessions?gradeId=eb8&live=true&sessionId=live-eb8-math', { token });
+  const response = await send(env, '/api/sessions?gradeId=eb8&live=true&sessionId=live-eb8-math', { token: activeToken });
   const { sessions } = await response.json();
   assert.equal(sessions.length, 1);
   assert.equal(sessions[0].isLive, true);
   assert.equal(sessions[0].playbackUrl, 'https://example.org/live/video');
-  const liveStatus = await send(env, '/api/live-stream?sessionId=live-eb8-math', { token });
+  const liveStatus = await send(env, '/api/live-stream?sessionId=live-eb8-math', { token: activeToken });
   const liveCredentials = await liveStatus.json();
   assert.equal(liveStatus.status, 200);
   assert.equal(liveCredentials.status, 'waiting');
