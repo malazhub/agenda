@@ -69,6 +69,8 @@ export const LearningResourcesView: React.FC<LearningResourcesViewProps> = ({
     fileLimit: currentLang === 'ar' ? 'الحد الأقصى لحجم الملف 50 ميغابايت.' : currentLang === 'fr' ? 'La taille maximale du fichier est de 50 Mo.' : currentLang === 'es' ? 'El tamaño máximo del archivo es de 50 MB.' : currentLang === 'it' ? 'La dimensione massima del file è di 50 MB.' : 'The maximum file size is 50 MB.',
   };
 
+  const effectiveSchoolId = registeredAccount?.schoolId || schoolId || '';
+
   const canEdit =
     isEducator &&
     Boolean(sessionToken) &&
@@ -84,14 +86,14 @@ export const LearningResourcesView: React.FC<LearningResourcesViewProps> = ({
     setError('');
     setEducatorsLoading(true);
 
-    if (!schoolId) {
+    if (!effectiveSchoolId) {
       setEducatorsLoading(false);
       return () => {
         active = false;
       };
     }
 
-    getSchoolEducators(schoolId)
+    getSchoolEducators(effectiveSchoolId)
       .then(({ educators: loaded }) => {
         if (!active) return;
 
@@ -141,7 +143,7 @@ export const LearningResourcesView: React.FC<LearningResourcesViewProps> = ({
       active = false;
     };
   }, [
-    schoolId,
+    effectiveSchoolId,
     isEducator,
     registeredAccount?.id,
     registeredAccount?.registeredSessionId,
@@ -154,11 +156,11 @@ export const LearningResourcesView: React.FC<LearningResourcesViewProps> = ({
     setSelectedLesson(null);
     setError('');
 
-    if (!schoolId || !educatorId) return;
+    if (!effectiveSchoolId || !educatorId) return;
 
     setLoading(true);
 
-    getEducatorLessons(schoolId, educatorId)
+    getEducatorLessons(effectiveSchoolId, educatorId)
       .then(({ lessons: loaded }) => {
         if (active) {
           setLessons(loaded);
@@ -180,7 +182,7 @@ export const LearningResourcesView: React.FC<LearningResourcesViewProps> = ({
     return () => {
       active = false;
     };
-  }, [schoolId, educatorId]);
+  }, [effectiveSchoolId, educatorId]);
 
   const openLesson = (lesson: EducatorLesson) => {
     setSelectedLesson(lesson);
