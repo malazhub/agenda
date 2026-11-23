@@ -1228,12 +1228,12 @@ const updateAccount = async (
       {/* Supplied classroom photo replaces the formula collage. Keep the top-right composition in frame. */}
       <section
         aria-label="Educator presenting to a classroom"
-        className="relative isolate flex min-h-[205px] flex-1 flex-col justify-center overflow-hidden rounded-2xl bg-slate-900 shadow-xl sm:min-h-[225px]"
+        className="relative isolate aspect-[16/9] w-full shrink-0 overflow-hidden rounded-2xl bg-slate-900 shadow-xl"
       >
         <img
           src={`${import.meta.env.BASE_URL}classroom-team.webp`}
           alt="An educator presenting a lesson to a group of students"
-          style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", objectPosition: "right top" }}
+          className="absolute inset-0 block h-full w-full object-cover object-right-top"
           loading="eager"
           decoding="async"
         />
