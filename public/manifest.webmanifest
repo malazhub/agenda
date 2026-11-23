@@ -1,20 +1,20 @@
 {
- "name": "Agenda",
- "short_name": "Agenda",
- "description": "Agenda — school agenda, official exams, and tutoring.",
- "id": "./?schoolId=default-agenda-school",
- "start_url": "./?schoolId=default-agenda-school",
- "scope": "./",
- "display": "standalone",
- "orientation": "any",
- "background_color": "#f8fafc",
- "theme_color": "#0f172a",
- "icons": [
- {
- "src": "./agenda-bee-icon.jpg",
- "sizes": "192x192",
- "type": "image/jpeg",
- "purpose": "any"
- }
- ]
+  "name": "Agenda",
+  "short_name": "Agenda",
+  "description": "Agenda — school agenda, official exams, and tutoring.",
+  "id": "./?schoolId=default-agenda-school",
+  "start_url": "./?schoolId=default-agenda-school",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#fff8e7",
+  "theme_color": "#d99a2b",
+  "icons": [
+    {
+      "src": "./agenda-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
 }
