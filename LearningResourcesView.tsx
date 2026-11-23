@@ -349,7 +349,7 @@ export const LearningResourcesView: React.FC<LearningResourcesViewProps> = ({
     );
   };
 
-  if (!schoolId) {
+  if (!effectiveSchoolId) {
     return (
       <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center text-sm text-slate-500">
         {text.chooseEducator}

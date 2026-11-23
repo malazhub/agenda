@@ -2585,7 +2585,6 @@ const handleClearChatMessages = async () => {
                   </span>
                 </button>
               )}
-                {!isEducator && (
                 <>
                   {/* Directory of ALL Live Educators */}
                   {visibleLiveSessions.length === 0 ? (
@@ -2711,7 +2710,6 @@ const handleClearChatMessages = async () => {
                 </div>
               )}
   </>
-)}
             </div>
           ) : (
             <LearningResourcesView
