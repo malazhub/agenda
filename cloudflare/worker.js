@@ -2970,16 +2970,21 @@ async function schoolEducators(env, schoolId) {
   const school = await env.DB.prepare("SELECT id FROM schools WHERE id = ?").bind(schoolId).first();
   if (!school) return json({ error: "School not found." }, 404);
   const result = await env.DB.prepare(
-    `SELECT id, full_name, school_or_subject, grade_id, registered_session_id
-     FROM accounts
-     WHERE school_id = ? AND role = 'educator'
-     ORDER BY full_name COLLATE NOCASE`
+    `SELECT a.id, a.username, a.full_name, a.school_or_subject, a.grade_id,
+            a.registered_session_id, COALESCE(s.title, '') AS class_name
+     FROM accounts a
+     LEFT JOIN sessions s
+       ON s.id = a.registered_session_id AND s.school_id = a.school_id
+     WHERE a.school_id = ? AND a.role = 'educator'
+     ORDER BY a.full_name COLLATE NOCASE`
   ).bind(schoolId).all();
   return json({ educators: (result.results || []).map((row) => ({
     id: row.id,
+    username: row.username,
     fullName: row.full_name,
     subject: row.school_or_subject || "",
     gradeId: row.grade_id,
+    className: row.class_name || "",
     registeredSessionId: row.registered_session_id || null,
   })) });
 }

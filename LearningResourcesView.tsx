@@ -48,6 +48,7 @@ export const LearningResourcesView: React.FC<LearningResourcesViewProps> = ({
   const text = {
     title: currentLang === 'ar' ? 'الموارد التعليمية' : currentLang === 'fr' ? 'Ressources pédagogiques' : currentLang === 'es' ? 'Recursos educativos' : currentLang === 'it' ? 'Risorse didattiche' : 'Learning Resources',
     chooseEducator: currentLang === 'ar' ? 'اختر الأستاذ' : currentLang === 'fr' ? 'Choisir un éducateur' : currentLang === 'es' ? 'Elegir educador' : currentLang === 'it' ? 'Scegli educatore' : 'Choose an educator',
+    classGrade: currentLang === 'ar' ? 'الصف' : currentLang === 'fr' ? 'Classe' : currentLang === 'es' ? 'Clase' : currentLang === 'it' ? 'Classe' : 'Class / Grade',
     noEducators: currentLang === 'ar' ? 'لا يوجد أساتذة مسجلون في هذه المدرسة بعد.' : currentLang === 'fr' ? 'Aucun éducateur inscrit dans cet établissement.' : currentLang === 'es' ? 'Todavía no hay educadores registrados en esta escuela.' : currentLang === 'it' ? 'Non ci sono ancora educatori registrati in questa scuola.' : 'No educators are registered in this school yet.',
     lesson: currentLang === 'ar' ? 'الدرس' : currentLang === 'fr' ? 'Leçon' : currentLang === 'es' ? 'Lección' : currentLang === 'it' ? 'Lezione' : 'Lesson',
     empty: currentLang === 'ar' ? 'لم ينشر الأستاذ هذا الدرس بعد.' : currentLang === 'fr' ? 'Cet éducateur n’a pas encore publié cette leçon.' : currentLang === 'es' ? 'Este educador aún no ha publicado esta lección.' : currentLang === 'it' ? 'Questo educatore non ha ancora pubblicato questa lezione.' : 'This educator has not published this lesson yet.',
@@ -395,7 +396,7 @@ export const LearningResourcesView: React.FC<LearningResourcesViewProps> = ({
               >
                 {educators.map((educator) => (
                   <option key={educator.id} value={educator.id}>
-                    {educator.fullName} · {educator.subject}
+                    {educator.username} · {educator.fullName} · {educator.subject} · {educator.className || educator.gradeId}
                   </option>
                 ))}
               </select>
@@ -404,11 +405,26 @@ export const LearningResourcesView: React.FC<LearningResourcesViewProps> = ({
 
           {isEducator && (
             <p className="rounded-xl bg-indigo-50 px-3 py-2 text-xs font-bold text-indigo-700">
-              {registeredAccount?.fullName}
+              {registeredAccount?.username} · {registeredAccount?.fullName} · {registeredAccount?.schoolOrSubject} · {educators.find((educator) => educator.id === registeredAccount?.id)?.className || registeredAccount?.gradeId}
             </p>
           )}
         </div>
       </div>
+
+      {educatorId && (() => {
+        const selectedEducator = educators.find((educator) => educator.id === educatorId);
+        if (!selectedEducator) return null;
+        return (
+          <div className="rounded-2xl border border-indigo-100 bg-indigo-50 px-4 py-3">
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm font-bold text-indigo-950">
+              <span>{selectedEducator.username}</span>
+              <span>{selectedEducator.fullName}</span>
+              <span>{selectedEducator.subject}</span>
+              <span>{text.classGrade}: {selectedEducator.className || selectedEducator.gradeId}</span>
+            </div>
+          </div>
+        );
+      })()}
 
       {error && (
         <p role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm font-semibold text-rose-700">

@@ -164,9 +164,11 @@ export interface SchoolRecord {
 
 export interface SchoolEducator {
   id: string;
+  username: string;
   fullName: string;
   subject: string;
   gradeId: string;
+  className: string;
   registeredSessionId: string | null;
 }
 
