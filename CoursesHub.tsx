@@ -1233,7 +1233,7 @@ const updateAccount = async (
         <img
           src={`${import.meta.env.BASE_URL}classroom-team.webp`}
           alt="An educator presenting a lesson to a group of students"
-          className="absolute inset-0 h-full w-full object-cover object-[100%_0%]"
+          className="absolute inset-0 h-full w-full object-contain object-right-top"
           loading="eager"
           decoding="async"
         />
