@@ -48,20 +48,20 @@ export const Header: React.FC<HeaderProps> = ({
 
   return (
     <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200 shadow-xs">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-2.5">
-        <div className="grid grid-cols-1 md:grid-cols-3 items-center gap-3">
+      <div className="w-full max-w-[1600px] mx-auto px-2 sm:px-4 py-2">
+        <div className="grid min-w-0 grid-cols-1 sm:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_minmax(180px,0.8fr)_minmax(0,1.3fr)] items-center gap-x-2 gap-y-2">
           {/* Left Side: Register OR Sign Out action */}
-          <div className="flex flex-wrap items-center gap-2 justify-start order-2 md:order-1">
+          <div className="flex min-w-0 flex-wrap items-center gap-1.5 sm:gap-2 justify-start order-2 sm:order-2 xl:order-1">
             {signedInName ? (
               /* Sign Out Card (Displayed when user is signed in) */
-              <div className="flex items-center gap-2 bg-slate-100 border border-slate-200 rounded-xl px-3 py-1.5 shadow-xs">
-                <span className="max-w-40 truncate text-xs font-bold text-slate-800" title={signedInName}>
+              <div className="flex min-w-0 items-center gap-1.5 bg-slate-100 border border-slate-200 rounded-xl px-2 sm:px-2.5 py-1 shadow-xs">
+                <span className="max-w-28 sm:max-w-40 truncate text-[10px] sm:text-xs font-bold text-slate-800" title={signedInName}>
                   {signedInName}
                 </span>
                 <button
                   type="button"
                   onClick={onSignOut}
-                  className="ml-1 flex items-center gap-1 px-2.5 py-1 rounded-lg bg-rose-50 text-rose-600 hover:bg-rose-100 hover:text-rose-700 font-bold text-xs transition cursor-pointer"
+                  className="ml-0.5 flex shrink-0 items-center gap-1 px-1.5 sm:px-2 py-1 rounded-lg bg-rose-50 text-rose-600 hover:bg-rose-100 hover:text-rose-700 font-bold text-[10px] sm:text-xs transition cursor-pointer"
                   title={currentLang === 'ar' ? 'تسجيل الخروج والعودة كضيف' : currentLang === 'fr' ? 'Se déconnecter et revenir en mode invité' : currentLang === 'es' ? 'Cerrar sesión y volver como invitado' : currentLang === 'it' ? 'Esci e torna come ospite' : 'Sign out and return to guest mode'}
                 >
                   <LogOut className="w-3.5 h-3.5" />
@@ -73,7 +73,7 @@ export const Header: React.FC<HeaderProps> = ({
               <button
                 type="button"
                 onClick={onOpenRegister}
-                className="flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-600 text-white font-medium text-sm hover:bg-indigo-700 transition cursor-pointer shadow-xs"
+                className="flex shrink-0 items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl bg-indigo-600 text-white font-medium text-xs hover:bg-indigo-700 transition cursor-pointer shadow-xs"
               >
                 <UserPlus className="w-4 h-4" />
                 <span>{t.registerBtn}</span>
@@ -106,7 +106,7 @@ export const Header: React.FC<HeaderProps> = ({
                   );
                 }
               }}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-black bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-200 transition cursor-pointer shadow-2xs mr-1"
+              className="flex shrink-0 items-center gap-1 px-2 sm:px-2.5 py-1.5 rounded-xl text-[10px] sm:text-xs font-black bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-200 transition cursor-pointer shadow-2xs mr-0.5"
               title={currentLang === 'ar' ? 'مشاركة رابط المدرسة' : currentLang === 'fr' ? 'Partager le lien de l’établissement' : currentLang === 'es' ? 'Compartir enlace de la escuela' : currentLang === 'it' ? 'Condividi il link della scuola' : 'Share school link'}
             >
               <Share2 className="w-3.5 h-3.5" />
@@ -115,13 +115,13 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
 
           {/* Middle of Top Bar: Agenda without 'A' logo and without dot, with 'التعليم والدروس الخصوصية' in RED, YELLOW, BLUE */}
-          <div className="flex items-center justify-center order-1 md:order-2">
-            <div className="text-center">
-              <span className="text-2xl font-black tracking-tight text-slate-900 block leading-tight">
+          <div className="flex min-w-0 items-center justify-center order-1 sm:col-span-2 xl:col-span-1 xl:order-2">
+            <div className="min-w-0 max-w-full text-center">
+              <span className="block max-w-full truncate px-1 text-lg sm:text-xl xl:text-2xl font-black tracking-tight text-slate-900 leading-tight">
                 {schoolName || 'Agenda'}
               </span>
                             {/* Subtitle follows the selected language; keep the original colors. */}
-              <span className="text-xs sm:text-sm font-black tracking-wide inline-block leading-snug">
+              <span className="inline-block max-w-full text-[10px] sm:text-xs xl:text-sm font-black tracking-wide leading-snug">
                 {currentLang === 'ar' ? (
                   <>
                     <span className="text-rose-600">التعليم </span>
@@ -158,14 +158,14 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
 
           {/* Right Side: Share Button & 3 Languages */}
-          <div className="flex items-center justify-end gap-2 order-3">
-            {isOwner && <button type="button" onClick={onOpenOwner} className="rounded-lg bg-amber-100 px-3 py-1.5 text-xs font-black text-amber-900">{currentLang === 'ar' ? 'لوحة المالك' : currentLang === 'fr' ? 'Contrôle propriétaire' : currentLang === 'es' ? 'Panel del propietario' : currentLang === 'it' ? 'Pannello proprietario' : 'Owner Control'}</button>}
+          <div className="flex min-w-0 flex-wrap items-center justify-end gap-1 sm:gap-1.5 order-3 sm:order-3 xl:order-3">
+            {isOwner && <button type="button" onClick={onOpenOwner} className="rounded-lg bg-amber-100 px-2 sm:px-2.5 py-1.5 text-[10px] sm:text-xs font-black text-amber-900">{currentLang === 'ar' ? 'لوحة المالك' : currentLang === 'fr' ? 'Contrôle propriétaire' : currentLang === 'es' ? 'Panel del propietario' : currentLang === 'it' ? 'Pannello proprietario' : 'Owner Control'}</button>}
             
             {/* Arabic: Vibrant Emerald Green */}
             <button
               type="button"
               onClick={() => onLanguageChange('ar')}
-              className={`px-3 py-1.5 rounded-xl text-xs font-black transition cursor-pointer border ${
+              className={`shrink-0 px-2 sm:px-2.5 xl:px-3 py-1.5 rounded-xl text-[10px] sm:text-xs font-black transition cursor-pointer border ${
                 currentLang === 'ar'
                   ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm scale-105'
                   : 'bg-emerald-50 text-emerald-800 border-emerald-200 hover:bg-emerald-100'
