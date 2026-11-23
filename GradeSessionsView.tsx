@@ -318,6 +318,7 @@ const containerRef = useRef<HTMLDivElement>(null);
   const [liveSessionsList, setLiveSessionsList] = useState<Array<{
     id: string;
     educatorId: string;
+    educatorUsername: string;
     sessionId: string | null;
     grade: string;
     educatorName: string;
@@ -354,8 +355,9 @@ const containerRef = useRef<HTMLDivElement>(null);
           return {
             id: sessionId || `educator-${educator.id}`,
             educatorId: educator.id,
+            educatorUsername: educator.username,
             sessionId,
-            grade: (liveSession?.gradeId || educator.gradeId || '').toUpperCase(),
+            grade: liveSession?.gradeId || educator.className || educator.gradeId || '',
             educatorName: educator.fullName,
             subject: liveSession?.subject || educator.subject || (currentLang === 'ar' ? 'المادة' : currentLang === 'fr' ? 'Matière' : currentLang === 'es' ? 'Materia' : currentLang === 'it' ? 'Materia' : 'Subject'),
             isLive: Boolean(liveSession?.isLive),
@@ -1386,7 +1388,9 @@ const isStudentSessionMatch = (session: any): boolean => {
 };
 
   // Show every educator who is currently broadcasting.
-const visibleLiveSessions = isEducator ? [] : [...liveSessionsList].sort((a, b) => Number(b.isLive) - Number(a.isLive) || a.educatorName.localeCompare(b.educatorName));
+const visibleLiveSessions = isEducator
+  ? liveSessionsList.filter((session) => String(session.sessionId || session.id) === String(assignedSessionId))
+  : [...liveSessionsList].sort((a, b) => Number(b.isLive) - Number(a.isLive) || a.educatorName.localeCompare(b.educatorName));
 
 // Keep the student's own assigned classroom identified separately.
 const studentPrimarySession =
@@ -2631,11 +2635,11 @@ const handleClearChatMessages = async () => {
                           </div>
 
                           <h3 className="text-base font-black text-slate-900">
-                            {session.educatorName}
+                            {session.educatorUsername} · {session.educatorName}
                           </h3>
 
                           <p className="text-xs text-slate-500">
-                            {session.grade}
+                            {session.subject} · {session.grade}
                           </p>
 
                           {isMyAssignedRoom && !isEducator && (
