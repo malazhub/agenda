@@ -2,9 +2,14 @@
 <img width="1200" height="475" alt="GHBanner" src="https://ai.google.dev/static/site-assets/images/share-ais-513315318.png" />
 </div>
 
-# Run and deploy your AI Studio app
+# Agenda
 
-This contains everything you need to run your app locally.
+**Live app:** https://riobase.github.io/agenda/  
+**Canonical repository:** https://github.com/riobase/agenda
+
+This repository is the source of truth for the Agenda web app and its Cloudflare services. The GitHub Pages build uses the `/agenda/` project path so that scripts, styles, and in-app routes resolve under the published URL.
+
+## Run and deploy locally
 
 View your app in AI Studio: https://ai.studio/apps/4dc31fa6-9cdd-4c0d-ab5b-3887c46d4985
 
