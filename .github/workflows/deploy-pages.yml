@@ -46,7 +46,7 @@ jobs:
         shell: bash
         run: |
           node --input-type=module <<'NODE'
-          const origins = ["https://sapcehub.github.io", "https://agenda.mycamp.workers.dev"];
+          const origins = ["https://riobase.github.io", "https://agenda.mycamp.workers.dev"];
           const endpoint = "https://agenda-api.mycamp.workers.dev/api/owner/directors";
 
           for (const origin of origins) {
