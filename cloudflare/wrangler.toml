@@ -4,7 +4,7 @@ compatibility_date = "2026-11-03"
 account_id = "15cd99734560c6868dd06d79236a0334"
 
 [vars]
-ALLOWED_ORIGINS = "https://sapcehub.github.io,https://agenda.mycamp.workers.dev,http://localhost:3000"
+ALLOWED_ORIGINS = "https://riobase.github.io,https://agenda.mycamp.workers.dev,http://localhost:3000"
 APP_BASE_URL = "https://agenda.mycamp.workers.dev"
 
 [ai]
