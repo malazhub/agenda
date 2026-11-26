@@ -517,7 +517,7 @@ function fakeEnvironment() {
     env: {
       DB,
       SESSION_SIGNING_KEY: signingKey,
-      ALLOWED_ORIGINS: 'https://sapcehub.github.io,https://agenda.mycamp.workers.dev',
+      ALLOWED_ORIGINS: 'https://riobase.github.io,https://agenda.mycamp.workers.dev',
       APP_BASE_URL: 'https://agenda.mycamp.workers.dev',
       STREAM_VIDEO_API_KEY: 'test-stream-video-key',
       STREAM_VIDEO_API_SECRET: 'test-stream-video-secret-with-sufficient-length',
@@ -620,7 +620,7 @@ test('health and CORS preflight are served', async () => {
   assert.equal(health.status, 200);
   assert.deepEqual(await health.json(), { status: 'ok' });
 
-  for (const origin of ['https://sapcehub.github.io', 'https://agenda.mycamp.workers.dev']) {
+  for (const origin of ['https://riobase.github.io', 'https://agenda.mycamp.workers.dev']) {
     const options = await worker.fetch(new Request('https://agenda-api.test/api/auth/register', {
       method: 'OPTIONS',
       headers: { Origin: origin },
