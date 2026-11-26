@@ -264,3 +264,46 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
+
+      - name: Verify live GitHub Pages route and bundled assets
+        shell: bash
+        run: |
+          node --input-type=module <<'NODE'
+          const origin = "https://riobase.github.io/agenda/";
+          const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+          let response;
+          let html = "";
+          for (let attempt = 1; attempt <= 12; attempt += 1) {
+            try {
+              response = await fetch(origin, { headers: { "Cache-Control": "no-cache" } });
+              if (response.ok) {
+                html = await response.text();
+                if (html.includes("<title>Agenda</title>")) break;
+              }
+            } catch (error) {
+              console.log(`Pages not ready yet (attempt ${attempt}): ${error.message}`);
+            }
+            if (attempt < 12) await sleep(10000);
+          }
+
+          if (!response?.ok || !html.includes("<title>Agenda</title>")) {
+            throw new Error(`Agenda Pages did not serve the expected homepage (HTTP ${response?.status ?? "no response"}).`);
+          }
+
+          const assetPaths = [...html.matchAll(/(?:src|href)="([^"]+\\.(?:js|css)(?:\\?[^"]*)?)"/g)]
+            .map((match) => new URL(match[1], origin).href)
+            .filter((url) => new URL(url).pathname.includes("/agenda/assets/"));
+          const jsAssets = assetPaths.filter((url) => url.endsWith(".js"));
+          const cssAssets = assetPaths.filter((url) => url.endsWith(".css"));
+          if (!jsAssets.length || !cssAssets.length) {
+            throw new Error("Agenda Pages HTML is missing its versioned JavaScript or CSS bundles.");
+          }
+
+          for (const assetUrl of [...new Set(assetPaths)]) {
+            const asset = await fetch(assetUrl, { method: "HEAD", headers: { "Cache-Control": "no-cache" } });
+            if (!asset.ok) throw new Error(`Agenda asset failed to load: ${asset.status} ${assetUrl}`);
+            console.log(`Verified ${assetUrl}`);
+          }
+          console.log("Agenda live Pages homepage and bundled assets passed.");
+          NODE
